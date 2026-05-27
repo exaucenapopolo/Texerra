@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- SEO -->
+    <title>Texerra | Numéros Virtuels pour SMS & Vérification</title>
+    <meta name="description" content="Achetez des numéros virtuels pour recevoir des SMS et codes de vérification. Livraison rapide, support 24/7, paiements Mobile Money et crypto. Plus de 50 pays disponibles.">
+    <meta name="keywords" content="numéro virtuel, recevoir SMS, vérification SMS, achat numéro étranger, SMS en ligne, Texerra, mobile money, Orange Money, MTN, crypto">
+    <meta name="author" content="Texerra">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.texerra.com/">
+    <!-- Open Graph -->
+    <meta property="og:title" content="Texerra | Numéros Virtuels pour SMS & Vérification">
+    <meta property="og:description" content="Recevez vos codes de vérification par SMS avec des numéros virtuels jetables ou longue durée. Paiement mobile money, crypto et carte bancaire.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://www.texerra.com/">
+    <meta property="og:image" content="https://www.texerra.com/og-image.jpg">
+    <meta property="og:locale" content="fr_FR">
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Texerra",
+        "url": "https://www.texerra.com",
+        "logo": "https://www.texerra.com/logo.png",
+        "description": "Numéros virtuels premium pour recevoir des SMS de vérification dans plus de 50 pays.",
+        "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": "+225-01-23-45-67-89",
+            "contactType": "Service client",
+            "availableLanguage": ["French", "English"]
+        },
+        "sameAs": ["https://twitter.com/texerra", "https://linkedin.com/company/texerra"]
+    }
+    </script>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --accent: #06b6d4;
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --text: #0b0f19;
+            --text-secondary: #4b5563;
+            --border: #e5e7eb;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+            --shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.03);
+            --shadow-lg: 0 20px 40px -10px rgba(0,0,0,0.08);
+            --radius: 20px;
+            --radius-sm: 12px;
+            --transition: 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+        h1, h2, h3, h4 { font-weight: 700; line-height: 1.2; }
+        a { text-decoration: none; color: inherit; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+        /* Animations */
+        .fade-up {
+            opacity: 0; transform: translateY(30px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+        /* Header */
+        header {
+            position: fixed; top: 0; left: 0; width: 100%;
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(229,231,235,0.6);
+            z-index: 1000;
+            transition: background var(--transition), box-shadow var(--transition);
+        }
+        header.scrolled {
+            background: rgba(255,255,255,0.96);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        .header-inner {
+            display: flex; align-items: center; justify-content: space-between;
+            height: 72px;
+        }
+        .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 1.8rem; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+        .logo-icon {
+            font-size: 1.8rem;
+            background: none;
+            -webkit-text-fill-color: var(--primary);
+        }
+        nav { display: flex; align-items: center; gap: 28px; }
+        nav a {
+            font-weight: 500; color: var(--text-secondary);
+            transition: color 0.2s; position: relative;
+        }
+        nav a::after {
+            content: ''; position: absolute; left: 0; bottom: -6px;
+            width: 0; height: 2px; background: var(--primary);
+            transition: width var(--transition);
+        }
+        nav a:hover { color: var(--primary); }
+        nav a:hover::after { width: 100%; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 12px 28px; border-radius: 40px; font-weight: 600;
+            font-size: 0.95rem; cursor: pointer; transition: all var(--transition);
+            border: none; outline: none; gap: 8px; white-space: nowrap;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff; box-shadow: 0 6px 15px rgba(79,70,229,0.25);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(79,70,229,0.35);
+        }
+        .btn-outline {
+            background: transparent; border: 2px solid var(--primary);
+            color: var(--primary);
+        }
+        .btn-outline:hover { background: var(--primary); color: #fff; }
+        .hamburger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; }
+        .hamburger span { width: 26px; height: 3px; background: var(--text); border-radius: 3px; transition: 0.3s; }
+
+        /* Hero */
+        .hero {
+            padding: 130px 0 80px;
+            background: radial-gradient(circle at 20% 30%, rgba(79,70,229,0.04) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(6,182,212,0.04) 0%, transparent 50%);
+        }
+        .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+        .hero-text h1 {
+            font-size: 3.3rem; font-weight: 800; letter-spacing: -1.5px;
+            background: linear-gradient(to right, #0b0f19, #1e293b);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; margin-bottom: 20px;
+        }
+        .hero-text .highlight {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-text p {
+            font-size: 1.2rem; color: var(--text-secondary); margin-bottom: 28px;
+            max-width: 480px;
+        }
+        .trust-badges {
+            display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap;
+        }
+        .trust-badge {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--surface); padding: 8px 16px;
+            border-radius: 30px; box-shadow: var(--shadow-sm);
+            font-size: 0.85rem; font-weight: 500;
+            color: var(--text-secondary);
+        }
+        .trust-badge i { color: var(--primary); }
+        .hero-cta { display: flex; gap: 16px; flex-wrap: wrap; }
+        .hero-image {
+            display: flex; justify-content: center; align-items: center;
+        }
+        .hero-illustration {
+            width: 100%; max-width: 400px;
+            filter: drop-shadow(0 25px 30px rgba(79,70,229,0.12));
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        /* Sections */
+        section { padding: 80px 0; }
+        .section-title {
+            text-align: center; margin-bottom: 60px;
+        }
+        .section-title h2 {
+            font-size: 2.5rem; font-weight: 700; margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+        .section-title p {
+            color: var(--text-secondary); font-size: 1.1rem;
+            max-width: 600px; margin: 0 auto;
+        }
+
+        /* Steps */
+        .steps-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 32px;
+        }
+        .step-card {
+            background: var(--surface); border-radius: var(--radius);
+            padding: 40px 24px; text-align: center;
+            box-shadow: var(--shadow); transition: all var(--transition);
+        }
+        .step-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); }
+        .step-number {
+            font-size: 3rem; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary-light, #6366f1), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; margin-bottom: 8px;
+        }
+        .step-icon { font-size: 2.2rem; color: var(--primary); margin-bottom: 16px; }
+
+        /* Cards génériques */
+        .card-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+        }
+        .card {
+            background: var(--surface); border-radius: var(--radius);
+            padding: 32px; box-shadow: var(--shadow);
+            border: 1px solid var(--border); transition: all var(--transition);
+        }
+        .card:hover { border-color: var(--primary); box-shadow: var(--shadow-lg); }
+        .card-icon { font-size: 2rem; color: var(--primary); margin-bottom: 16px; }
+
+        /* Pourquoi nous */
+        .why-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+        }
+        .why-item {
+            display: flex; gap: 16px; align-items: flex-start;
+            background: var(--surface); border-radius: var(--radius);
+            padding: 24px; box-shadow: var(--shadow); transition: all var(--transition);
+        }
+        .why-item:hover { box-shadow: var(--shadow-lg); }
+        .why-icon {
+            width: 48px; height: 48px; background: rgba(79,70,229,0.1);
+            border-radius: 12px; display: flex; align-items: center;
+            justify-content: center; color: var(--primary); font-size: 1.4rem;
+            flex-shrink: 0;
+        }
+
+        /* Paiements */
+        .payment-methods {
+            display: flex; flex-wrap: wrap; gap: 24px; justify-content: center;
+            align-items: center;
+        }
+        .payment-badge {
+            background: var(--surface); padding: 16px 24px;
+            border-radius: 16px; box-shadow: var(--shadow);
+            display: flex; flex-direction: column; align-items: center;
+            font-weight: 600; font-size: 0.9rem; gap: 8px;
+            transition: all var(--transition);
+        }
+        .payment-badge i { font-size: 2rem; color: var(--primary); }
+
+        /* Testimonials */
+        .testimonial-carousel {
+            display: flex; gap: 24px; overflow-x: auto;
+            scroll-snap-type: x mandatory; padding-bottom: 16px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .testimonial-card {
+            min-width: 320px; background: var(--surface);
+            border-radius: var(--radius); padding: 32px;
+            box-shadow: var(--shadow); scroll-snap-align: start;
+            flex-shrink: 0;
+        }
+        .stars { color: #f59e0b; margin-bottom: 8px; }
+        .testimonial-text { font-style: italic; color: var(--text-secondary); margin-bottom: 16px; }
+        .testimonial-author { font-weight: 600; }
+
+        /* FAQ */
+        .faq-item {
+            background: var(--surface); border-radius: var(--radius-sm);
+            margin-bottom: 12px; border: 1px solid var(--border);
+            overflow: hidden; transition: all var(--transition);
+        }
+        .faq-question {
+            padding: 20px; font-weight: 600; display: flex;
+            justify-content: space-between; align-items: center;
+            cursor: pointer; background: none; border: none;
+            width: 100%; text-align: left; font-size: 1rem;
+            color: var(--text);
+        }
+        .faq-answer {
+            max-height: 0; overflow: hidden; transition: max-height 0.4s ease;
+            padding: 0 20px; color: var(--text-secondary);
+        }
+        .faq-item.active .faq-answer { max-height: 300px; padding: 0 20px 20px; }
+        .faq-icon { transition: transform 0.3s; }
+        .faq-item.active .faq-icon { transform: rotate(45deg); }
+
+        /* Contact */
+        .contact-section {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: var(--radius); padding: 64px 48px;
+            color: #fff; margin: 0 24px;
+        }
+        .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+        .contact-form input, .contact-form textarea {
+            width: 100%; padding: 14px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.1); color: #fff;
+            font-family: inherit; margin-bottom: 16px;
+            backdrop-filter: blur(4px);
+        }
+        .contact-form input::placeholder, .contact-form textarea::placeholder { color: rgba(255,255,255,0.7); }
+        .contact-form .btn { background: #fff; color: var(--primary); }
+
+        /* Footer */
+        footer {
+            background: var(--surface); padding: 40px 0;
+            border-top: 1px solid var(--border); text-align: center;
+            color: var(--text-secondary);
+        }
+        .social-links { display: flex; gap: 16px; justify-content: center; margin: 16px 0; }
+        .social-links a {
+            width: 40px; height: 40px; display: flex; align-items: center;
+            justify-content: center; border-radius: 50%;
+            background: var(--bg); color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .social-links a:hover { background: var(--primary); color: #fff; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero-grid { grid-template-columns: 1fr; text-align: center; }
+            .hero-text p { max-width: 100%; }
+            .hero-cta, .trust-badges { justify-content: center; }
+            nav {
+                position: fixed; top: 72px; left: 0; width: 100%;
+                background: rgba(255,255,255,0.98);
+                backdrop-filter: blur(20px);
+                flex-direction: column; padding: 24px; gap: 20px;
+                transform: translateY(-150%);
+                transition: transform 0.3s ease;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            }
+            nav.open { transform: translateY(0); }
+            .hamburger { display: flex; }
+            .contact-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header id="header">
+        <div class="container header-inner">
+            <a href="#" class="logo">
+                <i class="fa-solid fa-sms logo-icon"></i> Texerra
+            </a>
+            <nav id="nav">
+                <a href="#accueil">Accueil</a>
+                <a href="#pourquoi">Pourquoi nous</a>
+                <a href="#services">Services</a>
+                <a href="#pays">Pays</a>
+                <a href="#paiement">Paiement</a>
+                <a href="#faq">FAQ</a>
+                <a href="#contact" class="btn btn-outline" style="padding: 8px 20px;">Contact</a>
+            </nav>
+            <button class="hamburger" id="hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section id="accueil" class="hero">
+            <div class="container hero-grid">
+                <div class="hero-text fade-up">
+                    <h1><span class="highlight">Numéros virtuels</span> instantanés pour vos SMS de vérification</h1>
+                    <p>Recevez des codes de confirmation pour WhatsApp, Telegram, Binance et des centaines d’autres services. Livraison en moins d’une minute, support 24/7.</p>
+                    <div class="trust-badges">
+                        <div class="trust-badge"><i class="fa-solid fa-shield-halved"></i> 100% sécurisé</div>
+                        <div class="trust-badge"><i class="fa-solid fa-clock"></i> Livraison < 60s</div>
+                        <div class="trust-badge"><i class="fa-solid fa-headset"></i> Support 24/7</div>
+                    </div>
+                    <div class="hero-cta">
+                        <a href="#services" class="btn btn-primary"><i class="fa-solid fa-bolt"></i> Voir les numéros</a>
+                        <a href="#pourquoi" class="btn btn-outline"><i class="fa-solid fa-circle-info"></i> Comment ça marche</a>
+                    </div>
+                </div>
+                <div class="hero-image fade-up">
+                    <!-- Illustration moderne -->
+                    <svg class="hero-illustration" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="200" cy="150" r="140" fill="url(#gradHero)" opacity="0.08"/>
+                        <rect x="135" y="40" width="130" height="220" rx="24" fill="#1e293b" stroke="#4f46e5" stroke-width="3"/>
+                        <circle cx="200" cy="70" r="10" fill="#4f46e5"/>
+                        <rect x="150" y="95" width="100" height="120" rx="12" fill="#f8fafc"/>
+                        <path d="M170 125 L230 125 M170 145 L215 145 M170 165 L205 165" stroke="#4f46e5" stroke-width="5" stroke-linecap="round"/>
+                        <circle cx="310" cy="65" r="45" fill="url(#gradAccent)" opacity="0.15"/>
+                        <path d="M285 65 A25 25 0 1 1 335 65" stroke="#06b6d4" stroke-width="5" fill="none"/>
+                        <circle cx="310" cy="45" r="5" fill="#06b6d4"/>
+                        <circle cx="325" cy="60" r="4" fill="#06b6d4"/>
+                        <circle cx="320" cy="80" r="4" fill="#06b6d4"/>
+                        <defs>
+                            <linearGradient id="gradHero" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#06b6d4"/>
+                            </linearGradient>
+                            <linearGradient id="gradAccent" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#4f46e5"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- Comment ça marche -->
+        <section class="container steps-section">
+            <div class="section-title fade-up">
+                <h2>Comment ça marche</h2>
+                <p>Obtenez votre numéro virtuel en trois étapes simples.</p>
+            </div>
+            <div class="steps-grid">
+                <div class="step-card fade-up">
+                    <div class="step-number">01</div>
+                    <div class="step-icon"><i class="fa-solid fa-globe"></i></div>
+                    <h3>Choisissez un pays</h3>
+                    <p>Sélectionnez parmi plus de 50 pays, y compris 18 pays africains.</p>
+                </div>
+                <div class="step-card fade-up">
+                    <div class="step-number">02</div>
+                    <div class="step-icon"><i class="fa-solid fa-cart-shopping"></i></div>
+                    <h3>Payez facilement</h3>
+                    <p>Mobile Money, carte bancaire ou crypto : le paiement est instantané.</p>
+                </div>
+                <div class="step-card fade-up">
+                    <div class="step-number">03</div>
+                    <div class="step-icon"><i class="fa-solid fa-envelope-circle-check"></i></div>
+                    <h3>Recevez vos SMS</h3>
+                    <p>Les codes arrivent sur votre tableau de bord en temps réel.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pourquoi nous choisir -->
+        <section id="pourquoi" style="background: var(--surface); border-radius: 40px 40px 0 0; margin-top: -30px; position: relative; z-index: 2;">
+            <div class="container" style="padding-top: 80px; padding-bottom: 80px;">
+                <div class="section-title fade-up">
+                    <h2>Pourquoi choisir Texerra</h2>
+                    <p>Des arguments concrets qui font la différence.</p>
+                </div>
+                <div class="why-grid">
+                    <div class="why-item fade-up">
+                        <div class="why-icon"><i class="fa-solid fa-rocket"></i></div>
+                        <div>
+                            <h4>Livraison express</h4>
+                            <p>Votre numéro est activé en moins d’une minute après paiement. Pas d’attente.</p>
+                        </div>
+                    </div>
+                    <div class="why-item fade-up">
+                        <div class="why-icon"><i class="fa-solid fa-headset"></i></div>
+                        <div>
+                            <h4>Support réactif 24/7</h4>
+                            <p>Une équipe dédiée vous répond par chat ou email, jour et nuit.</p>
+                        </div>
+                    </div>
+                    <div class="why-item fade-up">
+                        <div class="why-icon"><i class="fa-solid fa-tags"></i></div>
+                        <div>
+                            <h4>Prix compétitifs</h4>
+                            <p>À partir de 0.50€ seulement, sans frais cachés. Consultez nos tarifs.</p>
+                        </div>
+                    </div>
+                    <div class="why-item fade-up">
+                        <div class="why-icon"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                        <div>
+                            <h4>Interface intuitive</h4>
+                            <p>Un tableau de bord clair pour gérer vos numéros et consulter vos SMS.</p>
+                        </div>
+                    </div>
+                    <div class="why-item fade-up">
+                        <div class="why-icon"><i class="fa-solid fa-earth-africa"></i></div>
+                        <div>
+                            <h4>Présence en Afrique</h4>
+                            <p>18 pays africains disponibles. Paiements adaptés avec Orange Money, MTN, Moov.</p>
+                        </div>
+                    </div>
+                    <div class="why-item fade-up">
+                        <div class="why-icon"><i class="fa-solid fa-shield-check"></i></div>
+                        <div>
+                            <h4>Garantie de remplacement</h4>
+                            <p>Si un numéro ne fonctionne pas, nous le remplaçons immédiatement sans frais.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Services disponibles -->
+        <section id="services" class="container">
+            <div class="section-title fade-up">
+                <h2>Services compatibles</h2>
+                <p>Nos numéros fonctionnent avec les plateformes les plus demandées.</p>
+            </div>
+            <div class="card-grid fade-up">
+                <div class="card"><i class="fa-brands fa-whatsapp card-icon"></i> WhatsApp</div>
+                <div class="card"><i class="fa-brands fa-telegram card-icon"></i> Telegram</div>
+                <div class="card"><i class="fa-brands fa-facebook card-icon"></i> Facebook</div>
+                <div class="card"><i class="fa-brands fa-instagram card-icon"></i> Instagram</div>
+                <div class="card"><i class="fa-brands fa-google card-icon"></i> Google</div>
+                <div class="card"><i class="fa-solid fa-coins card-icon"></i> Binance</div>
+                <div class="card"><i class="fa-brands fa-amazon card-icon"></i> Amazon</div>
+                <div class="card"><i class="fa-brands fa-tiktok card-icon"></i> TikTok</div>
+                <div class="card"><i class="fa-brands fa-apple card-icon"></i> Apple</div>
+                <div class="card"><i class="fa-brands fa-microsoft card-icon"></i> Microsoft</div>
+            </div>
+            <p class="fade-up" style="text-align: center; margin-top: 32px; color: var(--text-secondary);">+100 services supplémentaires disponibles. Demandez-nous !</p>
+        </section>
+
+        <!-- Pays disponibles -->
+        <section id="pays" class="container">
+            <div class="section-title fade-up">
+                <h2>Couverture internationale</h2>
+                <p>Des numéros locaux dans plus de 50 pays, dont 18 en Afrique.</p>
+            </div>
+            <div class="card-grid fade-up">
+                <div class="card">🇺🇸 États-Unis</div>
+                <div class="card">🇬🇧 Royaume-Uni</div>
+                <div class="card">🇫🇷 France</div>
+                <div class="card">🇩🇪 Allemagne</div>
+                <div class="card">🇨🇮 Côte d'Ivoire</div>
+                <div class="card">🇸🇳 Sénégal</div>
+                <div class="card">🇨🇲 Cameroun</div>
+                <div class="card">🇰🇪 Kenya</div>
+                <div class="card">🇳🇬 Nigeria</div>
+                <div class="card">🇿🇦 Afrique du Sud</div>
+                <div class="card">🇬🇭 Ghana</div>
+                <div class="card">🇮🇳 Inde</div>
+            </div>
+            <p class="fade-up" style="text-align: center; margin-top: 32px; color: var(--text-secondary);">Et de nombreux autres pays sur demande.</p>
+        </section>
+
+        <!-- Moyens de paiement -->
+        <section id="paiement" style="background: var(--surface); border-radius: 40px;">
+            <div class="container" style="padding-top: 80px; padding-bottom: 80px;">
+                <div class="section-title fade-up">
+                    <h2>Paiements adaptés à l'Afrique</h2>
+                    <p>Réglez en toute simplicité via Mobile Money, carte ou crypto.</p>
+                </div>
+                <div class="payment-methods fade-up">
+                    <div class="payment-badge"><i class="fa-solid fa-mobile-screen"></i> Orange Money</div>
+                    <div class="payment-badge"><i class="fa-solid fa-mobile-screen"></i> MTN Mobile Money</div>
+                    <div class="payment-badge"><i class="fa-solid fa-mobile-screen"></i> Airtel Money</div>
+                    <div class="payment-badge"><i class="fa-solid fa-mobile-screen"></i> Moov Money</div>
+                    <div class="payment-badge"><i class="fa-regular fa-credit-card"></i> Carte bancaire</div>
+                    <div class="payment-badge"><i class="fa-brands fa-bitcoin"></i> Crypto (BTC, ETH)</div>
+                </div>
+                <p class="fade-up" style="text-align: center; margin-top: 32px; color: var(--text-secondary);">Paiement instantané et confirmation immédiate. Votre numéro est livré en quelques secondes.</p>
+            </div>
+        </section>
+
+        <!-- Témoignages -->
+        <section id="temoignages" class="container">
+            <div class="section-title fade-up">
+                <h2>Ce que nos clients disent</h2>
+                <p>La confiance de milliers d’utilisateurs à travers le monde.</p>
+            </div>
+            <div class="testimonial-carousel fade-up">
+                <div class="testimonial-card">
+                    <div class="stars"><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i></div>
+                    <p class="testimonial-text">“J’utilise Texerra pour mes vérifications WhatsApp et Binance. Rapide, fiable, et le support est top !”</p>
+                    <div class="testimonial-author"><i class="fa-solid fa-user-circle"></i> Awa K., Abidjan</div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="stars"><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i></div>
+                    <p class="testimonial-text">“Enfin un service qui accepte le mobile money. J’ai reçu mon code en 30 secondes.”</p>
+                    <div class="testimonial-author"><i class="fa-solid fa-user-circle"></i> Jean-Marc D., Douala</div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="stars"><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star-half-stroke"></i></div>
+                    <p class="testimonial-text">“Interface très simple et numéros toujours disponibles. Je recommande.”</p>
+                    <div class="testimonial-author"><i class="fa-solid fa-user-circle"></i> Fatou B., Dakar</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ -->
+        <section id="faq" class="container">
+            <div class="section-title fade-up">
+                <h2>Foire aux questions</h2>
+                <p>Les réponses aux questions les plus fréquentes.</p>
+            </div>
+            <div class="faq-item fade-up">
+                <button class="faq-question">Comment recevoir mes SMS ? <i class="fa-solid fa-plus faq-icon"></i></button>
+                <div class="faq-answer"><p>Connectez-vous à votre compte Texerra, votre numéro activé apparaît avec les SMS reçus en temps réel. Actualisez la page pour voir les nouveaux messages.</p></div>
+            </div>
+            <div class="faq-item fade-up">
+                <button class="faq-question">Les numéros fonctionnent-ils pour WhatsApp ? <i class="fa-solid fa-plus faq-icon"></i></button>
+                <div class="faq-answer"><p>Oui, ils sont parfaitement compatibles avec WhatsApp, Telegram, Signal et toutes les applications nécessitant un SMS de vérification.</p></div>
+            </div>
+            <div class="faq-item fade-up">
+                <button class="faq-question">Que faire si le numéro ne fonctionne pas ? <i class="fa-solid fa-plus faq-icon"></i></button>
+                <div class="faq-answer"><p>Nous appliquons une garantie de remplacement : si le SMS n’arrive pas, nous vous fournissons un autre numéro gratuitement dans les minutes qui suivent votre signalement.</p></div>
+            </div>
+            <div class="faq-item fade-up">
+                <button class="faq-question">Quels sont les délais de livraison ? <i class="fa-solid fa-plus faq-icon"></i></button>
+                <div class="faq-answer"><p>Après validation du paiement, le numéro est livré en moins de 60 secondes en moyenne.</p></div>
+            </div>
+        </section>
+
+        <!-- Contact -->
+        <section id="contact" class="contact-section container fade-up">
+            <div class="contact-grid">
+                <div>
+                    <h2 style="color:#fff;">Contactez-nous</h2>
+                    <p style="margin-bottom:24px; color:rgba(255,255,255,0.85);">Une question, une demande de partenariat ? Écrivez-nous.</p>
+                    <p><i class="fa-solid fa-envelope"></i> support@texerra.com</p>
+                </div>
+                <form class="contact-form">
+                    <input type="text" placeholder="Votre nom" required>
+                    <input type="email" placeholder="Votre email" required>
+                    <textarea rows="3" placeholder="Votre message"></textarea>
+                    <button type="submit" class="btn" style="background:#fff; color:#4f46e5;">Envoyer <i class="fa-solid fa-paper-plane"></i></button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="logo" style="justify-content:center; font-size:1.5rem; margin-bottom:8px;">
+                <i class="fa-solid fa-sms logo-icon"></i> Texerra
+            </div>
+            <p style="margin-bottom:12px;">Votre passerelle vers la vérification mondiale.</p>
+            <div class="social-links">
+                <a href="#"><i class="fa-brands fa-twitter"></i></a>
+                <a href="#"><i class="fa-brands fa-linkedin-in"></i></a>
+                <a href="#"><i class="fa-brands fa-github"></i></a>
+                <a href="#"><i class="fa-brands fa-instagram"></i></a>
+            </div>
+            <p style="font-size:0.9rem;">&copy; 2025 Texerra. Tous droits réservés. | <a href="#">Mentions légales</a> | <a href="#">Politique de confidentialité</a></p>
+        </div>
+    </footer>
+
+    <script>
+        // Header scroll effect
+        window.addEventListener('scroll', () => {
+            document.getElementById('header').classList.toggle('scrolled', window.scrollY > 10);
+        });
+
+        // Mobile menu
+        const hamburger = document.getElementById('hamburger');
+        const nav = document.getElementById('nav');
+        hamburger.addEventListener('click', () => nav.classList.toggle('open'));
+        nav.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', () => nav.classList.remove('open'));
+        });
+
+        // FAQ accordion
+        document.querySelectorAll('.faq-question').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const parent = btn.parentElement;
+                const wasActive = parent.classList.contains('active');
+                document.querySelectorAll('.faq-item').forEach(item => item.classList.remove('active'));
+                if (!wasActive) parent.classList.add('active');
+            });
+        });
+
+        // Scroll reveal
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) entry.target.classList.add('visible');
+            });
+        }, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+        document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    </script>
+</body>
+</html>
