@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <url>
+    <loc>https://texerra.site/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <lastmod>2025-05-28</lastmod>
+  </url>
+
+  <url>
+    <loc>https://texerra.site/order</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+    <lastmod>2025-05-28</lastmod>
+  </url>
+
+  <url>
+    <loc>https://texerra.site/wallet</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <lastmod>2025-05-28</lastmod>
+  </url>
+
+  <url>
+    <loc>https://texerra.site/dashboard</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+    <lastmod>2025-05-28</lastmod>
+  </url>
+
+</urlset>
