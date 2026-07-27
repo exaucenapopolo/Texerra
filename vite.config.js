@@ -1,8 +1,16 @@
 import { defineConfig } from 'vite'
-import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'url'
+import path from 'path'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  plugins: [
-    tailwindcss(),
-  ],
+  plugins: [react()],
+  resolve: {
+    alias: {
+      // Ceci indique à Vite que @ pointe vers le dossier src
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
 })
