@@ -96,9 +96,12 @@ router.get("/", async (req, res) => {
 
     res.json(sorted);
   } catch (err) {
-    req.log.error({ err }, "Failed to fetch services from GrizzlySMS");
+    // Utilisation d'un logger sécurisé compatible Express
+    const logger = (req as any).log || console;
+    logger.error({ err }, "Failed to fetch services from GrizzlySMS");
     res.status(502).json({ error: "Impossible de récupérer les services" });
   }
 });
 
 export default router;
+        
