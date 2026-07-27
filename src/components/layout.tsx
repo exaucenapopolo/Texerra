@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { ReactNode, useState } from "react";
 import { useAuth } from "../lib/auth-context";
-import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
+// import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Wallet, LogOut, LayoutDashboard, Menu, X, Plus, ShoppingBag, HelpCircle } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -10,7 +10,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
-  const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey(), enabled: !!user, staleTime: 10_000 } });
+  // const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey(), enabled: !!user, staleTime: 10_000 } });
+  const me = null; // Placeholder until @workspace/api-client-react is available
 
   void location;
 
@@ -56,7 +57,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5">
                     Se connecter
                   </Link>
-                  <Link href="/sign-up" className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-xl hover:bg-primary/90 transition-colors shadow-[0_2px_12px_hsl(24_90%_52%/0.3)]">
+                  <Link href="/sign-up" className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-xl hover:bg-primary/90 transition-colors shadow-[0_2px_12px_hsl(24_90%_52%[...]
                     Démarrer
                   </Link>
                 </>
@@ -67,17 +68,17 @@ export default function Layout({ children }: { children: ReactNode }) {
                     <span className="text-foreground">{me ? `${me.balance.toFixed(2)} €` : "—"}</span>
                     <Plus className="w-3 h-3 text-muted-foreground" />
                   </Link>
-                  <Link href="/order" className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0_2px_12px_hsl(24_90%_52%/0.3)]">
+                  <Link href="/order" className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0[...]
                     <ShoppingBag className="w-3.5 h-3.5" />
                     Commander
                   </Link>
-                  <Link href="/dashboard" className="flex items-center gap-1.5 bg-secondary border border-border px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                  <Link href="/dashboard" className="flex items-center gap-1.5 bg-secondary border border-border px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground ho[...]
                     <LayoutDashboard className="w-3.5 h-3.5" />
                     {displayName}
                   </Link>
                   <button
                     onClick={handleSignOut}
-                    className="flex items-center gap-1.5 bg-secondary border border-border px-2.5 py-2 rounded-xl text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    className="flex items-center gap-1.5 bg-secondary border border-border px-2.5 py-2 rounded-xl text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transitio[...]
                   >
                     <LogOut className="w-3.5 h-3.5" />
                   </button>
@@ -98,15 +99,15 @@ export default function Layout({ children }: { children: ReactNode }) {
               {!user ? (
                 <>
                   {navLinks.map(link => (
-                    <a key={link.href} href={link.href} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                    <a key={link.href} href={link.href} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hov[...]
                       {link.label}
                     </a>
                   ))}
                   <div className="h-px bg-border my-2" />
-                  <Link href="/sign-in" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                  <Link href="/sign-in" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary [...]
                     Se connecter
                   </Link>
-                  <Link href="/sign-up" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground text-center hover:bg-primary/90 transition-colors">
+                  <Link href="/sign-up" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground text-center hover:bg-primary[...]
                     Créer un compte
                   </Link>
                 </>
@@ -121,16 +122,16 @@ export default function Layout({ children }: { children: ReactNode }) {
                       <div className="text-xs text-muted-foreground">{me ? `${me.balance.toFixed(2)} € de solde` : "Chargement..."}</div>
                     </div>
                   </div>
-                  <Link href="/order" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary bg-primary/8 hover:bg-primary/12 transition-colors">
+                  <Link href="/order" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary bg-primary/8 hover:bg-primary/12[...]
                     <ShoppingBag className="w-4 h-4" /> Commander un numéro
                   </Link>
-                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground[...]
                     <LayoutDashboard className="w-4 h-4" /> Dashboard
                   </Link>
-                  <Link href="/wallet" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                  <Link href="/wallet" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground ho[...]
                     <Wallet className="w-4 h-4" /> Portefeuille
                   </Link>
-                  <Link href="/faq" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                  <Link href="/faq" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover[...]
                     <HelpCircle className="w-4 h-4" /> FAQ
                   </Link>
                   <div className="h-px bg-border my-1" />
