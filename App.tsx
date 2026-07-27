@@ -38,7 +38,7 @@ function Spinner() {
   );
 }
 
-/** Map Firebase auth error codes to user-friendly French messages */
+/** Traduction des codes d'erreur d'authentification Firebase en messages conviviaux en français[span_4](start_span)[span_4](end_span) */
 function firebaseErrorMsg(code: string): string {
   switch (code) {
     case "auth/user-not-found":
@@ -140,7 +140,7 @@ function AuthCard({
         </div>
       </div>
 
-      {/* Google button */}
+      {/* Bouton Google */}
       <button
         onClick={handleGoogle}
         disabled={isLoading}
@@ -154,14 +154,14 @@ function AuthCard({
           : "S'inscrire avec Google"}
       </button>
 
-      {/* Divider */}
+      {/* Séparateur */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-px bg-border" />
         <span className="text-muted-foreground text-xs font-medium">ou</span>
         <div className="flex-1 h-px bg-border" />
       </div>
 
-      {/* Email + password form */}
+      {/* Formulaire Email et Mot de passe */}
       <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3" noValidate>
         <div className="flex flex-col gap-1.5">
           <label className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
@@ -216,7 +216,7 @@ function AuthCard({
         </button>
       </form>
 
-      {/* Switch link */}
+      {/* Lien de bascule entre connexion et inscription */}
       <div className="border-t border-border pt-4 text-center">
         <span className="text-muted-foreground text-sm">
           {switchText}{" "}
@@ -334,3 +334,4 @@ function App() {
 }
 
 export default App;
+  
