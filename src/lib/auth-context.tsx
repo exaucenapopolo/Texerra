@@ -11,7 +11,6 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 interface AuthContextType {
   user: User | null;
@@ -34,11 +33,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
-      if (firebaseUser) {
-        setAuthTokenGetter(() => firebaseUser.getIdToken());
-      } else {
-        setAuthTokenGetter(null);
-      }
     });
 
     return unsubscribe;
@@ -60,12 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const displayName = email.split("@")[0];
     await updateProfile(cred.user, { displayName });
-    // Force refresh token so backend gets updated claims
     await cred.user.getIdToken(true);
   };
 
   const logout = async () => {
-    setAuthTokenGetter(null);
     await signOut(auth);
   };
 
@@ -80,4 +72,5 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
-}
+                                           }
+                                     
