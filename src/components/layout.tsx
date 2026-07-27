@@ -1,17 +1,35 @@
 import { Link, useLocation } from "wouter";
 import { ReactNode, useState } from "react";
 import { useAuth } from "../lib/auth-context";
-// import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Wallet, LogOut, LayoutDashboard, Menu, X, Plus, ShoppingBag, HelpCircle } from "lucide-react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+interface UserProfile {
+  balance: number;
+}
+
+async function fetchApi<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw { status: res.status, data: errorData };
+  }
+  return res.json();
+}
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuth();
-  // const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey(), enabled: !!user, staleTime: 10_000 } });
-  const me = null; // Placeholder until @workspace/api-client-react is available
+  
+  const { data: me } = useQuery<UserProfile>({
+    queryKey: ["/api/me"],
+    queryFn: () => fetchApi<UserProfile>("/api/me"),
+    enabled: !!user,
+    staleTime: 10_000,
+  });
 
   void location;
 
@@ -57,7 +75,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <Link href="/sign-in" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5">
                     Se connecter
                   </Link>
-                  <Link href="/sign-up" className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-xl hover:bg-primary/90 transition-colors shadow-[0_2px_12px_hsl(24_90%_52%[...]
+                  <Link href="/sign-up" className="text-sm font-semibold bg-primary text-primary-foreground px-4 py-2 rounded-xl hover:bg-primary/90 transition-colors shadow-[0_2px_12px_hsl(24_90%_52%/0.3)]">
                     Démarrer
                   </Link>
                 </>
@@ -68,17 +86,17 @@ export default function Layout({ children }: { children: ReactNode }) {
                     <span className="text-foreground">{me ? `${me.balance.toFixed(2)} €` : "—"}</span>
                     <Plus className="w-3 h-3 text-muted-foreground" />
                   </Link>
-                  <Link href="/order" className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0[...]
+                  <Link href="/order" className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0_2px_12px_hsl(24_90%_52%/0.3)]">
                     <ShoppingBag className="w-3.5 h-3.5" />
                     Commander
                   </Link>
-                  <Link href="/dashboard" className="flex items-center gap-1.5 bg-secondary border border-border px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground ho[...]
+                  <Link href="/dashboard" className="flex items-center gap-1.5 bg-secondary border border-border px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                     <LayoutDashboard className="w-3.5 h-3.5" />
                     {displayName}
                   </Link>
                   <button
                     onClick={handleSignOut}
-                    className="flex items-center gap-1.5 bg-secondary border border-border px-2.5 py-2 rounded-xl text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transitio[...]
+                    className="flex items-center gap-1.5 bg-secondary border border-border px-2.5 py-2 rounded-xl text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                   </button>
@@ -99,15 +117,15 @@ export default function Layout({ children }: { children: ReactNode }) {
               {!user ? (
                 <>
                   {navLinks.map(link => (
-                    <a key={link.href} href={link.href} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hov[...]
+                    <a key={link.href} href={link.href} onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                       {link.label}
                     </a>
                   ))}
                   <div className="h-px bg-border my-2" />
-                  <Link href="/sign-in" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary [...]
+                  <Link href="/sign-in" onClick={() => setMobileOpen(false)} className="block px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                     Se connecter
                   </Link>
-                  <Link href="/sign-up" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground text-center hover:bg-primary[...]
+                  <Link href="/sign-up" onClick={() => setMobileOpen(false)} className="block px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground text-center hover:bg-primary/90 transition-colors">
                     Créer un compte
                   </Link>
                 </>
@@ -122,16 +140,16 @@ export default function Layout({ children }: { children: ReactNode }) {
                       <div className="text-xs text-muted-foreground">{me ? `${me.balance.toFixed(2)} € de solde` : "Chargement..."}</div>
                     </div>
                   </div>
-                  <Link href="/order" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary bg-primary/8 hover:bg-primary/12[...]
+                  <Link href="/order" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary bg-primary/8 hover:bg-primary/12 transition-colors">
                     <ShoppingBag className="w-4 h-4" /> Commander un numéro
                   </Link>
-                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground[...]
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                     <LayoutDashboard className="w-4 h-4" /> Dashboard
                   </Link>
-                  <Link href="/wallet" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground ho[...]
+                  <Link href="/wallet" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                     <Wallet className="w-4 h-4" /> Portefeuille
                   </Link>
-                  <Link href="/faq" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover[...]
+                  <Link href="/faq" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                     <HelpCircle className="w-4 h-4" /> FAQ
                   </Link>
                   <div className="h-px bg-border my-1" />
