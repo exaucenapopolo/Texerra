@@ -1,16 +1,13 @@
 import { useState, useEffect } from "react";
 import { useMeta } from "../lib/use-meta";
-import {
-  useGetOrders, useGetOrder, useCancelOrder, useUpdateMe, useGetTopups,
-  getGetOrderQueryKey, getGetOrdersQueryKey, getGetMeQueryKey, useGetMe
-} from "@workspace/api-client-react";
+import { auth } from "../lib/firebase";
 import { motion } from "framer-motion";
 import {
   CheckCircle2, Clock, XCircle, Loader2, Copy, RefreshCw, Plus, Wallet,
   ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard, TrendingUp
 } from "lucide-react";
 import { Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { CURRENCIES, getCurrency } from "../lib/currencies";
 
 const ICON_COLORS: Record<string, string> = {
@@ -48,28 +45,79 @@ function timeRemaining(expiresAt: string | null | undefined): string | null {
   return `${min}m ${sec}s`;
 }
 
+export interface Order {
+  id: string;
+  serviceCode: string;
+  serviceIcon?: string | null;
+  countryCode: string;
+  phoneNumber?: string | null;
+  smsCode?: string | null;
+  status: string;
+  price?: number;
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
+export interface Topup {
+  id: string;
+  amountEur: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+  phone?: string | null;
+  currency?: string | null;
+  balance: number;
+}
+
 function ActiveOrderCard({ orderId }: { orderId: string }) {
   const queryClient = useQueryClient();
-  const cancelOrder = useCancelOrder();
   const [copied, setCopied] = useState<string>("");
   const [remaining, setRemaining] = useState<string | null>(null);
 
-  const { data: order } = useGetOrder(orderId, {
-    query: {
-      queryKey: getGetOrderQueryKey(orderId),
-      refetchInterval: (query) => {
-        const d = query.state.data;
-        if (!d) return 2500;
-        if (d.status === "completed" || d.status === "cancelled" || d.status === "expired") return false;
-        return 2500;
-      },
+  const { data: order } = useQuery<Order>({
+    queryKey: [`/api/orders/${orderId}`],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch(`/api/orders/${orderId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur chargement commande");
+      return res.json();
     },
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (!d) return 2500;
+      if (d.status === "completed" || d.status === "cancelled" || d.status === "expired") return false;
+      return 2500;
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur annulation");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    }
   });
 
   useEffect(() => {
     if (order?.status === "completed" || order?.status === "expired" || order?.status === "cancelled") {
-      queryClient.invalidateQueries({ queryKey: getGetOrdersQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
     }
   }, [order?.status, queryClient]);
 
@@ -84,7 +132,7 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
 
   const cfg = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.active;
   const StatusIcon = cfg.icon;
-  const iconUrl = svcIconUrl((order as any).serviceIcon ?? null);
+  const iconUrl = svcIconUrl(order.serviceIcon ?? null);
 
   const copyText = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -107,7 +155,7 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
             <div className="font-semibold text-sm capitalize">{order.serviceCode}</div>
             <div className="text-xs text-muted-foreground">
               {order.countryCode}
-              {order.price && <span className="ml-2">· {order.price.toFixed(2)} €</span>}
+              {order.price !== undefined && <span className="ml-2">· {Number(order.price).toFixed(2)} €</span>}
             </div>
           </div>
         </div>
@@ -145,16 +193,11 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
 
       {order.status === "active" && (
         <button
-          onClick={() => cancelOrder.mutate({ id: orderId }, {
-            onSuccess: () => {
-              queryClient.invalidateQueries({ queryKey: getGetOrdersQueryKey() });
-              queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-            }
-          })}
-          disabled={cancelOrder.isPending}
+          onClick={() => cancelMutation.mutate()}
+          disabled={cancelMutation.isPending}
           className="w-full mt-2 py-2 text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-red-50 border border-border hover:border-red-200 rounded-xl transition-all"
         >
-          {cancelOrder.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : "Annuler et rembourser"}
+          {cancelMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : "Annuler et rembourser"}
         </button>
       )}
     </motion.div>
@@ -162,7 +205,17 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
 }
 
 function RechargesTab() {
-  const { data: topups, isLoading } = useGetTopups();
+  const { data: topups, isLoading } = useQuery<Topup[]>({
+    queryKey: ["/api/topups"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/topups", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur chargement recharges");
+      return res.json();
+    },
+  });
 
   const topupStatusConfig = {
     pending: { label: "En attente", color: "text-amber-700 bg-amber-100 border-amber-200" },
@@ -207,7 +260,7 @@ function RechargesTab() {
               <TrendingUp className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm text-foreground">{t.amountEur.toFixed(2)} € rechargés</div>
+              <div className="font-semibold text-sm text-foreground">{Number(t.amountEur).toFixed(2)} € rechargés</div>
               <div className="text-xs text-muted-foreground">{date} à {time}</div>
             </div>
             <div className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${cfg.color}`}>
@@ -222,43 +275,55 @@ function RechargesTab() {
 
 type EditableField = "name" | "phone" | null;
 
-function ProfileTab({ me }: {
-  me: {
-    id: string; email: string; name?: string | null; avatarUrl?: string | null;
-    phone?: string | null; currency?: string | null; balance: number;
-  }
-}) {
+function ProfileTab({ me }: { me: UserProfile }) {
   const queryClient = useQueryClient();
-  const updateMe = useUpdateMe();
   const [editing, setEditing] = useState<EditableField>(null);
   const [name, setName] = useState(me.name ?? "");
   const [phone, setPhone] = useState(me.phone ?? "");
   const [error, setError] = useState("");
   const [savingCurrency, setSavingCurrency] = useState(false);
 
+  const updateMutation = useMutation({
+    mutationFn: async (data: { name?: string; phone?: string; currency?: string }) => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/me", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error("Erreur mise à jour profil");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    }
+  });
+
   const initials = (me.name ?? me.email ?? "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 
   const handleSaveName = () => {
     if (!name.trim()) { setError("Le nom ne peut pas être vide"); return; }
     setError("");
-    updateMe.mutate({ data: { name: name.trim() } }, {
-      onSuccess: () => { setEditing(null); queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }); },
+    updateMutation.mutate({ name: name.trim() }, {
+      onSuccess: () => { setEditing(null); },
       onError: () => setError("Erreur lors de la mise à jour"),
     });
   };
 
   const handleSavePhone = () => {
     setError("");
-    updateMe.mutate({ data: { phone: phone.trim() } }, {
-      onSuccess: () => { setEditing(null); queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }); },
+    updateMutation.mutate({ phone: phone.trim() }, {
+      onSuccess: () => { setEditing(null); },
       onError: () => setError("Erreur lors de la mise à jour"),
     });
   };
 
   const handleCurrencyChange = (newCurrency: string) => {
     setSavingCurrency(true);
-    updateMe.mutate({ data: { currency: newCurrency } }, {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }),
+    updateMutation.mutate({ currency: newCurrency }, {
       onSettled: () => setSavingCurrency(false),
     });
   };
@@ -301,9 +366,9 @@ function ProfileTab({ me }: {
                 placeholder="Votre nom" />
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex gap-2">
-                <button onClick={handleSaveName} disabled={updateMe.isPending}
+                <button onClick={handleSaveName} disabled={updateMutation.isPending}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
-                  {updateMe.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   Enregistrer
                 </button>
                 <button onClick={handleCancel}
@@ -344,9 +409,9 @@ function ProfileTab({ me }: {
                 placeholder="+237 6 XX XX XX XX" />
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex gap-2">
-                <button onClick={handleSavePhone} disabled={updateMe.isPending}
+                <button onClick={handleSavePhone} disabled={updateMutation.isPending}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
-                  {updateMe.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   Enregistrer
                 </button>
                 <button onClick={handleCancel}
@@ -426,8 +491,30 @@ export default function Dashboard() {
     noindex: true,
   });
 
-  const { data: me, isLoading: loadingMe } = useGetMe();
-  const { data: orders, isLoading: loadingOrders } = useGetOrders();
+  const { data: me, isLoading: loadingMe } = useQuery<UserProfile>({
+    queryKey: ["/api/me"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/me", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur profil");
+      return res.json();
+    },
+  });
+
+  const { data: orders, isLoading: loadingOrders } = useQuery<Order[]>({
+    queryKey: ["/api/orders"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/orders", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur commandes");
+      return res.json();
+    },
+  });
+
   const [tab, setTab] = useState<DashTab>("orders");
 
   const activeOrders = orders?.filter(o => o.status === "active" || o.status === "pending_payment") ?? [];
@@ -451,7 +538,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <Link href="/wallet" className="flex items-center gap-2 bg-white border border-border px-4 py-2.5 rounded-xl text-sm font-semibold hover:border-primary/40 hover:shadow-sm transition-all">
             <Wallet className="w-4 h-4 text-primary" />
-            {loadingMe ? "—" : `${me?.balance.toFixed(2)} €`}
+            {loadingMe ? "—" : `${me?.balance?.toFixed(2) ?? "0.00"} €`}
             <Plus className="w-3.5 h-3.5 text-muted-foreground" />
           </Link>
           <Link href="/order" className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0_2px_10px_hsl(24_90%_52%/0.25)]">
@@ -490,7 +577,7 @@ export default function Dashboard() {
               {loadingMe ? (
                 <div className="h-8 w-24 bg-secondary animate-pulse rounded-lg" />
               ) : (
-                <div className="text-3xl font-extrabold gradient-text">{me?.balance.toFixed(2)} €</div>
+                <div className="text-3xl font-extrabold gradient-text">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
               )}
               <Link href="/wallet" className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline font-semibold">
                 Recharger <ArrowRight className="w-3 h-3" />
@@ -544,7 +631,6 @@ export default function Dashboard() {
                 {pastOrders.map(o => {
                   const cfg = STATUS_CONFIG[o.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.cancelled;
                   const StatusIcon = cfg.icon;
-                  const iconUrl = svcIconUrl(null);
                   const date = new Date(o.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
                   return (
                     <div key={o.id} className="bg-white border border-border rounded-2xl px-5 py-4 flex items-center gap-4 hover:shadow-sm transition-all">
@@ -567,8 +653,8 @@ export default function Dashboard() {
                           <StatusIcon className="w-3 h-3" />
                           {cfg.label}
                         </div>
-                        {o.price && (
-                          <div className="text-xs text-muted-foreground mt-1">{o.price.toFixed(2)} €</div>
+                        {o.price !== undefined && (
+                          <div className="text-xs text-muted-foreground mt-1">{Number(o.price).toFixed(2)} €</div>
                         )}
                       </div>
                     </div>

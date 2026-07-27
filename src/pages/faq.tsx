@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ArrowRight, AlertTriangle, CheckCircle2, Lightbulb, HelpCircle, Smartphone, RefreshCw, Wallet, Shield } from "lucide-react";
+import { ChevronDown, ArrowRight, AlertTriangle, CheckCircle2, Lightbulb, HelpCircle, Smartphone, Wallet, Shield } from "lucide-react";
 import { useMeta } from "../lib/use-meta";
 
 interface FaqItem {
@@ -122,7 +122,7 @@ const SECTIONS: FaqSection[] = [
       },
       {
         q: "Certains services sont-ils plus difficiles que d'autres ?",
-        a: "Oui. Les services très populaires comme WhatsApp, Google et Instagram ont des systèmes anti-fraude très avancés qui bloquent fréquemment les numéros virtuels. Des services moins connus ont généralement un meilleur taux de livraison. Nous affichons les prix en conséquence.",
+        a: "Oui. Les services très populaires comme WhatsApp, Google et Instagram have des systèmes anti-fraude très avancés qui bloquent fréquemment les numéros virtuels. Des services moins connus ont généralement un meilleur taux de livraison. Nous affichons les prix en conséquence.",
       },
     ],
   },
