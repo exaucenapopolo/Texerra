@@ -132,9 +132,11 @@ router.get("/", async (req, res) => {
     cachedGeneric = { data: sorted, ts: Date.now() };
     res.json(sorted);
   } catch (err) {
-    req.log.error({ err }, "Failed to fetch countries from GrizzlySMS");
+    const logger = (req as any).log || console;
+    logger.error({ err }, "Failed to fetch countries from GrizzlySMS");
     res.status(502).json({ error: "Impossible de récupérer les pays" });
   }
 });
 
 export default router;
+    
