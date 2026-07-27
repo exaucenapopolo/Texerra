@@ -1,10 +1,29 @@
 import { Link } from "wouter";
-import { useGetStats, useGetServices, useGetCountries } from "@workspace/api-client-react";
 import { Shield, Zap, Globe2, HeadphonesIcon, ArrowRight, MessageSquare, ChevronDown, TrendingUp, Star, Users, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMeta } from "../lib/use-meta";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+
+// Types de données pour remplacer l'ancien client externe
+interface Stats {
+  totalOrders: number;
+  totalCountries: number;
+  averageDeliverySeconds: number;
+}
+
+interface Service {
+  code: string;
+  name: string;
+  priceFrom?: number;
+}
+
+interface Country {
+  code: string;
+  name: string;
+  dialCode?: string;
+  flag?: string;
+}
 
 const SERVICE_ICON_URLS: Record<string, string> = {
   ig: "https://cdn.simpleicons.org/instagram/E1306C",
@@ -114,10 +133,18 @@ export default function Home() {
     canonical: "https://texerra.site/",
   });
 
-  const { data: stats } = useGetStats();
-  const { data: services } = useGetServices();
-  const { data: countries } = useGetCountries();
+  // États locaux de remplacement pour les données d'API
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   const [showAllCountries, setShowAllCountries] = useState(false);
+
+  useEffect(() => {
+    // Récupération sécurisée des données si des routes API existent
+    fetch("/api/stats").then(res => res.json()).then(setStats).catch(() => {});
+    fetch("/api/services").then(res => res.json()).then(setServices).catch(() => {});
+    fetch("/api/countries").then(res => res.json()).then(setCountries).catch(() => {});
+  }, []);
 
   const visibleCountries = showAllCountries ? (countries ?? []) : (countries ?? []).slice(0, 24);
 
