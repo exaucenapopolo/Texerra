@@ -1,18 +1,30 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMeta } from "../lib/use-meta";
-import {
-  useGetMe, useInitiateTopup, useGetTopupStatus, useGetTopups,
-  getGetMeQueryKey, getGetTopupStatusQueryKey, getGetTopupsQueryKey,
-  type Topup,
-} from "@workspace/api-client-react";
 import { auth } from "../lib/firebase";
 import { Wallet, Plus, ArrowRight, CheckCircle2, Clock, Loader2, ExternalLink, User, Mail, Phone, RefreshCw, XCircle, History, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth-context";
 import { getCurrency, formatLocalAmount } from "../lib/currencies";
 
 const PRESET_AMOUNTS = [5, 10, 20, 50];
+
+/* ─── Types locaux ────────────────────────────────────────────────────── */
+
+export interface Topup {
+  id: string;
+  amountEur: number | string;
+  status: string;
+  createdAt: string;
+}
+
+interface UserProfile {
+  name?: string;
+  email?: string;
+  phone?: string;
+  balance: number;
+  currency?: string;
+}
 
 /* ─── Per-item verify button component ─────────────────────────────────── */
 
@@ -43,9 +55,7 @@ function TopupHistoryItem({ topup, onCredited }: { topup: Topup; onCredited: () 
 
       const data = await res.json() as { status: string; _justCredited?: boolean };
 
-      if (data.status === "completed") {
-        onCredited();
-      } else if (data.status === "failed") {
+      if (data.status === "completed" || data.status === "failed") {
         onCredited();
       } else {
         setMsg({ type: "info", text: "Paiement pas encore confirmé. Réessayez dans 1–2 min." });
@@ -141,11 +151,49 @@ export default function WalletPage() {
 
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { data: me, isLoading: loadingMe } = useGetMe({ query: { queryKey: getGetMeQueryKey() } });
-  const { data: topups, isLoading: loadingTopups } = useGetTopups({
-    query: { queryKey: getGetTopupsQueryKey(), enabled: !!user },
+
+  // Requêtes avec TanStack Query et fetch natif
+  const { data: me, isLoading: loadingMe } = useQuery<UserProfile>({
+    queryKey: ["/api/me"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/me", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur chargement profil");
+      return res.json();
+    },
+    enabled: !!user,
   });
-  const initiateTopup = useInitiateTopup();
+
+  const { data: topups, isLoading: loadingTopups } = useQuery<Topup[]>({
+    queryKey: ["/api/topups"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/topups", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur chargement recharges");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const initiateTopupMutation = useMutation({
+    mutationFn: async (data: { amountEur: number; name: string; email: string; mobile: string }) => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/topups", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error("Erreur initialisation paiement");
+      return res.json() as Promise<{ checkoutUrl: string; topupId: string }>;
+    },
+  });
 
   const [customAmount, setCustomAmount] = useState("");
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
@@ -156,7 +204,7 @@ export default function WalletPage() {
   const [forceCheckMsg, setForceCheckMsg] = useState<{ type: "info" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", mobile: "" });
 
-  // Handle AccountPe redirect-back: /wallet?topup=<id>&result=credited|failed|pending
+  // Handle redirect-back: /wallet?topup=<id>&result=credited|failed|pending
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const topupParam = params.get("topup");
@@ -167,21 +215,18 @@ export default function WalletPage() {
 
     if (result === "credited") {
       setStep("success");
-      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
     } else if (result === "failed") {
       setStep("failed");
-      queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
     } else {
-      // pending or no result — show pending screen so user can manually verify
       setStep("pending");
     }
 
-    // Clean up URL params without reload
     const clean = window.location.pathname;
     window.history.replaceState({}, "", clean);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     setForm(f => ({
@@ -196,34 +241,40 @@ export default function WalletPage() {
   const localCurrency = getCurrency(me?.currency ?? "EUR");
   const showConversion = localCurrency && localCurrency.code !== "EUR" && amount && amount > 0;
 
-  const { data: topupStatus } = useGetTopupStatus(pendingTopupId, {
-    query: {
-      queryKey: getGetTopupStatusQueryKey(pendingTopupId),
-      enabled: !!pendingTopupId && step === "pending",
-      refetchInterval: (query) => {
-        const data = query.state.data;
-        if (!data) return 5000;
-        if (data.status === "completed" || data.status === "failed") return false;
-        return 5000;
-      },
+  const { data: topupStatus } = useQuery<{ status: string }>({
+    queryKey: ["/api/topups", pendingTopupId, "status"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch(`/api/topups/${pendingTopupId}/status`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur statut");
+      return res.json();
+    },
+    enabled: !!pendingTopupId && step === "pending",
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 5000;
+      if (data.status === "completed" || data.status === "failed") return false;
+      return 5000;
     },
   });
 
   useEffect(() => {
     if (topupStatus?.status === "completed") {
       setStep("success");
-      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
     } else if (topupStatus?.status === "failed") {
       setStep("failed");
-      queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
     }
   }, [topupStatus?.status, queryClient]);
 
   const handleInitiate = () => {
     if (!amount || amount < 1 || !form.name || !form.email || !form.mobile) return;
-    initiateTopup.mutate(
-      { data: { amountEur: amount, name: form.name, email: form.email, mobile: form.mobile } },
+    initiateTopupMutation.mutate(
+      { amountEur: amount, name: form.name, email: form.email, mobile: form.mobile },
       {
         onSuccess: (data) => {
           if (data.checkoutUrl) {
@@ -237,7 +288,6 @@ export default function WalletPage() {
     );
   };
 
-  /* Force-check for the currently active new recharge flow */
   const handleForceCheck = useCallback(async () => {
     if (!pendingTopupId || forceChecking) return;
     setForceChecking(true);
@@ -266,11 +316,11 @@ export default function WalletPage() {
 
       if (data.status === "completed") {
         setStep("success");
-        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
       } else if (data.status === "failed") {
         setStep("failed");
-        queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
       } else {
         setForceCheckMsg({
           type: "info",
@@ -291,10 +341,9 @@ export default function WalletPage() {
     setSelectedAmount(null);
     setCustomAmount("");
     setForceCheckMsg(null);
-    queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
   };
 
-  /* History: topups minus the one currently in the active flow */
   const historyTopups = (topups ?? []).filter(t => t.id !== pendingTopupId || step === "select");
 
   return (
@@ -318,7 +367,7 @@ export default function WalletPage() {
             <div className="h-12 w-32 bg-muted animate-pulse rounded-xl mt-1" />
           ) : (
             <div className="text-5xl font-extrabold gradient-text mt-1">
-              {me?.balance.toFixed(2)} <span className="text-3xl">€</span>
+              {(me?.balance ?? 0).toFixed(2)} <span className="text-3xl">€</span>
             </div>
           )}
           <p className="text-xs text-muted-foreground mt-3">Solde permanent — n'expire jamais</p>
@@ -459,16 +508,16 @@ export default function WalletPage() {
 
             <button
               onClick={handleInitiate}
-              disabled={!form.name || !form.email || !form.mobile || initiateTopup.isPending}
+              disabled={!form.name || !form.email || !form.mobile || initiateTopupMutation.isPending}
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_4px_20px_hsl(24_90%_52%/0.25)] text-sm"
             >
-              {initiateTopup.isPending ? (
+              {initiateTopupMutation.isPending ? (
                 <><Loader2 className="w-5 h-5 animate-spin" /> Préparation du paiement...</>
               ) : (
                 <>Payer {amount} € <ArrowRight className="w-5 h-5" /></>
               )}
             </button>
-            {initiateTopup.isError && (
+            {initiateTopupMutation.isError && (
               <p className="text-destructive text-sm mt-3 text-center">Une erreur s'est produite. Réessayez.</p>
             )}
           </div>
@@ -494,7 +543,6 @@ export default function WalletPage() {
               </div>
             )}
 
-            {/* Feedback message */}
             <AnimatePresence>
               {forceCheckMsg && (
                 <motion.div
@@ -513,7 +561,6 @@ export default function WalletPage() {
               )}
             </AnimatePresence>
 
-            {/* Force-check button */}
             <button
               onClick={handleForceCheck}
               disabled={forceChecking}
@@ -547,7 +594,7 @@ export default function WalletPage() {
             </div>
             <h2 className="text-xl font-bold mb-3">Solde rechargé !</h2>
             <p className="text-muted-foreground mb-6 text-sm">Votre solde a été crédité avec succès.</p>
-            <div className="text-4xl font-extrabold gradient-text mb-8">{me?.balance.toFixed(2)} €</div>
+            <div className="text-4xl font-extrabold gradient-text mb-8">{(me?.balance ?? 0).toFixed(2)} €</div>
             <div className="flex gap-3 flex-col sm:flex-row justify-center">
               <a href="/order" className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors text-sm">
                 Commander un numéro <ArrowRight className="w-4 h-4" />
@@ -608,8 +655,8 @@ export default function WalletPage() {
                     <TopupHistoryItem
                       topup={topup}
                       onCredited={() => {
-                        queryClient.invalidateQueries({ queryKey: getGetTopupsQueryKey() });
-                        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+                        queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/me"] });
                       }}
                     />
                   </div>
@@ -617,7 +664,6 @@ export default function WalletPage() {
               </div>
             )}
 
-            {/* Note about pending items */}
             {historyTopups.some(t => t.status === "pending") && (
               <div className="mt-6 flex items-start gap-2 text-xs text-muted-foreground bg-secondary/60 rounded-xl px-4 py-3">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
