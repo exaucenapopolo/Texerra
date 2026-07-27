@@ -1,20 +1,48 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useMeta } from "../lib/use-meta";
-import {
-  useGetServices, useGetCountries, useCreateOrder, useGetOrder,
-  getGetOrderQueryKey, getGetMeQueryKey, getGetServicesQueryKey,
-} from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe2, Smartphone, CheckCircle2, Copy, RefreshCw, ArrowLeft,
   Loader2, Wallet, ArrowRight, Search, AlertCircle, X,
 } from "lucide-react";
 import { Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
-import { useGetMe } from "@workspace/api-client-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth-context";
 
 const STORAGE_KEY = "texerra_active_order";
+
+// Types TypeScript locaux pour un typage strict et sécurisé
+interface Service {
+  code: string;
+  name: string;
+  icon?: string | null;
+  available?: boolean;
+  priceFrom?: number | null;
+  stock?: number | null;
+  servicePrice?: number | null;
+}
+
+interface Country {
+  code: string;
+  name: string;
+  flag: string;
+  dialCode?: string | null;
+  available?: boolean;
+  stock?: number | null;
+  servicePrice?: number | null;
+}
+
+interface OrderResponse {
+  id: string;
+  status: string;
+  phoneNumber?: string | null;
+  smsCode?: string | null;
+  smsText?: string | null;
+}
+
+interface UserProfile {
+  balance: number;
+}
 
 const ICON_COLORS: Record<string, string> = {
   instagram: "E1306C", whatsapp: "25D366", telegram: "26A5E4", facebook: "1877F2",
@@ -38,7 +66,6 @@ function svcIconUrl(icon: string | null | undefined): string | null {
   return `https://cdn.simpleicons.org/${icon}/${color}`;
 }
 
-/** Normalise une chaîne : minuscules + suppression d'accents pour une recherche robuste */
 function normalize(str: string): string {
   return str
     .toLowerCase()
@@ -59,6 +86,29 @@ const steps = [
 
 type SelectedService = { code: string; name: string; priceFrom?: number | null; icon?: string | null };
 type SelectedCountry = { code: string; name: string; flag: string; dialCode?: string | null };
+
+// Fonctions utilitaires fetch pour l'API backend standard
+async function fetchApi<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw { status: res.status, data: errorData };
+  }
+  return res.json();
+}
+
+async function postApi<T, B>(url: string, body: B): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw { status: res.status, data: errorData };
+  }
+  return res.json();
+}
 
 export default function Order() {
   useMeta({
@@ -86,7 +136,6 @@ export default function Order() {
   const serviceSearchRef = useRef<HTMLInputElement>(null);
   const countrySearchRef = useRef<HTMLInputElement>(null);
 
-  // Restore active order on mount
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -101,10 +150,8 @@ export default function Order() {
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Focus search on step change
   useEffect(() => {
     if (step === 1) setTimeout(() => serviceSearchRef.current?.focus(), 120);
     if (step === 2) setTimeout(() => countrySearchRef.current?.focus(), 120);
@@ -121,48 +168,71 @@ export default function Order() {
     setCountrySearch("");
   };
 
-  const { data: me } = useGetMe();
-  const { data: allServices, isLoading: loadingServices } = useGetServices();
-  const countriesParams = selectedService ? { serviceCode: selectedService.code } : undefined;
-  const { data: countries, isLoading: loadingCountries } = useGetCountries(countriesParams, {
-    query: {
-      queryKey: ["/api/countries", countriesParams] as const,
-      enabled: !!selectedService,
+  // Requêtes autonomes avec useQuery
+  const { data: me } = useQuery<UserProfile>({
+    queryKey: ["/api/me"],
+    queryFn: () => fetchApi<UserProfile>("/api/me"),
+    enabled: isSignedIn,
+  });
+
+  const { data: allServices, isLoading: loadingServices } = useQuery<Service[]>({
+    queryKey: ["/api/services"],
+    queryFn: () => fetchApi<Service[]>("/api/services"),
+  });
+
+  const countriesParams = selectedService ? `?serviceCode=${selectedService.code}` : "";
+  const { data: countries, isLoading: loadingCountries } = useQuery<Country[]>({
+    queryKey: ["/api/countries", selectedService?.code],
+    queryFn: () => fetchApi<Country[]>(`/api/countries${countriesParams}`),
+    enabled: !!selectedService,
+  });
+
+  const servicesForCountryParams = selectedCountry ? `?countryCode=${selectedCountry.code}` : "";
+  const { data: servicesForCountry, isLoading: loadingServicesForCountry } = useQuery<Service[]>({
+    queryKey: ["/api/services", selectedCountry?.code],
+    queryFn: () => fetchApi<Service[]>(`/api/services${servicesForCountryParams}`),
+    enabled: !!selectedCountry,
+    staleTime: 30_000,
+  });
+
+  // Mutation pour créer une commande
+  const createOrder = useMutation({
+    mutationFn: (data: { serviceCode: string; countryCode: string }) =>
+      postApi<OrderResponse, { serviceCode: string; countryCode: string }>("/api/orders", data),
+    onSuccess: (data) => {
+      setOrderId(data.id);
+      setStep(3);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        orderId: data.id,
+        service: selectedService,
+        country: selectedCountry,
+      }));
+    },
+    onError: (err: any) => {
+      const code = err?.data?.error;
+      if (code === "insufficient_balance" || err?.status === 402) setOrderError("insufficient_balance");
+      else if (code === "no_numbers") setOrderError("no_numbers");
+      else if (code === "no_balance") setOrderError("no_balance");
+      else if (code === "provider_error") setOrderError("provider_error");
+      else setOrderError("unknown");
     },
   });
 
-  // Fetch services for selected country to get accurate price & availability
-  const servicesForCountryKey = selectedCountry
-    ? getGetServicesQueryKey({ countryCode: selectedCountry.code })
-    : null;
-  const { data: servicesForCountry, isLoading: loadingServicesForCountry } = useGetServices(
-    selectedCountry ? { countryCode: selectedCountry.code } : undefined,
-    {
-      query: {
-        queryKey: servicesForCountryKey ?? ["disabled"],
-        enabled: !!selectedCountry,
-        staleTime: 30_000,
-      },
-    }
-  );
-
-  const createOrder = useCreateOrder();
-
-  const { data: order } = useGetOrder(orderId, {
-    query: {
-      queryKey: getGetOrderQueryKey(orderId),
-      enabled: !!orderId && step === 3,
-      refetchInterval: (query) => {
-        const d = query.state.data;
-        if (d?.smsCode || d?.status === "cancelled" || d?.status === "expired") return false;
-        return 2500;
-      },
+  // Suivi de la commande en temps réel
+  const { data: order } = useQuery<OrderResponse>({
+    queryKey: ["/api/orders", orderId],
+    queryFn: () => fetchApi<OrderResponse>(`/api/orders/${orderId}`),
+    enabled: !!orderId && step === 3,
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (d?.smsCode || d?.status === "cancelled" || d?.status === "expired") return false;
+      return 2500;
     },
   });
 
   useEffect(() => {
     if (order?.status === "completed" || order?.smsCode) {
-      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
     }
   }, [order?.status, order?.smsCode, queryClient]);
 
@@ -173,14 +243,12 @@ export default function Order() {
     }
   }, [order?.status, order?.smsCode]);
 
-  // ── Filtered & sorted services ──────────────────────────────────────────
   const filteredServices = useMemo(() => {
     const list = allServices ?? [];
     const q = serviceSearch.trim();
     return q ? list.filter(s => matchesSearch(s.name, q)) : list;
   }, [allServices, serviceSearch]);
 
-  // ── Filtered, sorted & grouped countries ────────────────────────────────
   const { filteredCountries, countryGroups, alphabet } = useMemo(() => {
     const list = (countries ?? [])
       .filter(c => c.available)
@@ -199,7 +267,6 @@ export default function Order() {
     return { filteredCountries: filtered, countryGroups: groups, alphabet: groups.map(g => g.letter) };
   }, [countries, countrySearch]);
 
-  // ── Combo availability & pricing (keyed by selectedCountry.code) ─────────
   const serviceInCountry = useMemo(() => {
     if (!servicesForCountry || !selectedService) return undefined;
     return servicesForCountry.find(s => s.code === selectedService.code);
@@ -207,7 +274,7 @@ export default function Order() {
 
   const comboAvailable = selectedCountry
     ? loadingServicesForCountry
-      ? null   // still loading
+      ? null
       : servicesForCountry != null
         ? (serviceInCountry != null && serviceInCountry.available)
         : null
@@ -224,30 +291,10 @@ export default function Order() {
   const handlePlaceOrder = () => {
     if (!selectedService || !selectedCountry) return;
     setOrderError("");
-    createOrder.mutate(
-      { data: { serviceCode: selectedService.code, countryCode: selectedCountry.code } },
-      {
-        onSuccess: (data) => {
-          setOrderId(data.id);
-          setStep(3);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            orderId: data.id,
-            service: selectedService,
-            country: selectedCountry,
-          }));
-        },
-        onError: (err: unknown) => {
-          // ApiError (custom-fetch) stores response body in .data, not .response.data
-          const apiErr = err as { data?: { error?: string }; status?: number };
-          const code = apiErr?.data?.error;
-          if (code === "insufficient_balance" || apiErr?.status === 402) setOrderError("insufficient_balance");
-          else if (code === "no_numbers") setOrderError("no_numbers");
-          else if (code === "no_balance") setOrderError("no_balance");
-          else if (code === "provider_error") setOrderError("provider_error");
-          else setOrderError("unknown");
-        },
-      }
-    );
+    createOrder.mutate({
+      serviceCode: selectedService.code,
+      countryCode: selectedCountry.code,
+    });
   };
 
   const copyText = (text: string) => {
@@ -259,14 +306,11 @@ export default function Order() {
 
   return (
     <div className="min-h-[80vh] max-w-3xl mx-auto px-4 sm:px-6 py-10">
-
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl sm:text-3xl font-extrabold mb-1.5 text-foreground">Commander un numéro</h1>
         <p className="text-muted-foreground text-sm">Recevez votre code SMS en quelques secondes</p>
       </div>
 
-      {/* Step indicator */}
       <div className="flex items-center gap-2 mb-8">
         {steps.map((s, i) => (
           <div key={s.id} className="flex items-center gap-2">
@@ -288,15 +332,12 @@ export default function Order() {
       </div>
 
       <AnimatePresence mode="wait">
-
-        {/* ── Step 1: Choose service ── */}
         {step === 1 && (
           <motion.div key="step1" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
             <div className="bg-white border border-border rounded-2xl p-5 sm:p-7 shadow-sm">
               <h2 className="text-lg font-bold mb-1">Quel service voulez-vous vérifier ?</h2>
               <p className="text-muted-foreground text-sm mb-5">Choisissez l'application pour laquelle vous avez besoin d'un numéro.</p>
 
-              {/* Search */}
               <div className="relative mb-5">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <input
@@ -375,12 +416,9 @@ export default function Order() {
           </motion.div>
         )}
 
-        {/* ── Step 2: Choose country ── */}
         {step === 2 && selectedService && (
           <motion.div key="step2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
             <div className="bg-white border border-border rounded-2xl shadow-sm overflow-hidden">
-
-              {/* Selected service bar */}
               <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-secondary/40">
                 <button onClick={() => { setStep(1); setSelectedCountry(null); }} className="p-1.5 rounded-lg hover:bg-border transition-colors text-muted-foreground hover:text-foreground">
                   <ArrowLeft className="w-4 h-4" />
@@ -401,8 +439,6 @@ export default function Order() {
               </div>
 
               <div className="p-5 sm:p-6">
-
-                {/* Search + alphabet index */}
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -433,7 +469,6 @@ export default function Order() {
                   </div>
                 ) : (
                   <div className="flex gap-2">
-                    {/* Country list */}
                     <div ref={countryListRef} className="flex-1 max-h-[380px] overflow-y-auto space-y-3 pr-1">
                       {countryGroups.length === 0 ? (
                         <div className="text-center py-10 text-muted-foreground text-sm">
@@ -445,7 +480,6 @@ export default function Order() {
                       ) : (
                         countryGroups.map(group => (
                           <div key={group.letter} data-letter={group.letter}>
-                            {/* Letter header (only when not searching) */}
                             {!countrySearch && (
                               <div className="sticky top-0 z-10 text-[11px] font-extrabold text-muted-foreground uppercase tracking-wider py-1.5 px-1 bg-white/95 backdrop-blur-sm">
                                 {group.letter}
@@ -502,7 +536,6 @@ export default function Order() {
                       )}
                     </div>
 
-                    {/* Alphabet index (only without search, on desktop) */}
                     {!countrySearch && alphabet.length > 3 && (
                       <div className="hidden sm:flex flex-col gap-0.5 py-1 shrink-0">
                         {alphabet.map(l => (
@@ -520,12 +553,9 @@ export default function Order() {
                 )}
               </div>
 
-              {/* ── Order summary panel (keyed by country code so it always re-renders fresh) ── */}
               {selectedCountry && (
                 <div key={selectedCountry.code} className="border-t border-border px-5 sm:px-6 py-5 bg-secondary/30">
                   <div className="space-y-3">
-
-                    {/* Service */}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Service</span>
                       <div className="flex items-center gap-2 font-semibold">
@@ -536,7 +566,6 @@ export default function Order() {
                       </div>
                     </div>
 
-                    {/* Country — always shows the currently selected country */}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Pays</span>
                       <div className="flex items-center gap-2">
@@ -555,7 +584,6 @@ export default function Order() {
                       </div>
                     </div>
 
-                    {/* Availability / price */}
                     {comboAvailable === null ? (
                       <div className="flex items-center gap-2 text-muted-foreground text-sm py-1">
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -673,7 +701,6 @@ export default function Order() {
           </motion.div>
         )}
 
-        {/* ── Step 3: Number + SMS ── */}
         {step === 3 && (
           <motion.div key="step3" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.28 }}>
             <div className="bg-white border border-border rounded-2xl p-5 sm:p-8 shadow-sm">
@@ -699,7 +726,6 @@ export default function Order() {
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    {/* Status badge */}
                     <div className="text-center">
                       <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${
                         order.smsCode
@@ -713,7 +739,6 @@ export default function Order() {
                       </div>
                     </div>
 
-                    {/* Service + country info */}
                     {(selectedService || selectedCountry) && (
                       <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
                         {selectedService && (
@@ -731,7 +756,6 @@ export default function Order() {
                       </div>
                     )}
 
-                    {/* Phone number */}
                     {order.phoneNumber && (
                       <div className="bg-secondary border border-border rounded-2xl p-5">
                         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-semibold">Votre numéro virtuel</div>
@@ -748,14 +772,12 @@ export default function Order() {
                       </div>
                     )}
 
-                    {/* Instructions */}
                     {!order.smsCode && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
                         <strong>Étape suivante :</strong> Saisissez ce numéro dans {selectedService?.name} pour recevoir le code de vérification.
                       </div>
                     )}
 
-                    {/* SMS Code */}
                     {order.smsCode ? (
                       <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
                         <div className="text-xs text-green-700 uppercase tracking-wider mb-3 font-semibold">Code de vérification</div>
@@ -780,7 +802,6 @@ export default function Order() {
                       </div>
                     )}
 
-                    {/* Actions */}
                     <div className="flex gap-3 pt-1">
                       <button
                         onClick={resetOrder}
@@ -798,7 +819,6 @@ export default function Order() {
             </div>
           </motion.div>
         )}
-
       </AnimatePresence>
     </div>
   );
