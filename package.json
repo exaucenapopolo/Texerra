@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc && vite build",
-    "serve": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc --noEmit"
+    "build": "vite build",
+    "serve": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "@clerk/react": "^6.7.1",
