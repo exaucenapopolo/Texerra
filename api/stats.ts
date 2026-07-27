@@ -1,21 +1,37 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { ordersTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { initializeApp, getApps } from "firebase/app";
+import { getFirestore, collection, getDocs } from "firebase/firestore";
 import { getCachedPrices } from "../lib/priceCache.js";
+
+// Configuration Firebase pour le serveur (connecté à ton projet texerra-d2506)
+const firebaseConfig = {
+  apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
+  authDomain: "texerra-d2506.firebaseapp.com",
+  projectId: "texerra-d2506",
+  storageBucket: "texerra-d2506.firebasestorage.app",
+  messagingSenderId: "711713247381",
+  appId: "1:711713247381:web:3c74d9207fa152d9f70b9c",
+};
+
+// Initialisation sécurisée de Firebase pour l'API
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const firestoreDb = getFirestore(app);
 
 const router = Router();
 
 router.get("/", async (_req, res) => {
   try {
-    const [ordersResult, prices] = await Promise.all([
-      db.select({ count: sql<number>`count(*)::int` }).from(ordersTable),
+    // Récupération en parallèle des commandes depuis Firestore et des prix en cache
+    const [ordersSnapshot, prices] = await Promise.all([
+      getDocs(collection(firestoreDb, "orders")),
       getCachedPrices(),
     ]);
 
-    const totalOrders = Math.max(ordersResult[0]?.count ?? 0, 12847);
+    // Compte le nombre réel de documents dans la collection "orders" de Firestore
+    const totalOrdersCount = ordersSnapshot.size;
+    const totalOrders = Math.max(totalOrdersCount, 12847);
 
-    // prices is Record<countryId, Record<serviceCode, ...>>
+    // Calcul dynamique du nombre de pays et de services uniques
     const uniqueCountries = Object.keys(prices).length;
     const serviceSet = new Set<string>();
     for (const countryData of Object.values(prices)) {
@@ -31,7 +47,9 @@ router.get("/", async (_req, res) => {
       totalServices: uniqueServices || 20,
       averageDeliverySeconds: 45,
     });
-  } catch {
+  } catch (err) {
+    console.error("Erreur lors de la récupération des stats Firestore:", err);
+    // Valeurs de secours si Firestore ne répond pas temporairement
     res.json({
       totalOrders: 12847,
       totalCountries: 205,
@@ -42,3 +60,4 @@ router.get("/", async (_req, res) => {
 });
 
 export default router;
+        
