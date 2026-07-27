@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
+// Importation relative corrigée pour Vercel
+import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "./lib/auth-context";
 import Layout from "./components/layout";
@@ -38,7 +39,6 @@ function Spinner() {
   );
 }
 
-/** Traduction des codes d'erreur d'authentification Firebase en messages conviviaux en français[span_4](start_span)[span_4](end_span) */
 function firebaseErrorMsg(code: string): string {
   switch (code) {
     case "auth/user-not-found":
@@ -121,7 +121,6 @@ function AuthCard({
 
   return (
     <div className="bg-white rounded-2xl w-full max-w-[420px] border border-border shadow-[0_4px_32px_hsl(32_14%_78%/0.5)] p-8 flex flex-col gap-6">
-      {/* Logo */}
       <div className="flex flex-col items-center gap-3">
         <img
           src={`${window.location.origin}${basePath}/logo-full.png`}
@@ -140,7 +139,6 @@ function AuthCard({
         </div>
       </div>
 
-      {/* Bouton Google */}
       <button
         onClick={handleGoogle}
         disabled={isLoading}
@@ -154,14 +152,12 @@ function AuthCard({
           : "S'inscrire avec Google"}
       </button>
 
-      {/* Séparateur */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-px bg-border" />
         <span className="text-muted-foreground text-xs font-medium">ou</span>
         <div className="flex-1 h-px bg-border" />
       </div>
 
-      {/* Formulaire Email et Mot de passe */}
       <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3" noValidate>
         <div className="flex flex-col gap-1.5">
           <label className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
@@ -216,7 +212,6 @@ function AuthCard({
         </button>
       </form>
 
-      {/* Lien de bascule entre connexion et inscription */}
       <div className="border-t border-border pt-4 text-center">
         <span className="text-muted-foreground text-sm">
           {switchText}{" "}
@@ -334,4 +329,4 @@ function App() {
 }
 
 export default App;
-  
+      
