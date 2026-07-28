@@ -1,35 +1,51 @@
-import express from "express";
+import express, { Router } from "express";
 import cors from "cors";
 
-// Importation statique de TOUTES tes routes d'origine, sans en oublier une seule
-import healthRouter from "./health.js";
-import meRouter from "./me.js";
-import countriesRouter from "./countries.js";
-import servicesRouter from "./services.js";
-import ordersRouter from "./orders.js";
-import paymentsRouter from "./payments.js";
-import topupsRouter from "./topups.js";
-import statsRouter from "./stats.js";
-import contactRouter from "./contact.js";
+// Importations de tes fichiers de routes
+import * as healthMod from "./health.js";
+import * as meMod from "./me.js";
+import * as countriesMod from "./countries.js";
+import * as servicesMod from "./services.js";
+import * as ordersMod from "./orders.js";
+import * as paymentsMod from "./payments.js";
+import * as topupsMod from "./topups.js";
+import * as statsMod from "./stats.js";
+import * as contactMod from "./contact.js";
 
 const app = express();
 
-// Configuration des middlewares globaux
 app.use(cors());
 app.use(express.json());
 
-// Montage de toutes tes routes (identique à ton fichier d'origine, mais sécurisé pour Vercel)
-app.use("/health", healthRouter);
-app.use("/api/me", meRouter);
-app.use("/api/countries", countriesRouter);
-app.use("/api/services", servicesRouter);
-app.use("/api/orders", ordersRouter);
-app.use("/api/payments", paymentsRouter);
-app.use("/api/topups", topupsRouter);
-app.use("/api/stats", statsRouter);
-app.use("/api/contact", contactRouter);
+/**
+ * Bouclier anti-crash : si un module de route est introuvable ou mal exporté (undefined),
+ * cette fonction renvoie un routeur vide par défaut au lieu de faire planter Express.
+ */
+const getRouter = (mod: any): Router => {
+  const router = mod?.default || mod?.router || mod;
+  if (router && (typeof router === "function" || typeof router.handle === "function")) {
+    return router;
+  }
+  // Fallback de sécurité pour éviter le crash .apply() de Vercel
+  const dummyRouter = Router();
+  dummyRouter.all("*", (req, res) => {
+    res.status(503).json({ error: "Service temporairement indisponible (route mal initialisée)" });
+  });
+  return dummyRouter;
+};
 
-// Fallback 404 pour les routes introuvables
+// Montage sécurisé de toutes tes routes
+app.use("/health", getRouter(healthMod));
+app.use("/api/me", getRouter(meMod));
+app.use("/api/countries", getRouter(countriesMod));
+app.use("/api/services", getRouter(servicesMod));
+app.use("/api/orders", getRouter(ordersMod));
+app.use("/api/payments", getRouter(paymentsMod));
+app.use("/api/topups", getRouter(topupsMod));
+app.use("/api/stats", getRouter(statsMod));
+app.use("/api/contact", getRouter(contactMod));
+
+// Fallback 404
 app.use((req, res) => {
   res.status(404).json({
     ok: false,
@@ -37,7 +53,7 @@ app.use((req, res) => {
   });
 });
 
-// Gestion d'erreurs globale du serveur
+// Gestion d'erreurs globale
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("🔥 Erreur Express :", err);
   res.status(500).json({
@@ -47,3 +63,4 @@ app.use((err: any, req: any, res: any, next: any) => {
 });
 
 export default app;
+    
