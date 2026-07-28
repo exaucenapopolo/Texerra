@@ -1,13 +1,30 @@
 import { Router } from "express";
 import { firestoreDb } from "../lib/firebase-admin.js";
-import { z } from "zod"; // <-- On utilise Zod directement
+import { z } from "zod";
 import crypto from "crypto";
-import { buyNumber, checkOrder, cancelOrder, finishOrder, GRIZZLY_COUNTRIES } from "../lib/grizzlysms.js";
+import {
+  buyNumber,
+  checkOrder,
+  cancelOrder,
+  finishOrder,
+  GRIZZLY_COUNTRIES,
+} from "../lib/grizzlysms.js";
 import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
 import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer.js";
-import { requireAuth } from "../lib/requireAuth.js";
+import * as requireAuthModule from "../lib/requireAuth.js";
 
 const router = Router();
+
+// Supporte export default OU export nommé requireAuth
+const requireAuth =
+  (requireAuthModule as any).default ??
+  (requireAuthModule as any).requireAuth;
+
+if (typeof requireAuth !== "function") {
+  throw new Error(
+    'Le middleware "../lib/requireAuth.js" doit exporter une fonction valide (default ou requireAuth).'
+  );
+}
 
 // Définition locale du schéma de validation (qui remplace @workspace/api-zod)
 const CreateOrderBody = z.object({
@@ -18,16 +35,21 @@ const CreateOrderBody = z.object({
 /**
  * Remboursement atomique du solde utilisateur dans Firestore en cas d'annulation ou d'expiration.
  */
-async function atomicRefundOrder(orderId: string, userId: string, priceNum: number, newStatus: "cancelled" | "expired"): Promise<boolean> {
+async function atomicRefundOrder(
+  orderId: string,
+  userId: string,
+  priceNum: number,
+  newStatus: "cancelled" | "expired"
+): Promise<boolean> {
   const orderRef = firestoreDb.collection("orders").doc(orderId);
   const userRef = firestoreDb.collection("users").doc(userId);
 
   return await firestoreDb.runTransaction(async (transaction) => {
     const orderDoc = await transaction.get(orderRef);
     if (!orderDoc.exists) return false;
-    
+
     const orderData = orderDoc.data();
-    if (!orderData || (orderData.status !== 'active' && orderData.status !== 'pending_payment')) {
+    if (!orderData || (orderData.status !== "active" && orderData.status !== "pending_payment")) {
       return false; // Déjà traité
     }
 
@@ -39,10 +61,14 @@ async function atomicRefundOrder(orderId: string, userId: string, priceNum: numb
       updatedAt: new Date().toISOString(),
     });
 
-    transaction.set(userRef, {
-      balance: (currentBalance + priceNum).toFixed(4),
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    transaction.set(
+      userRef,
+      {
+        balance: (currentBalance + priceNum).toFixed(4),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
 
     return true;
   });
@@ -52,7 +78,8 @@ async function atomicRefundOrder(orderId: string, userId: string, priceNum: numb
 router.get("/", requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId as string;
-    const snapshot = await firestoreDb.collection("orders")
+    const snapshot = await firestoreDb
+      .collection("orders")
       .where("userId", "==", userId)
       .get();
 
@@ -65,7 +92,11 @@ router.get("/", requireAuth, async (req, res) => {
       };
     });
 
-    orders.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    orders.sort(
+      (a: any, b: any) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
     res.json(orders);
   } catch (err) {
     const logger = (req as any).log || console;
@@ -301,7 +332,12 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
   }
 
   if (order.price && order.userId) {
-    const refunded = await atomicRefundOrder(orderId, order.userId, parseFloat(order.price), "cancelled");
+    const refunded = await atomicRefundOrder(
+      orderId,
+      order.userId,
+      parseFloat(order.price),
+      "cancelled"
+    );
     if (!refunded) {
       res.json({ ...order, price: order.price ? parseFloat(order.price) : null });
       return;
@@ -351,4 +387,3 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 });
 
 export default router;
-                  
