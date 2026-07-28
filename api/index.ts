@@ -12,55 +12,52 @@ import * as meModule from "./me.js";
 import * as statsModule from "./stats.js";
 import * as contactModule from "./contact.js";
 
-// Création de l'application Express
+// Création de l'application Express principale
 const app = express();
 
-// Middlewares globaux
+// Middlewares globaux indispensables
 app.use(cors());
 app.use(express.json());
 
 /**
- * Fonction intelligente pour extraire le routeur d'un module,
- * qu'il soit exporté par défaut (default) ou nommé (router).
+ * Fonction de sécurité ultra-robuste pour monter une route.
+ * Elle vérifie si le module contient bien un routeur valide avant de l'ajouter.
  */
-const getRouter = (mod: any) => {
-  if (!mod) return null;
-  // Si le module lui-même est une fonction/routeur Express
-  if (typeof mod === "function" || (mod && typeof mod.handle === "function")) return mod;
-  // S'il est exporté via "export default"
-  if (mod.default && (typeof mod.default === "function" || typeof mod.default.handle === "function")) return mod.default;
-  // S'il est exporté via "export const router"
-  if (mod.router && (typeof mod.router === "function" || typeof mod.router.handle === "function")) return mod.router;
-  return null;
-};
-
-// Fonction de montage sécurisé
-const safeMount = (path: string, mod: any) => {
-  const router = getRouter(mod);
-  if (router) {
-    app.use(path, router);
-  } else {
-    console.error(`⚠️ Attention : Le routeur pour "${path}" n'a pas pu être chargé (invalide ou undefined).`);
+const mountRoute = (path: string, moduleObj: any, name: string) => {
+  try {
+    // Récupère le routeur qu'il soit exporté par défaut ou nommé
+    const router = moduleObj?.default || moduleObj?.router || moduleObj;
+    
+    // Vérifie si c'est bien une fonction ou un routeur Express valide
+    if (typeof router === "function" || (router && typeof router.handle === "function")) {
+      app.use(path, router);
+      console.log(`✅ Route [${name}] montée avec succès sur le chemin : ${path}`);
+    } else {
+      console.error(`❌ Erreur : Le module "${name}" (${path}) ne fournit pas de routeur Express valide.`);
+    }
+  } catch (err) {
+    console.error(`❌ Exception critique lors du montage de la route "${name}" (${path}) :`, err);
   }
 };
 
-// Montage de la route de santé
-const healthRouter = getRouter(healthModule);
-if (healthRouter) {
+// Montage sécurisé de la route de santé (Health)
+const healthRouter = healthModule?.default || healthModule?.router || healthModule;
+if (typeof healthRouter === "function" || (healthRouter && typeof healthRouter.handle === "function")) {
   app.use(healthRouter);
+  console.log("✅ Route [health] montée avec succès à la racine.");
 } else {
-  console.error("⚠️ Attention : healthRouter est introuvable.");
+  console.error("⚠️ Attention : healthRouter est invalide ou introuvable.");
 }
 
-// Montage sécurisé de toutes tes autres routes
-safeMount("/me", meModule);
-safeMount("/countries", countriesModule);
-safeMount("/services", servicesModule);
-safeMount("/orders", ordersModule);
-safeMount("/payments", paymentsModule);
-safeMount("/topups", topupsModule);
-safeMount("/stats", statsModule);
-safeMount("/contact", contactModule);
+// Montage sécurisé de toutes tes autres routes avec un journal clair
+mountRoute("/me", meModule, "me");
+mountRoute("/countries", countriesModule, "countries");
+mountRoute("/services", servicesModule, "services");
+mountRoute("/orders", ordersModule, "orders");
+mountRoute("/payments", paymentsModule, "payments");
+mountRoute("/topups", topupsModule, "topups");
+mountRoute("/stats", statsModule, "stats");
+mountRoute("/contact", contactModule, "contact");
 
-// Exportation de l'application pour Vercel
+// Exportation de l'application (compatible à 100% avec les fonctions Serverless de Vercel)
 export default app;
