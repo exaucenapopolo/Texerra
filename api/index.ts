@@ -1,51 +1,36 @@
-import express, { Router } from "express";
+import express from "express";
 import cors from "cors";
 
-// Importations de tes fichiers de routes
-import * as healthMod from "./health.js";
-import * as meMod from "./me.js";
-import * as countriesMod from "./countries.js";
-import * as servicesMod from "./services.js";
-import * as ordersMod from "./orders.js";
-import * as paymentsMod from "./payments.js";
-import * as topupsMod from "./topups.js";
-import * as statsMod from "./stats.js";
-import * as contactMod from "./contact.js";
+// 1. Importation propre et directe de chaque routeur.
+// Note : on omet l'extension (.js ou .ts) pour laisser TypeScript gérer la résolution.
+import healthRouter from "./health";
+import meRouter from "./me";
+import countriesRouter from "./countries";
+import servicesRouter from "./services";
+import ordersRouter from "./orders";
+import paymentsRouter from "./payments";
+import topupsRouter from "./topups";
+import statsRouter from "./stats";
+import contactRouter from "./contact";
 
 const app = express();
 
+// 2. Configuration des middlewares de base
 app.use(cors());
 app.use(express.json());
 
-/**
- * Bouclier anti-crash : si un module de route est introuvable ou mal exporté (undefined),
- * cette fonction renvoie un routeur vide par défaut au lieu de faire planter Express.
- */
-const getRouter = (mod: any): Router => {
-  const router = mod?.default || mod?.router || mod;
-  if (router && (typeof router === "function" || typeof router.handle === "function")) {
-    return router;
-  }
-  // Fallback de sécurité pour éviter le crash .apply() de Vercel
-  const dummyRouter = Router();
-  dummyRouter.all("*", (req, res) => {
-    res.status(503).json({ error: "Service temporairement indisponible (route mal initialisée)" });
-  });
-  return dummyRouter;
-};
+// 3. Montage standard et direct de tes routes
+app.use("/health", healthRouter);
+app.use("/api/me", meRouter);
+app.use("/api/countries", countriesRouter);
+app.use("/api/services", servicesRouter);
+app.use("/api/orders", ordersRouter);
+app.use("/api/payments", paymentsRouter);
+app.use("/api/topups", topupsRouter);
+app.use("/api/stats", statsRouter);
+app.use("/api/contact", contactRouter);
 
-// Montage sécurisé de toutes tes routes
-app.use("/health", getRouter(healthMod));
-app.use("/api/me", getRouter(meMod));
-app.use("/api/countries", getRouter(countriesMod));
-app.use("/api/services", getRouter(servicesMod));
-app.use("/api/orders", getRouter(ordersMod));
-app.use("/api/payments", getRouter(paymentsMod));
-app.use("/api/topups", getRouter(topupsMod));
-app.use("/api/stats", getRouter(statsMod));
-app.use("/api/contact", getRouter(contactMod));
-
-// Fallback 404
+// 4. Gestion des routes introuvables (Fallback 404)
 app.use((req, res) => {
   res.status(404).json({
     ok: false,
@@ -53,7 +38,7 @@ app.use((req, res) => {
   });
 });
 
-// Gestion d'erreurs globale
+// 5. Gestion d'erreurs globale
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("🔥 Erreur Express :", err);
   res.status(500).json({
@@ -62,5 +47,5 @@ app.use((err: any, req: any, res: any, next: any) => {
   });
 });
 
+// 6. L'export crucial pour Vercel
 export default app;
-    
