@@ -3,10 +3,21 @@ import { db, usersTable, topupsTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { createPaymentLink, verifyPayment } from "../lib/accountpe.js";
-import { requireAuth } from "../lib/requireAuth.js";
+import * as requireAuthModule from "../lib/requireAuth.js";
 import { sendTopupEmail } from "../lib/mailer.js";
 
 const router = Router();
+
+// Supporte export default OU export nommé requireAuth
+const requireAuth =
+  (requireAuthModule as any).default ??
+  (requireAuthModule as any).requireAuth;
+
+if (typeof requireAuth !== "function") {
+  throw new Error(
+    'Le middleware "../lib/requireAuth.js" doit exporter une fonction valide (default ou requireAuth).'
+  );
+}
 
 function getServerUrl(): string {
   if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
@@ -45,12 +56,9 @@ function formatTopup(t: typeof topupsTable.$inferSelect) {
 
 /**
  * Atomically credit the user balance for a topup.
- * Uses WHERE status='pending' to guarantee at-most-once execution —
- * even if two requests race, only one UPDATE will match and return a row.
- * Returns true if this call was the one that credited the balance.
+ * Uses WHERE status='pending' to guarantee at-most-once execution.
  */
 async function atomicCredit(topupId: string, userId: string, amountEur: string): Promise<boolean> {
-  // 1. Atomically flip status pending → completed
   const [credited] = await db
     .update(topupsTable)
     .set({ status: "completed", updatedAt: new Date() })
@@ -58,11 +66,9 @@ async function atomicCredit(topupId: string, userId: string, amountEur: string):
     .returning({ id: topupsTable.id });
 
   if (!credited) {
-    // Already processed by another request (webhook racing with poll, etc.)
     return false;
   }
 
-  // 2. Credit the balance — only runs if step 1 succeeded
   await db
     .update(usersTable)
     .set({
@@ -77,15 +83,17 @@ async function atomicCredit(topupId: string, userId: string, amountEur: string):
 // GET /api/topups — list user's recharge history
 router.get("/", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
+
   const topups = await db
     .select()
     .from(topupsTable)
     .where(eq(topupsTable.userId, userId))
     .orderBy(desc(topupsTable.createdAt));
+
   res.json(topups.map(formatTopup));
 });
 
-// POST /api/topups/initiate — create AccountPe payment link for wallet top-up
+// POST /api/topups/initiate — create payment link
 router.post("/initiate", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const { amountEur, name, email, mobile, countryIso } = req.body as {
@@ -100,6 +108,7 @@ router.post("/initiate", requireAuth, async (req, res) => {
     res.status(400).json({ error: "Montant invalide (min 0.50€, max 500€)" });
     return;
   }
+
   if (!name || !email || !mobile) {
     res.status(400).json({ error: "Champs requis: name, email, mobile" });
     return;
@@ -124,7 +133,6 @@ router.post("/initiate", requireAuth, async (req, res) => {
       transactionId,
       description: `Texerra — recharge solde ${amountEur.toFixed(2)}€`,
       callbackUrl: `${serverUrl}/api/topups/webhook`,
-      // Redirect via backend so AccountPe's ?status=&transaction_id= are handled server-side
       redirectUrl: `${serverUrl}/api/topups/return?topupId=${topupId}`,
     });
 
@@ -142,12 +150,13 @@ router.post("/initiate", requireAuth, async (req, res) => {
 
     res.json({ topupId: topup.id, checkoutUrl, amountEur });
   } catch (err) {
-    req.log.error({ err }, "Failed to create AccountPe topup link");
+    const logger = (req as any).log || console;
+    logger.error({ err }, "Failed to create AccountPe topup link");
     res.status(502).json({ error: "Impossible d'initier le paiement. Veuillez réessayer." });
   }
 });
 
-// POST /api/topups/webhook — AccountPe callback → credit user balance (atomic)
+// POST /api/topups/webhook — callback
 router.post("/webhook", async (req, res) => {
   res.status(200).json({ received: true });
 
@@ -167,23 +176,29 @@ router.post("/webhook", async (req, res) => {
     if (!topup) return;
 
     const credited = await atomicCredit(topup.id, topup.userId, topup.amountEur);
+
     if (credited) {
       const [u] = await db.select().from(usersTable).where(eq(usersTable.id, topup.userId)).limit(1);
-      if (u?.email) sendTopupEmail({ to: u.email, name: u.name, amountEur: parseFloat(topup.amountEur), status: "credited" }).catch(() => {});
+      if (u?.email) {
+        sendTopupEmail({
+          to: u.email,
+          name: u.name,
+          amountEur: parseFloat(topup.amountEur),
+          status: "credited",
+        }).catch(() => {});
+      }
     }
   } catch (err) {
     console.error("Topup webhook error:", err);
   }
 });
 
-// GET /api/topups/return — AccountPe redirect back after payment (public, no auth)
-// AccountPe appends: ?status=1&transaction_id=TEX-TOP-xxx to our redirectUrl
+// GET /api/topups/return
 router.get("/return", async (req, res) => {
   const { topupId, transaction_id } = req.query as { topupId?: string; transaction_id?: string };
 
-  // Determine frontend redirect base
   const serverUrl = getServerUrl();
-  const frontendBase = serverUrl; // same domain — proxy routes /wallet to frontend
+  const frontendBase = serverUrl;
 
   if (!topupId && !transaction_id) {
     res.redirect(`${frontendBase}/wallet`);
@@ -191,13 +206,13 @@ router.get("/return", async (req, res) => {
   }
 
   try {
-    // Find the topup by internal id OR by externalId (AccountPe transaction_id)
     let topup: typeof topupsTable.$inferSelect | undefined;
 
     if (topupId) {
       const rows = await db.select().from(topupsTable).where(eq(topupsTable.id, String(topupId))).limit(1);
       topup = rows[0];
     }
+
     if (!topup && transaction_id) {
       const rows = await db.select().from(topupsTable).where(eq(topupsTable.externalId, String(transaction_id))).limit(1);
       topup = rows[0];
@@ -208,17 +223,16 @@ router.get("/return", async (req, res) => {
       return;
     }
 
-    // Already processed — go straight to success
     if (topup.status === "completed") {
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}&result=credited`);
       return;
     }
+
     if (topup.status === "failed") {
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}&result=failed`);
       return;
     }
 
-    // Verify with AccountPe
     const txId = topup.externalId ?? transaction_id as string | undefined;
     if (!txId) {
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}`);
@@ -230,9 +244,17 @@ router.get("/return", async (req, res) => {
     if (isPaid) {
       const credited = await atomicCredit(topup.id, topup.userId, topup.amountEur);
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}&result=credited`);
+
       if (credited) {
         const [u] = await db.select().from(usersTable).where(eq(usersTable.id, topup.userId)).limit(1);
-        if (u?.email) sendTopupEmail({ to: u.email, name: u.name, amountEur: parseFloat(topup.amountEur), status: "credited" }).catch(() => {});
+        if (u?.email) {
+          sendTopupEmail({
+            to: u.email,
+            name: u.name,
+            amountEur: parseFloat(topup.amountEur),
+            status: "credited",
+          }).catch(() => {});
+        }
       }
       return;
     }
@@ -242,13 +264,21 @@ router.get("/return", async (req, res) => {
         .update(topupsTable)
         .set({ status: "failed", updatedAt: new Date() })
         .where(and(eq(topupsTable.id, topup.id), eq(topupsTable.status, "pending")));
+
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}&result=failed`);
+
       const [u] = await db.select().from(usersTable).where(eq(usersTable.id, topup.userId)).limit(1);
-      if (u?.email) sendTopupEmail({ to: u.email, name: u.name, amountEur: parseFloat(topup.amountEur), status: "failed" }).catch(() => {});
+      if (u?.email) {
+        sendTopupEmail({
+          to: u.email,
+          name: u.name,
+          amountEur: parseFloat(topup.amountEur),
+          status: "failed",
+        }).catch(() => {});
+      }
       return;
     }
 
-    // Still pending
     res.redirect(`${frontendBase}/wallet?topup=${topup.id}&result=pending`);
   } catch (err) {
     console.error("AccountPe return handler error:", err);
@@ -256,7 +286,7 @@ router.get("/return", async (req, res) => {
   }
 });
 
-// GET /api/topups/:id/status — check topup status, optionally force-verifying with provider
+// GET /api/topups/:id/status
 router.get("/:id/status", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
 
@@ -271,7 +301,6 @@ router.get("/:id/status", requireAuth, async (req, res) => {
     return;
   }
 
-  // Force-verify with AccountPe when: still pending OR explicitly requested via ?force=true
   const force = req.query.force === "true";
   const shouldCheck = (topup.status === "pending" || force) && !!topup.externalId;
 
@@ -286,7 +315,6 @@ router.get("/:id/status", requireAuth, async (req, res) => {
         return;
       }
 
-      // Mark as failed if provider confirms failure
       if (providerStatus === "failed" && topup.status === "pending") {
         await db
           .update(topupsTable)
@@ -298,7 +326,8 @@ router.get("/:id/status", requireAuth, async (req, res) => {
         return;
       }
     } catch (err) {
-      req.log.warn({ err }, "AccountPe verify error during status check (non-fatal)");
+      const logger = (req as any).log || console;
+      logger.warn?.({ err }, "AccountPe verify error during status check (non-fatal)");
     }
   }
 
