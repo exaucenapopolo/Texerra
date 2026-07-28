@@ -7,24 +7,17 @@
     "jsx": "react-jsx",
     "strict": false,
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": false,
+    "noEmit": true,
     "baseUrl": ".",
-    "types": ["vite/client"],
     "paths": {
-      "@/*": ["./src/*", "./client/src/*"],
-      "@workspace/db": ["./lib/db", "./shared/db"],
-      "@workspace/api-zod": ["./shared/zod", "./shared"],
-      "@workspace/api-client-react": ["./client/src", "./src"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
     "src/**/*",
-    "client/**/*",
-    "api/**/*",
-    "lib/**/*",
-    "shared/**/*",
     "*.ts",
     "*.tsx",
     "*.js",
