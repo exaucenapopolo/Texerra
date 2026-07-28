@@ -11,17 +11,20 @@
     "isolatedModules": true,
     "noEmit": false,
     "baseUrl": ".",
+    "types": ["vite/client"],
     "paths": {
-      "@/*": ["./src/*"],
-      "@workspace/db": ["./lib/db"],
-      "@workspace/api-zod": ["./shared/zod"],
-      "@workspace/api-client-react": ["./client/src"]
+      "@/*": ["./src/*", "./client/src/*"],
+      "@workspace/db": ["./lib/db", "./shared/db"],
+      "@workspace/api-zod": ["./shared/zod", "./shared"],
+      "@workspace/api-client-react": ["./client/src", "./src"]
     }
   },
   "include": [
     "src/**/*",
+    "client/**/*",
     "api/**/*",
     "lib/**/*",
+    "shared/**/*",
     "*.ts",
     "*.tsx",
     "*.js",
