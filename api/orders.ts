@@ -15,7 +15,7 @@ import * as requireAuthModule from "../lib/requireAuth.js";
 
 const router = Router();
 
-// Supporte export default OU export nommé requireAuth
+// Support robuste pour l'import de requireAuth (qu'il soit default ou nommé)
 const requireAuth =
   (requireAuthModule as any).default ??
   (requireAuthModule as any).requireAuth;
@@ -26,7 +26,7 @@ if (typeof requireAuth !== "function") {
   );
 }
 
-// Définition locale du schéma de validation (qui remplace @workspace/api-zod)
+// Définition locale du schéma de validation
 const CreateOrderBody = z.object({
   countryCode: z.string().min(1, "Le code pays est requis"),
   serviceCode: z.string().min(1, "Le code service est requis"),
@@ -387,3 +387,4 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 });
 
 export default router;
+                                     
