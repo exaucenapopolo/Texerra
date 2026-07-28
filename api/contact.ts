@@ -13,9 +13,18 @@ router.post("/", async (req, res) => {
 
   const { name, email, message } = parsed.data;
 
-  await db.insert(contactsTable).values({ name, email, message });
+  try {
+    // Enregistrement dans la base de données
+    await db.insert(contactsTable).values({ name, email, message });
 
-  res.json({ success: true, message: "Message envoyé avec succès. Notre équipe vous répondra dans les 24 heures." });
+    res.json({ 
+      success: true, 
+      message: "Message envoyé avec succès. Notre équipe vous répondra dans les 24 heures." 
+    });
+  } catch (err) {
+    console.error("Erreur lors de l'enregistrement du message de contact :", err);
+    res.status(500).json({ error: "Impossible d'envoyer le message pour le moment" });
+  }
 });
 
 export default router;
