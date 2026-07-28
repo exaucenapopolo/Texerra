@@ -1,22 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import admin from "firebase-admin";
+import { initializeApp, getApps } from "firebase/app";
+import { getFirestore, collection, getDocs } from "firebase/firestore";
 import { getCachedPrices } from "../lib/priceCache.js";
 
-// Initialisation sécurisée de Firebase Admin (Accès VIP Backend)
-// On vérifie d'abord si l'application n'est pas déjà initialisée pour éviter les erreurs
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: "texerra-d2506",
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      // .replace permet de corriger le formatage de la clé privée sur Vercel
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }),
-  });
-}
+// Configuration Firebase pour le serveur (connecté à ton projet texerra-d2506)
+const firebaseConfig = {
+  apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
+  authDomain: "texerra-d2506.firebaseapp.com",
+  projectId: "texerra-d2506",
+  storageBucket: "texerra-d2506.firebasestorage.app",
+  messagingSenderId: "711713247381",
+  appId: "1:711713247381:web:3c74d9207fa152d9f70b9c",
+};
 
-// On utilise Firestore via l'Admin SDK
-const firestoreDb = admin.firestore();
+// Initialisation sécurisée de Firebase pour l'API
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const firestoreDb = getFirestore(app);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Configuration des en-têtes CORS
@@ -29,19 +28,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Récupération de la collection "orders". 
-    // Grâce à l'Admin SDK, cela fonctionnera sans erreur de permission !
+    // Récupération en parallèle des commandes depuis Firestore et des prix en cache
     const [ordersSnapshot, prices] = await Promise.all([
-      firestoreDb.collection("orders").get(),
+      getDocs(collection(firestoreDb, "orders")),
       getCachedPrices(),
     ]);
 
+    // Compte le nombre réel de documents dans la collection "orders" de Firestore
     const totalOrdersCount = ordersSnapshot.size;
     const totalOrders = Math.max(totalOrdersCount, 12847);
 
+    // Calcul dynamique du nombre de pays et de services uniques
     const uniqueCountries = Object.keys(prices).length;
     const serviceSet = new Set<string>();
-    
     for (const countryData of Object.values(prices)) {
       for (const code of Object.keys(countryData)) {
         serviceSet.add(code);
@@ -57,6 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (err) {
     console.error("Erreur lors de la récupération des stats Firestore:", err);
+    // Valeurs de secours si Firestore ne répond pas temporairement
     return res.status(200).json({
       totalOrders: 12847,
       totalCountries: 205,
