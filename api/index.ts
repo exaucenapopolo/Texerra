@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 
-// 1. Importation propre avec l'extension .js obligatoire pour Vercel (ESM)
+// 1. Importation avec l'extension .js obligatoire pour Vercel (ESM)
 import healthRouter from "./health.js";
 import meRouter from "./me.js";
 import countriesRouter from "./countries.js";
@@ -48,3 +48,4 @@ app.use((err: any, req: any, res: any, next: any) => {
 
 // 6. L'export crucial pour Vercel
 export default app;
+        
