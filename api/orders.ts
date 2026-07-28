@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { db, ordersTable, usersTable } from "@workspace/db";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { firestoreDb } from "../lib/firebase-admin.js";
 import { CreateOrderBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import { buyNumber, checkOrder, cancelOrder, finishOrder, GRIZZLY_COUNTRIES } from "../lib/grizzlysms.js";
@@ -11,44 +10,67 @@ import { requireAuth } from "../lib/requireAuth.js";
 const router = Router();
 
 /**
- * Atomically refund the order price to the user balance.
- * Uses WHERE status IN (active|pending_payment) to avoid double-refund.
- * Returns true if the refund was applied.
+ * Atomically refund the order price to the user balance using a Firestore transaction.
+ * Prevents double-refund if already cancelled or expired.
  */
-async function atomicRefundOrder(orderId: string, userId: string, price: string, newStatus: "cancelled" | "expired"): Promise<boolean> {
-  const [updated] = await db
-    .update(ordersTable)
-    .set({ status: newStatus, updatedAt: new Date() })
-    .where(and(
-      eq(ordersTable.id, orderId),
-      // Only refund if the order was still active (prevents double-refund)
-      sql`status IN ('active', 'pending_payment')`
-    ))
-    .returning({ id: ordersTable.id });
+async function atomicRefundOrder(orderId: string, userId: string, priceNum: number, newStatus: "cancelled" | "expired"): Promise<boolean> {
+  const orderRef = firestoreDb.collection("orders").doc(orderId);
+  const userRef = firestoreDb.collection("users").doc(userId);
 
-  if (!updated) return false; // already cancelled/expired/completed
+  return await firestoreDb.runTransaction(async (transaction) => {
+    const orderDoc = await transaction.get(orderRef);
+    if (!orderDoc.exists) return false;
+    
+    const orderData = orderDoc.data();
+    if (!orderData || (orderData.status !== 'active' && orderData.status !== 'pending_payment')) {
+      return false; // Already processed
+    }
 
-  // Credit balance back
-  await db
-    .update(usersTable)
-    .set({
-      balance: sql`balance + ${price}::numeric`,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.id, userId));
+    const userDoc = await transaction.get(userRef);
+    const currentBalance = userDoc.exists ? parseFloat(userDoc.data()?.balance ?? "0") : 0;
 
-  return true;
+    // Update order status
+    transaction.update(orderRef, {
+      status: newStatus,
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Credit balance back
+    transaction.set(userRef, {
+      balance: (currentBalance + priceNum).toFixed(4),
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    return true;
+  });
 }
 
 // GET /api/orders — orders for the authenticated user
 router.get("/", requireAuth, async (req, res) => {
-  const userId = (req as any).userId as string;
-  const orders = await db
-    .select()
-    .from(ordersTable)
-    .where(eq(ordersTable.userId, userId))
-    .orderBy(desc(ordersTable.createdAt));
-  res.json(orders.map((o) => ({ ...o, price: o.price ? parseFloat(o.price) : null })));
+  try {
+    const userId = (req as any).userId as string;
+    const snapshot = await firestoreDb.collection("orders")
+      .where("userId", "==", userId)
+      .get();
+
+    const orders = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        price: data.price ? parseFloat(data.price) : null,
+      };
+    });
+
+    // Sort by creation date descending
+    orders.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json(orders);
+  } catch (err) {
+    const logger = (req as any).log || console;
+    logger.error({ err }, "Failed to fetch orders from Firestore");
+    res.status(500).json({ error: "Impossible de récupérer les commandes" });
+  }
 });
 
 // POST /api/orders — create order and immediately buy number (deducts from balance)
@@ -79,37 +101,46 @@ router.post("/", requireAuth, async (req, res) => {
       return;
     }
     priceEur = p;
-  } catch (err) {
-    req.log.error({ err }, "Failed to fetch prices");
+  } catch (err: any) {
+    const logger = (req as any).log || console;
+    logger.error({ err }, "Failed to fetch prices");
     res.status(500).json({ error: "Impossible de récupérer les prix" });
     return;
   }
 
-  // Check user balance
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-  if (!user) {
-    res.status(401).json({ error: "Utilisateur introuvable" });
-    return;
-  }
+  const userRef = firestoreDb.collection("users").doc(userId);
+  let orderId = crypto.randomUUID();
 
-  const balance = parseFloat(user.balance ?? "0");
-  if (balance < priceEur) {
-    res.status(402).json({ error: "Solde insuffisant", required: priceEur, balance });
-    return;
-  }
+  // Check and deduct balance atomically using a Firestore transaction
+  try {
+    await firestoreDb.runTransaction(async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists) {
+        throw new Error("user_not_found");
+      }
 
-  // Deduct balance atomically (only if balance still >= price)
-  const [deducted] = await db
-    .update(usersTable)
-    .set({
-      balance: sql`balance - ${priceEur.toFixed(4)}::numeric`,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(usersTable.id, userId), sql`balance >= ${priceEur.toFixed(4)}::numeric`))
-    .returning({ id: usersTable.id });
+      const userData = userDoc.data();
+      const currentBalance = parseFloat(userData?.balance ?? "0");
 
-  if (!deducted) {
-    res.status(402).json({ error: "Solde insuffisant", required: priceEur, balance });
+      if (currentBalance < priceEur) {
+        throw new Error("insufficient_balance");
+      }
+
+      transaction.update(userRef, {
+        balance: (currentBalance - priceEur).toFixed(4),
+        updatedAt: new Date().toISOString(),
+      });
+    });
+  } catch (err: any) {
+    if (err.message === "user_not_found") {
+      res.status(401).json({ error: "Utilisateur introuvable" });
+      return;
+    }
+    if (err.message === "insufficient_balance") {
+      res.status(402).json({ error: "Solde insuffisant", required: priceEur });
+      return;
+    }
+    res.status(500).json({ error: "Erreur lors de la vérification du solde" });
     return;
   }
 
@@ -117,15 +148,20 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     grizzlyOrder = await buyNumber(countryId, serviceCode);
   } catch (err: any) {
-    // Refund balance on failure
-    await db.update(usersTable)
-      .set({
-        balance: sql`balance + ${priceEur.toFixed(4)}::numeric`,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.id, userId));
+    // Refund balance on failure atomically
+    await firestoreDb.runTransaction(async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (userDoc.exists) {
+        const currentBalance = parseFloat(userDoc.data()?.balance ?? "0");
+        transaction.update(userRef, {
+          balance: (currentBalance + priceEur).toFixed(4),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    });
 
-    req.log.error({ err }, "Failed to buy GrizzlySMS number");
+    const logger = (req as any).log || console;
+    logger.error({ err }, "Failed to buy GrizzlySMS number");
     if (err.message === "no_numbers") {
       res.status(503).json({ error: "no_numbers" });
     } else if (err.message === "no_balance") {
@@ -137,35 +173,41 @@ router.post("/", requireAuth, async (req, res) => {
   }
 
   const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
+  const orderData = {
+    id: orderId,
+    userId,
+    countryCode,
+    serviceCode,
+    phoneNumber: `+${grizzlyOrder.phone}`,
+    externalOrderId: String(grizzlyOrder.id),
+    status: "active",
+    price: priceEur.toFixed(4),
+    currency: "EUR",
+    expiresAt: expiresAt.toISOString(),
+    createdAt: new Date().toISOString(),
+  };
 
-  const [order] = await db
-    .insert(ordersTable)
-    .values({
-      id: crypto.randomUUID(),
-      userId,
-      countryCode,
-      serviceCode,
-      phoneNumber: `+${grizzlyOrder.phone}`,
-      externalOrderId: String(grizzlyOrder.id),
-      status: "active",
-      price: priceEur.toFixed(4),
-      currency: "EUR",
-      expiresAt,
-    })
-    .returning();
+  await firestoreDb.collection("orders").doc(orderId).set(orderData);
 
-  res.status(201).json({ ...order, price: order.price ? parseFloat(order.price) : null });
+  res.status(201).json({
+    ...orderData,
+    price: priceEur,
+    expiresAt,
+  });
 
   // Email de confirmation — non-bloquant
-  if (user.email) {
+  const userDoc = await userRef.get();
+  const userData = userDoc.data();
+  if (userData?.email) {
     sendOrderEmail({
-      to: user.email, name: user.name,
-      phoneNumber: order.phoneNumber,
-      serviceCode: order.serviceCode,
-      countryCode: order.countryCode,
+      to: userData.email,
+      name: userData.name,
+      phoneNumber: orderData.phoneNumber,
+      serviceCode: orderData.serviceCode,
+      countryCode: orderData.countryCode,
       priceEur,
-      expiresAt: order.expiresAt,
-      orderId: order.id,
+      expiresAt,
+      orderId,
     }).catch(() => {});
   }
 });
@@ -173,33 +215,35 @@ router.post("/", requireAuth, async (req, res) => {
 // GET /api/orders/:id — get order + poll SMS + auto-refund on expire
 router.get("/:id", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
+  const orderId = String(req.params.id);
 
-  const [order] = await db
-    .select()
-    .from(ordersTable)
-    .where(eq(ordersTable.id, String(req.params.id)))
-    .limit(1);
+  const orderRef = firestoreDb.collection("orders").doc(orderId);
+  const orderDoc = await orderRef.get();
 
-  if (!order) {
+  if (!orderDoc.exists) {
     res.status(404).json({ error: "Commande introuvable" });
     return;
   }
 
+  const order = orderDoc.data()!;
   if (order.userId !== userId) {
     res.status(403).json({ error: "Accès refusé" });
     return;
   }
 
+  const expiresAtDate = new Date(order.expiresAt);
+
   // Auto-expire if past expiry time and still active
-  if (order.status === "active" && order.expiresAt && new Date() > order.expiresAt) {
+  if (order.status === "active" && order.expiresAt && new Date() > expiresAtDate) {
     if (order.externalOrderId) {
       cancelOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
     }
     if (order.price && order.userId) {
-      await atomicRefundOrder(order.id, order.userId, order.price, "expired");
+      await atomicRefundOrder(orderId, order.userId, parseFloat(order.price), "expired");
     }
-    const [fresh] = await db.select().from(ordersTable).where(eq(ordersTable.id, order.id)).limit(1);
-    res.json({ ...fresh, price: fresh.price ? parseFloat(fresh.price) : null });
+    const freshDoc = await orderRef.get();
+    const freshData = freshDoc.data()!;
+    res.json({ ...freshData, price: freshData.price ? parseFloat(freshData.price) : null });
     return;
   }
 
@@ -209,29 +253,33 @@ router.get("/:id", requireAuth, async (req, res) => {
       const result = await checkOrder(parseInt(order.externalOrderId, 10));
 
       if (result.status === "received" && result.code) {
-        const [updated] = await db
-          .update(ordersTable)
-          .set({ smsCode: result.code, smsText: result.code, status: "completed", updatedAt: new Date() })
-          .where(eq(ordersTable.id, order.id))
-          .returning();
+        await orderRef.update({
+          smsCode: result.code,
+          smsText: result.code,
+          status: "completed",
+          updatedAt: new Date().toISOString(),
+        });
 
         finishOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
 
-        res.json({ ...updated, price: updated.price ? parseFloat(updated.price) : null });
+        const updatedDoc = await orderRef.get();
+        const updatedData = updatedDoc.data()!;
+        res.json({ ...updatedData, price: updatedData.price ? parseFloat(updatedData.price) : null });
         return;
       }
 
       if (result.status === "cancelled") {
-        // Provider cancelled — refund and mark expired
         if (order.price && order.userId) {
-          await atomicRefundOrder(order.id, order.userId, order.price, "expired");
+          await atomicRefundOrder(orderId, order.userId, parseFloat(order.price), "expired");
         }
-        const [fresh] = await db.select().from(ordersTable).where(eq(ordersTable.id, order.id)).limit(1);
-        res.json({ ...fresh, price: fresh.price ? parseFloat(fresh.price) : null });
+        const freshDoc = await orderRef.get();
+        const freshData = freshDoc.data()!;
+        res.json({ ...freshData, price: freshData.price ? parseFloat(freshData.price) : null });
         return;
       }
     } catch (err) {
-      req.log.warn({ err }, "GrizzlySMS checkOrder error (non-fatal)");
+      const logger = (req as any).log || console;
+      logger.warn({ err }, "GrizzlySMS checkOrder error (non-fatal)");
     }
   }
 
@@ -241,18 +289,17 @@ router.get("/:id", requireAuth, async (req, res) => {
 // POST /api/orders/:id/cancel — cancel order (refund to balance, atomic)
 router.post("/:id/cancel", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
+  const orderId = String(req.params.id);
 
-  const [order] = await db
-    .select()
-    .from(ordersTable)
-    .where(eq(ordersTable.id, String(req.params.id)))
-    .limit(1);
+  const orderRef = firestoreDb.collection("orders").doc(orderId);
+  const orderDoc = await orderRef.get();
 
-  if (!order) {
+  if (!orderDoc.exists) {
     res.status(404).json({ error: "Commande introuvable" });
     return;
   }
 
+  const order = orderDoc.data()!;
   if (order.userId !== userId) {
     res.status(403).json({ error: "Accès refusé" });
     return;
@@ -265,47 +312,57 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 
   // Atomic refund — prevents double-refund if already cancelled
   if (order.price && order.userId) {
-    const refunded = await atomicRefundOrder(order.id, order.userId, order.price, "cancelled");
+    const refunded = await atomicRefundOrder(orderId, order.userId, parseFloat(order.price), "cancelled");
     if (!refunded) {
-      // Already cancelled/completed, just return current state
       res.json({ ...order, price: order.price ? parseFloat(order.price) : null });
       return;
     }
-    const [fresh] = await db.select().from(ordersTable).where(eq(ordersTable.id, order.id)).limit(1);
-    res.json({ ...fresh, price: fresh.price ? parseFloat(fresh.price) : null });
+    const freshDoc = await orderRef.get();
+    const freshData = freshDoc.data()!;
+    res.json({ ...freshData, price: freshData.price ? parseFloat(freshData.price) : null });
 
     // Email d'annulation avec remboursement — non-bloquant
-    const [u] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-    if (u?.email) sendCancellationEmail({
-      to: u.email, name: u.name,
-      phoneNumber: order.phoneNumber,
-      serviceCode: order.serviceCode,
-      countryCode: order.countryCode,
-      refundEur: order.price ? parseFloat(order.price) : null,
-      orderId: order.id,
-    }).catch(() => {});
+    const userDoc = await firestoreDb.collection("users").doc(userId).get();
+    const u = userDoc.data();
+    if (u?.email) {
+      sendCancellationEmail({
+        to: u.email,
+        name: u.name,
+        phoneNumber: order.phoneNumber,
+        serviceCode: order.serviceCode,
+        countryCode: order.countryCode,
+        refundEur: order.price ? parseFloat(order.price) : null,
+        orderId,
+      }).catch(() => {});
+    }
     return;
   }
 
   // No price to refund, just cancel
-  const [updated] = await db
-    .update(ordersTable)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(eq(ordersTable.id, String(req.params.id)))
-    .returning();
+  await orderRef.update({
+    status: "cancelled",
+    updatedAt: new Date().toISOString(),
+  });
 
-  res.json({ ...updated, price: updated.price ? parseFloat(updated.price) : null });
+  const updatedDoc = await orderRef.get();
+  const updatedData = updatedDoc.data()!;
+  res.json({ ...updatedData, price: updatedData.price ? parseFloat(updatedData.price) : null });
 
   // Email d'annulation sans remboursement — non-bloquant
-  const [u2] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-  if (u2?.email) sendCancellationEmail({
-    to: u2.email, name: u2.name,
-    phoneNumber: order.phoneNumber,
-    serviceCode: order.serviceCode,
-    countryCode: order.countryCode,
-    refundEur: null,
-    orderId: order.id,
-  }).catch(() => {});
+  const userDoc2 = await firestoreDb.collection("users").doc(userId).get();
+  const u2 = userDoc2.data();
+  if (u2?.email) {
+    sendCancellationEmail({
+      to: u2.email,
+      name: u2.name,
+      phoneNumber: order.phoneNumber,
+      serviceCode: order.serviceCode,
+      countryCode: order.countryCode,
+      refundEur: null,
+      orderId,
+    }).catch(() => {});
+  }
 });
 
 export default router;
+           
