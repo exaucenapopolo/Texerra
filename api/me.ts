@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { firestoreDb } from "../lib/firebase-admin.js";
 import { requireAuth } from "../lib/requireAuth.js";
 import { sendWelcomeEmail } from "../lib/mailer.js";
 
@@ -12,18 +11,22 @@ const SUPPORTED_CURRENCIES = [
   "ZMW", "MWK", "MZN", "ETB", "MAD", "DZD",
 ];
 
-function formatUser(user: typeof usersTable.$inferSelect) {
+/**
+ * Formate les données utilisateur pour l'API
+ */
+function formatUser(user: any) {
   return {
     id: user.id,
-    email: user.email,
-    name: user.name,
-    avatarUrl: user.avatarUrl,
+    email: user.email || "",
+    name: user.name || "Utilisateur",
+    avatarUrl: user.avatarUrl || null,
     phone: user.phone ?? null,
     currency: user.currency ?? "EUR",
     balance: parseFloat(user.balance ?? "0"),
   };
 }
 
+// GET /api/me — Récupérer ou initialiser le profil de l'utilisateur authentifié
 router.get("/", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const firebaseUser = (req as any).firebaseUser as {
@@ -33,36 +36,50 @@ router.get("/", requireAuth, async (req, res) => {
     picture?: string;
   };
 
-  let [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+  const userRef = firestoreDb.collection("users").doc(userId);
+  const userDoc = await userRef.get();
 
-  if (!user) {
-    const email = firebaseUser.email ?? "";
-    const name = firebaseUser.name || email.split("@")[0] || "Utilisateur";
-    const avatarUrl = firebaseUser.picture ?? null;
+  let userData: any;
+
+  if (!userDoc.exists) {
+    const email = firebaseUser?.email ?? "";
+    const name = firebaseUser?.name || email.split("@")[0] || "Utilisateur";
+    const avatarUrl = firebaseUser?.picture ?? null;
+
+    userData = {
+      id: userId,
+      email,
+      name,
+      avatarUrl,
+      phone: null,
+      currency: "EUR",
+      balance: "0.0000",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
     try {
-      [user] = await db
-        .insert(usersTable)
-        .values({ id: userId, email, name, avatarUrl, balance: "0" })
-        .onConflictDoNothing()
-        .returning();
+      // Création du profil dans Firestore
+      await userRef.set(userData);
 
-      if (!user) {
-        [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-      } else {
-        // Nouvel utilisateur — envoyer l'email de bienvenue (sans bloquer la réponse)
-        if (email) sendWelcomeEmail(email, name).catch(() => {});
+      // Nouvel utilisateur — envoyer l'e-mail de bienvenue (non-bloquant)
+      if (email) {
+        sendWelcomeEmail(email, name).catch(() => {});
       }
     } catch (err) {
-      req.log.error({ err }, "Failed to provision user from Firebase");
+      const logger = (req as any).log || console;
+      logger.error({ err }, "Failed to provision user from Firebase");
       res.status(500).json({ error: "Failed to load user profile" });
       return;
     }
+  } else {
+    userData = userDoc.data();
   }
 
-  res.json(formatUser(user));
+  res.json(formatUser(userData));
 });
 
+// PATCH /api/me — Mettre à jour le profil utilisateur
 router.patch("/", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const { name, phone, currency } = (req.body ?? {}) as {
@@ -71,7 +88,9 @@ router.patch("/", requireAuth, async (req, res) => {
     currency?: string;
   };
 
-  const updates: Partial<typeof usersTable.$inferInsert> = {};
+  const updates: Record<string, any> = {
+    updatedAt: new Date().toISOString(),
+  };
 
   if (name !== undefined) {
     if (!name.trim()) {
@@ -93,28 +112,32 @@ router.patch("/", requireAuth, async (req, res) => {
     updates.currency = currency;
   }
 
-  if (Object.keys(updates).length === 0) {
+  // S'il n'y a que 'updatedAt', c'est qu'aucune modification valide n'a été passée
+  if (Object.keys(updates).length <= 1) {
     res.status(400).json({ error: "Aucune modification fournie" });
     return;
   }
 
   try {
-    const [updated] = await db
-      .update(usersTable)
-      .set(updates)
-      .where(eq(usersTable.id, userId))
-      .returning();
+    const userRef = firestoreDb.collection("users").doc(userId);
+    const userDoc = await userRef.get();
 
-    if (!updated) {
+    if (!userDoc.exists) {
       res.status(404).json({ error: "Utilisateur non trouvé" });
       return;
     }
 
-    res.json(formatUser(updated));
+    // Mise à jour dans Firestore
+    await userRef.update(updates);
+
+    const updatedDoc = await userRef.get();
+    res.json(formatUser(updatedDoc.data()));
   } catch (err) {
-    req.log.error({ err }, "Failed to update user profile");
+    const logger = (req as any).log || console;
+    logger.error({ err }, "Failed to update user profile");
     res.status(500).json({ error: "Erreur lors de la mise à jour du profil" });
   }
 });
 
 export default router;
+        
