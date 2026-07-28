@@ -1,25 +1,43 @@
 import { Router } from "express";
 import { db, paymentsTable, ordersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-type InitiatePaymentBodyType = { orderId?: string; name?: string; email?: string; mobile?: string; countryIso?: string };
-const InitiatePaymentBody = {
-  safeParse(body: unknown) {
-    const b = body as InitiatePaymentBodyType;
-    if (!b?.orderId || !b?.name || !b?.email || !b?.mobile) return { success: false as const, error: { issues: [] } };
-    return { success: true as const, data: b as Required<Omit<InitiatePaymentBodyType, "countryIso">> & Pick<InitiatePaymentBodyType, "countryIso"> };
-  }
-};
 import crypto from "crypto";
 import { createPaymentLink, verifyPayment } from "../lib/accountpe.js";
 import { buyNumber } from "../lib/grizzlysms.js";
 import { getCachedPrices, sellingPrice, countryIdFromCode } from "../lib/priceCache.js";
 
+type InitiatePaymentBodyType = {
+  orderId?: string;
+  name?: string;
+  email?: string;
+  mobile?: string;
+  countryIso?: string;
+};
+
+const InitiatePaymentBody = {
+  safeParse(body: unknown) {
+    const b = body as InitiatePaymentBodyType;
+    if (!b?.orderId || !b?.name || !b?.email || !b?.mobile) {
+      return { success: false as const, error: { issues: [] } };
+    }
+    return {
+      success: true as const,
+      data: b as Required<Omit<InitiatePaymentBodyType, "countryIso">> &
+        Pick<InitiatePaymentBodyType, "countryIso">,
+    };
+  },
+};
+
 const router = Router();
 
 function getServerUrl(): string {
   if (process.env.SERVER_URL) return process.env.SERVER_URL;
-  if (process.env.REPLIT_DOMAINS) return `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
-  if (process.env.REPLIT_DEV_DOMAIN) return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  if (process.env.REPLIT_DOMAINS) {
+    return `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`;
+  }
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
   return "http://localhost:8080";
 }
 
@@ -54,6 +72,7 @@ const BUYER_CURRENCY: Record<string, { currency: string; eurRate: number }> = {
 
 router.post("/initiate", async (req, res) => {
   const parsed = InitiatePaymentBody.safeParse(req.body);
+
   if (!parsed.success) {
     res.status(400).json({ error: "Données invalides", details: parsed.error.issues });
     return;
@@ -62,7 +81,10 @@ router.post("/initiate", async (req, res) => {
   const { orderId, name, email, mobile, countryIso } = parsed.data;
 
   const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId)).limit(1);
-  if (!order) { res.status(404).json({ error: "Commande introuvable" }); return; }
+  if (!order) {
+    res.status(404).json({ error: "Commande introuvable" });
+    return;
+  }
 
   try {
     const prices = await getCachedPrices();
@@ -110,7 +132,9 @@ router.post("/initiate", async (req, res) => {
 
     res.json({ ...payment, amount: parseFloat(payment.amount), checkoutUrl });
   } catch (err) {
-    req.log.error({ err }, "Failed to create AccountPe payment link");
+    const logger = (req as any).log || console;
+    logger.error?.({ err }, "Failed to create AccountPe payment link");
+    logger.error({ err }, "Failed to create AccountPe payment link");
     res.status(502).json({ error: "Impossible d'initier le paiement. Veuillez réessayer." });
   }
 });
@@ -133,7 +157,8 @@ router.post("/webhook", async (req, res) => {
 
     if (!payment || payment.status === "completed") return;
 
-    await db.update(paymentsTable)
+    await db
+      .update(paymentsTable)
       .set({ status: "completed", updatedAt: new Date() })
       .where(eq(paymentsTable.id, payment.id));
 
@@ -144,7 +169,8 @@ router.post("/webhook", async (req, res) => {
     const countryId = countryIdFromCode(order.countryCode);
     const grizzlyOrder = await buyNumber(countryId, order.serviceCode);
 
-    await db.update(ordersTable)
+    await db
+      .update(ordersTable)
       .set({
         phoneNumber: `+${grizzlyOrder.phone}`,
         externalOrderId: String(grizzlyOrder.id),
@@ -153,13 +179,24 @@ router.post("/webhook", async (req, res) => {
       })
       .where(eq(ordersTable.id, order.id));
   } catch (err) {
-    req.log.error({ err }, "Webhook processing error");
+    const logger = (req as any).log || console;
+    logger.error?.({ err }, "Webhook processing error");
+    logger.error({ err }, "Webhook processing error");
   }
 });
 
 router.get("/:id/status", async (req, res) => {
-  const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, String(req.params.id))).limit(1);
-  if (!payment) { res.status(404).json({ error: "Paiement introuvable" }); return; }
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.id, String(req.params.id)))
+    .limit(1);
+
+  if (!payment) {
+    res.status(404).json({ error: "Paiement introuvable" });
+    return;
+  }
+
   res.json({ ...payment, amount: parseFloat(payment.amount) });
 });
 
