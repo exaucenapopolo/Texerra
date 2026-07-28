@@ -1,4 +1,4 @@
-import { Router } from "express";
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, getDocs } from "firebase/firestore";
 import { getCachedPrices } from "../lib/priceCache.js";
@@ -17,9 +17,16 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const firestoreDb = getFirestore(app);
 
-const router = Router();
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Configuration des en-têtes CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-router.get("/", async (_req, res) => {
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
     // Récupération en parallèle des commandes depuis Firestore et des prix en cache
     const [ordersSnapshot, prices] = await Promise.all([
@@ -41,7 +48,7 @@ router.get("/", async (_req, res) => {
     }
     const uniqueServices = serviceSet.size;
 
-    res.json({
+    return res.status(200).json({
       totalOrders,
       totalCountries: uniqueCountries || 205,
       totalServices: uniqueServices || 20,
@@ -50,14 +57,12 @@ router.get("/", async (_req, res) => {
   } catch (err) {
     console.error("Erreur lors de la récupération des stats Firestore:", err);
     // Valeurs de secours si Firestore ne répond pas temporairement
-    res.json({
+    return res.status(200).json({
       totalOrders: 12847,
       totalCountries: 205,
       totalServices: 20,
       averageDeliverySeconds: 45,
     });
   }
-});
-
-export default router;
-        
+}
+  
