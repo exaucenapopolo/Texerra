@@ -11,7 +11,6 @@ import contactRouter from "./contact.js";
 
 const router: IRouter = Router();
 
-// Fonction de sécurité pour éviter le crash .apply() si un routeur est undefined
 const safeMount = (path: string, subRouter: any) => {
   if (subRouter) {
     router.use(path, subRouter);
