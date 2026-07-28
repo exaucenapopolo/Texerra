@@ -66,8 +66,6 @@ router.get("/", async (req, res) => {
   try {
     const prices = await getCachedPrices();
 
-    // ── Service-filtered mode ─────────────────────────────────────────────────
-    // Returns only countries where this service has stock, with exact price & stock.
     if (serviceCode) {
       const mapped = Object.entries(GRIZZLY_COUNTRIES).map(([idStr, { iso, fr }]) => {
         const id = Number(idStr);
@@ -99,7 +97,6 @@ router.get("/", async (req, res) => {
       return;
     }
 
-    // ── Generic mode (cached) ─────────────────────────────────────────────────
     if (cachedGeneric && Date.now() - cachedGeneric.ts < CACHE_TTL) {
       res.json(cachedGeneric.data);
       return;
@@ -139,4 +136,4 @@ router.get("/", async (req, res) => {
 });
 
 export default router;
-    
+  
