@@ -1,17 +1,16 @@
 import express from "express";
 import cors from "cors";
 
-// 1. Importation propre et directe de chaque routeur.
-// Note : on omet l'extension (.js ou .ts) pour laisser TypeScript gérer la résolution.
-import healthRouter from "./health";
-import meRouter from "./me";
-import countriesRouter from "./countries";
-import servicesRouter from "./services";
-import ordersRouter from "./orders";
-import paymentsRouter from "./payments";
-import topupsRouter from "./topups";
-import statsRouter from "./stats";
-import contactRouter from "./contact";
+// 1. Importation propre avec l'extension .js obligatoire pour Vercel (ESM)
+import healthRouter from "./health.js";
+import meRouter from "./me.js";
+import countriesRouter from "./countries.js";
+import servicesRouter from "./services.js";
+import ordersRouter from "./orders.js";
+import paymentsRouter from "./payments.js";
+import topupsRouter from "./topups.js";
+import statsRouter from "./stats.js";
+import contactRouter from "./contact.js";
 
 const app = express();
 
