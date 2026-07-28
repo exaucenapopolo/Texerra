@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, topupsTable } from "@workspace/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { firestoreDb } from "../lib/firebase-admin.js";
 import crypto from "crypto";
 import { createPaymentLink, verifyPayment } from "../lib/accountpe.js";
 import * as requireAuthModule from "../lib/requireAuth.js";
@@ -50,50 +49,89 @@ const BUYER_CURRENCY: Record<string, { currency: string; eurRate: number }> = {
   ZA: { currency: "ZAR", eurRate: 20 },
 };
 
-function formatTopup(t: typeof topupsTable.$inferSelect) {
-  return { ...t, amountEur: parseFloat(t.amountEur) };
+function formatTopup(t: any) {
+  return { 
+    ...t, 
+    amountEur: typeof t.amountEur === "string" ? parseFloat(t.amountEur) : (t.amountEur ?? 0) 
+  };
 }
 
 /**
- * Atomically credit the user balance for a topup.
- * Uses WHERE status='pending' to guarantee at-most-once execution.
+ * Crédite atomiquement le solde de l'utilisateur pour une recharge via une transaction Firestore.
  */
-async function atomicCredit(topupId: string, userId: string, amountEur: string): Promise<boolean> {
-  const [credited] = await db
-    .update(topupsTable)
-    .set({ status: "completed", updatedAt: new Date() })
-    .where(and(eq(topupsTable.id, topupId), eq(topupsTable.status, "pending")))
-    .returning({ id: topupsTable.id });
+async function atomicCredit(topupId: string, userId: string, amountEur: string | number): Promise<boolean> {
+  const topupRef = firestoreDb.collection("topups").doc(topupId);
+  const userRef = firestoreDb.collection("users").doc(userId);
+  const eurVal = typeof amountEur === "string" ? parseFloat(amountEur) : amountEur;
 
-  if (!credited) {
+  try {
+    return await firestoreDb.runTransaction(async (transaction) => {
+      const topupDoc = await transaction.get(topupRef);
+      if (!topupDoc.exists) return false;
+      const topupData = topupDoc.data();
+      if (topupData?.status !== "pending") return false;
+
+      // Mise à jour du statut de la recharge
+      transaction.update(topupRef, {
+        status: "completed",
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Mise à jour atomique du solde utilisateur
+      const userDoc = await transaction.get(userRef);
+      let currentBalance = 0;
+      if (userDoc.exists) {
+        currentBalance = parseFloat(userDoc.data()?.balance ?? "0");
+      }
+      const newBalance = (currentBalance + eurVal).toFixed(4);
+
+      if (userDoc.exists) {
+        transaction.update(userRef, {
+          balance: newBalance,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        transaction.set(userRef, {
+          balance: newBalance,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      return true;
+    });
+  } catch (err) {
+    console.error("Firestore transaction error in atomicCredit:", err);
     return false;
   }
-
-  await db
-    .update(usersTable)
-    .set({
-      balance: sql`balance + ${amountEur}::numeric`,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.id, userId));
-
-  return true;
 }
 
-// GET /api/topups — list user's recharge history
+// GET /api/topups — Liste l'historique des recharges de l'utilisateur
 router.get("/", requireAuth, async (req, res) => {
-  const userId = (req as any).userId as string;
+  try {
+    const userId = (req as any).userId as string;
 
-  const topups = await db
-    .select()
-    .from(topupsTable)
-    .where(eq(topupsTable.userId, userId))
-    .orderBy(desc(topupsTable.createdAt));
+    const snapshot = await firestoreDb
+      .collection("topups")
+      .where("userId", "==", userId)
+      .get();
 
-  res.json(topups.map(formatTopup));
+    const topups = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    // Tri par date décroissante
+    topups.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    res.json(topups.map(formatTopup));
+  } catch (err) {
+    console.error("Erreur lors de la récupération des recharges :", err);
+    res.status(500).json({ error: "Impossible de récupérer l'historique des recharges" });
+  }
 });
 
-// POST /api/topups/initiate — create payment link
+// POST /api/topups/initiate — Création du lien de paiement
 router.post("/initiate", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const { amountEur, name, email, mobile, countryIso } = req.body as {
@@ -136,19 +174,20 @@ router.post("/initiate", requireAuth, async (req, res) => {
       redirectUrl: `${serverUrl}/api/topups/return?topupId=${topupId}`,
     });
 
-    const [topup] = await db
-      .insert(topupsTable)
-      .values({
-        id: topupId,
-        userId,
-        amountEur: amountEur.toFixed(4),
-        status: "pending",
-        paymentUrl: checkoutUrl,
-        externalId: transactionId,
-      })
-      .returning();
+    const topupData = {
+      id: topupId,
+      userId,
+      amountEur: amountEur.toFixed(4),
+      status: "pending",
+      paymentUrl: checkoutUrl,
+      externalId: transactionId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
 
-    res.json({ topupId: topup.id, checkoutUrl, amountEur });
+    await firestoreDb.collection("topups").doc(topupId).set(topupData);
+
+    res.json({ topupId, checkoutUrl, amountEur });
   } catch (err) {
     const logger = (req as any).log || console;
     logger.error({ err }, "Failed to create AccountPe topup link");
@@ -156,7 +195,7 @@ router.post("/initiate", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/topups/webhook — callback
+// POST /api/topups/webhook — Callback
 router.post("/webhook", async (req, res) => {
   res.status(200).json({ received: true });
 
@@ -167,25 +206,30 @@ router.post("/webhook", async (req, res) => {
     const { isPaid } = await verifyPayment(transaction_id);
     if (!isPaid) return;
 
-    const [topup] = await db
-      .select()
-      .from(topupsTable)
-      .where(eq(topupsTable.externalId, transaction_id))
-      .limit(1);
+    const snapshot = await firestoreDb
+      .collection("topups")
+      .where("externalId", "==", transaction_id)
+      .limit(1)
+      .get();
 
-    if (!topup) return;
+    if (snapshot.empty) return;
+    const topupDoc = snapshot.docs[0];
+    const topup = { id: topupDoc.id, ...topupDoc.data() } as any;
 
     const credited = await atomicCredit(topup.id, topup.userId, topup.amountEur);
 
     if (credited) {
-      const [u] = await db.select().from(usersTable).where(eq(usersTable.id, topup.userId)).limit(1);
-      if (u?.email) {
-        sendTopupEmail({
-          to: u.email,
-          name: u.name,
-          amountEur: parseFloat(topup.amountEur),
-          status: "credited",
-        }).catch(() => {});
+      const userDoc = await firestoreDb.collection("users").doc(topup.userId).get();
+      if (userDoc.exists) {
+        const u = userDoc.data() as any;
+        if (u?.email) {
+          sendTopupEmail({
+            to: u.email,
+            name: u.name || "Utilisateur",
+            amountEur: parseFloat(topup.amountEur),
+            status: "credited",
+          }).catch(() => {});
+        }
       }
     }
   } catch (err) {
@@ -206,16 +250,24 @@ router.get("/return", async (req, res) => {
   }
 
   try {
-    let topup: typeof topupsTable.$inferSelect | undefined;
+    let topup: any = null;
 
     if (topupId) {
-      const rows = await db.select().from(topupsTable).where(eq(topupsTable.id, String(topupId))).limit(1);
-      topup = rows[0];
+      const doc = await firestoreDb.collection("topups").doc(String(topupId)).get();
+      if (doc.exists) {
+        topup = { id: doc.id, ...doc.data() };
+      }
     }
 
     if (!topup && transaction_id) {
-      const rows = await db.select().from(topupsTable).where(eq(topupsTable.externalId, String(transaction_id))).limit(1);
-      topup = rows[0];
+      const snapshot = await firestoreDb
+        .collection("topups")
+        .where("externalId", "==", String(transaction_id))
+        .limit(1)
+        .get();
+      if (!snapshot.empty) {
+        topup = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+      }
     }
 
     if (!topup) {
@@ -233,7 +285,7 @@ router.get("/return", async (req, res) => {
       return;
     }
 
-    const txId = topup.externalId ?? transaction_id as string | undefined;
+    const txId = topup.externalId ?? (transaction_id as string | undefined);
     if (!txId) {
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}`);
       return;
@@ -246,35 +298,41 @@ router.get("/return", async (req, res) => {
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}&result=credited`);
 
       if (credited) {
-        const [u] = await db.select().from(usersTable).where(eq(usersTable.id, topup.userId)).limit(1);
-        if (u?.email) {
-          sendTopupEmail({
-            to: u.email,
-            name: u.name,
-            amountEur: parseFloat(topup.amountEur),
-            status: "credited",
-          }).catch(() => {});
+        const userDoc = await firestoreDb.collection("users").doc(topup.userId).get();
+        if (userDoc.exists) {
+          const u = userDoc.data() as any;
+          if (u?.email) {
+            sendTopupEmail({
+              to: u.email,
+              name: u.name || "Utilisateur",
+              amountEur: parseFloat(topup.amountEur),
+              status: "credited",
+            }).catch(() => {});
+          }
         }
       }
       return;
     }
 
     if (providerStatus === "failed") {
-      await db
-        .update(topupsTable)
-        .set({ status: "failed", updatedAt: new Date() })
-        .where(and(eq(topupsTable.id, topup.id), eq(topupsTable.status, "pending")));
+      await firestoreDb.collection("topups").doc(topup.id).update({
+        status: "failed",
+        updatedAt: new Date().toISOString(),
+      });
 
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}&result=failed`);
 
-      const [u] = await db.select().from(usersTable).where(eq(usersTable.id, topup.userId)).limit(1);
-      if (u?.email) {
-        sendTopupEmail({
-          to: u.email,
-          name: u.name,
-          amountEur: parseFloat(topup.amountEur),
-          status: "failed",
-        }).catch(() => {});
+      const userDoc = await firestoreDb.collection("users").doc(topup.userId).get();
+      if (userDoc.exists) {
+        const u = userDoc.data() as any;
+        if (u?.email) {
+          sendTopupEmail({
+            to: u.email,
+            name: u.name || "Utilisateur",
+            amountEur: parseFloat(topup.amountEur),
+            status: "failed",
+          }).catch(() => {});
+        }
       }
       return;
     }
@@ -290,13 +348,15 @@ router.get("/return", async (req, res) => {
 router.get("/:id/status", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
 
-  const [topup] = await db
-    .select()
-    .from(topupsTable)
-    .where(eq(topupsTable.id, String(req.params.id)))
-    .limit(1);
+  const doc = await firestoreDb.collection("topups").doc(String(req.params.id)).get();
+  if (!doc.exists) {
+    res.status(404).json({ error: "Recharge introuvable" });
+    return;
+  }
 
-  if (!topup || topup.userId !== userId) {
+  const topup = { id: doc.id, ...doc.data() } as any;
+
+  if (topup.userId !== userId) {
     res.status(404).json({ error: "Recharge introuvable" });
     return;
   }
@@ -309,19 +369,21 @@ router.get("/:id/status", requireAuth, async (req, res) => {
       const { isPaid, status: providerStatus } = await verifyPayment(topup.externalId!);
 
       if (isPaid) {
-        const credited = await atomicCredit(topup.id, topup.userId, topup.amountEur);
-        const [fresh] = await db.select().from(topupsTable).where(eq(topupsTable.id, topup.id)).limit(1);
-        res.json({ ...formatTopup(fresh), _justCredited: credited });
+        await atomicCredit(topup.id, topup.userId, topup.amountEur);
+        const freshDoc = await firestoreDb.collection("topups").doc(topup.id).get();
+        const fresh = { id: freshDoc.id, ...freshDoc.data() };
+        res.json({ ...formatTopup(fresh), _justCredited: true });
         return;
       }
 
       if (providerStatus === "failed" && topup.status === "pending") {
-        await db
-          .update(topupsTable)
-          .set({ status: "failed", updatedAt: new Date() })
-          .where(and(eq(topupsTable.id, topup.id), eq(topupsTable.status, "pending")));
+        await firestoreDb.collection("topups").doc(topup.id).update({
+          status: "failed",
+          updatedAt: new Date().toISOString(),
+        });
 
-        const [fresh] = await db.select().from(topupsTable).where(eq(topupsTable.id, topup.id)).limit(1);
+        const freshDoc = await firestoreDb.collection("topups").doc(topup.id).get();
+        const fresh = { id: freshDoc.id, ...freshDoc.data() };
         res.json(formatTopup(fresh));
         return;
       }
@@ -335,3 +397,4 @@ router.get("/:id/status", requireAuth, async (req, res) => {
 });
 
 export default router;
+                                      
