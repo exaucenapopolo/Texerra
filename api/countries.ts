@@ -1,8 +1,6 @@
-import { Router } from "express";
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getCachedPrices, minSellingPrice, computeSellingPrice } from "../lib/priceCache.js";
 import { GRIZZLY_COUNTRIES } from "../lib/grizzlysms.js";
-
-const router = Router();
 
 const ISO_DIAL_CODES: Record<string, string> = {
   AD: "+376", AE: "+971", AF: "+93",  AG: "+1",   AI: "+1",   AL: "+355",
@@ -60,12 +58,22 @@ const AFRICAN_ISO = new Set([
 let cachedGeneric: { data: unknown[]; ts: number } | null = null;
 const CACHE_TTL = 10 * 60 * 1000;
 
-router.get("/", async (req, res) => {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Configuration des en-têtes CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   const serviceCode = req.query.serviceCode as string | undefined;
 
   try {
     const prices = await getCachedPrices();
 
+    // ── Service-filtered mode ─────────────────────────────────────────────────
     if (serviceCode) {
       const mapped = Object.entries(GRIZZLY_COUNTRIES).map(([idStr, { iso, fr }]) => {
         const id = Number(idStr);
@@ -93,13 +101,12 @@ router.get("/", async (req, res) => {
         ...mapped.filter((c) => !c.available),
       ].map(({ _african: _, ...rest }) => rest);
 
-      res.json(sorted);
-      return;
+      return res.status(200).json(sorted);
     }
 
+    // ── Generic mode (cached) ─────────────────────────────────────────────────
     if (cachedGeneric && Date.now() - cachedGeneric.ts < CACHE_TTL) {
-      res.json(cachedGeneric.data);
-      return;
+      return res.status(200).json(cachedGeneric.data);
     }
 
     const mapped = Object.entries(GRIZZLY_COUNTRIES).map(([idStr, { iso, fr }]) => {
@@ -127,13 +134,10 @@ router.get("/", async (req, res) => {
     ].map(({ _african: _, ...rest }) => rest);
 
     cachedGeneric = { data: sorted, ts: Date.now() };
-    res.json(sorted);
+    return res.status(200).json(sorted);
   } catch (err) {
-    const logger = (req as any).log || console;
-    logger.error({ err }, "Failed to fetch countries from GrizzlySMS");
-    res.status(502).json({ error: "Impossible de récupérer les pays" });
+    console.error("Failed to fetch countries from GrizzlySMS", err);
+    return res.status(502).json({ error: "Impossible de récupérer les pays" });
   }
-});
-
-export default router;
-  
+  }
+      
