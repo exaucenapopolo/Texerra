@@ -1,11 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
-// Retrait de l'extension .js pour une meilleure compatibilité avec Vercel
-import { getAdminAuth } from "./firebase-admin";
+// Ajout de l'extension .js pour respecter les règles ESM de Vercel
+import { getAdminAuth } from "./firebase-admin.js";
 
 /**
- * Middleware d'authentification
- * Utilisation de "export const" (export nommé) pour correspondre 
- * aux imports dans me.ts et orders.ts
+ * Middleware d'authentification sécurisé
  */
 export const requireAuth = async (
   req: Request,
