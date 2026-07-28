@@ -1,20 +1,9 @@
 import { Router } from "express";
-import { firestoreDb } from "../lib/firebase-admin.js";
-import * as requireAuthModule from "../lib/requireAuth.js";
-import { sendWelcomeEmail } from "../lib/mailer.js";
+import { firestoreDb } from "../lib/firebase-admin";
+import { requireAuth } from "../lib/requireAuth";
+import { sendWelcomeEmail } from "../lib/mailer";
 
 const router = Router();
-
-// Support robuste pour l'import de requireAuth (qu'il soit default ou nommé)
-const requireAuth =
-  (requireAuthModule as any).default ??
-  (requireAuthModule as any).requireAuth;
-
-if (typeof requireAuth !== "function") {
-  throw new Error(
-    'Le middleware "../lib/requireAuth.js" doit exporter une fonction valide (default ou requireAuth).'
-  );
-}
 
 const SUPPORTED_CURRENCIES = [
   "EUR", "USD",
@@ -151,4 +140,4 @@ router.patch("/", requireAuth, async (req, res) => {
 });
 
 export default router;
-      
+                   
