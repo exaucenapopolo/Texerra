@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { firestoreDb } from "../lib/firebase-admin";
-import { requireAuth } from "../lib/requireAuth";
-import { sendWelcomeEmail } from "../lib/mailer";
+import { firestoreDb } from "../lib/firebase-admin.js";
+import { requireAuth } from "../lib/requireAuth.js";
+import { sendWelcomeEmail } from "../lib/mailer.js";
 
 const router = Router();
 
@@ -140,4 +140,4 @@ router.patch("/", requireAuth, async (req, res) => {
 });
 
 export default router;
-                   
+           
