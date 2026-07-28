@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 
-// Importations directes par défaut de tes routeurs
+// Importation de tes routeurs
 import healthRouter from "./health.js";
 import countriesRouter from "./countries.js";
 import servicesRouter from "./services.js";
@@ -12,42 +12,48 @@ import meRouter from "./me.js";
 import statsRouter from "./stats.js";
 import contactRouter from "./contact.js";
 
-// Création de l'application Express principale
+// Création de l'application Express
 const app = express();
 
 // Middlewares globaux
 app.use(cors());
 app.use(express.json());
 
-// Montage de la route de santé (Health) si elle est valide
-if (typeof healthRouter === "function") {
-  app.use(healthRouter);
-  console.log("✅ Route [health] montée avec succès.");
-} else {
-  console.error("❌ Erreur : healthRouter n'est pas une fonction valide (Vérifie son export default).");
-}
-
-// Tableau de configuration pour monter proprement toutes les routes
-const routes = [
-  { path: "/me", router: meRouter, name: "me" },
-  { path: "/countries", router: countriesRouter, name: "countries" },
-  { path: "/services", router: servicesRouter, name: "services" },
-  { path: "/orders", router: ordersRouter, name: "orders" },
-  { path: "/payments", router: paymentsRouter, name: "payments" },
-  { path: "/topups", router: topupsRouter, name: "topups" },
-  { path: "/stats", router: statsRouter, name: "stats" },
-  { path: "/contact", router: contactRouter, name: "contact" },
-];
-
-// Boucle de montage sécurisée
-routes.forEach(({ path, router, name }) => {
+/**
+ * Fonction de montage ultra-sécurisée :
+ * Si le routeur est valide, on l'ajoute. S'il est undefined, on crée une mini-route 
+ * de secours pour empêcher le serveur de planter et identifier le coupable.
+ */
+const safeMount = (path: string, router: any, name: string) => {
   if (typeof router === "function") {
     app.use(path, router);
-    console.log(`✅ Route [${name}] montée sur ${path}`);
+    console.log(`✅ Route [${name}] chargée avec succès sur ${path}`);
   } else {
-    console.error(`❌ Erreur : Le routeur "${name}" (${path}) n'est pas une fonction. Assure-toi d'utiliser "export default router" dans ${name}.ts`);
+    console.error(`🚨 ERREUR : Le routeur "${name}" (${path}) est UNDEFINED ! Vérifie que le fichier ${name}.ts se termine bien par "export default router;".`);
+    
+    // Empêche le plantage de Vercel en injectant une réponse d'erreur propre
+    app.use(path, (req, res) => {
+      res.status(500).json({ error: `La route ${name} est temporairement indisponible (problème d'exportation).` });
+    });
   }
-});
+};
+
+// Montage sécurisé de la route de santé
+if (typeof healthRouter === "function") {
+  app.use(healthRouter);
+} else {
+  console.error("🚨 ERREUR : healthRouter est invalide ou undefined.");
+}
+
+// Montage sécurisé de toutes tes routes métiers
+safeMount("/me", meRouter, "me");
+safeMount("/countries", countriesRouter, "countries");
+safeMount("/services", servicesRouter, "services");
+safeMount("/orders", ordersRouter, "orders");
+safeMount("/payments", paymentsRouter, "payments");
+safeMount("/topups", topupsRouter, "topups");
+safeMount("/stats", statsRouter, "stats");
+safeMount("/contact", contactRouter, "contact");
 
 // Exportation de l'application pour Vercel
 export default app;
