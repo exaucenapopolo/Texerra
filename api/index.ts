@@ -1,61 +1,35 @@
-import express, { Router } from "express";
+import express from "express";
 import cors from "cors";
+
+// Importation statique de TOUTES tes routes d'origine, sans en oublier une seule
+import healthRouter from "./health.js";
+import meRouter from "./me.js";
+import countriesRouter from "./countries.js";
+import servicesRouter from "./services.js";
+import ordersRouter from "./orders.js";
+import paymentsRouter from "./payments.js";
+import topupsRouter from "./topups.js";
+import statsRouter from "./stats.js";
+import contactRouter from "./contact.js";
 
 const app = express();
 
+// Configuration des middlewares globaux
 app.use(cors());
 app.use(express.json());
 
-function isExpressRouter(value: unknown): value is Router {
-  return (
-    typeof value === "function" &&
-    typeof (value as any).use === "function" &&
-    typeof (value as any).handle === "function"
-  );
-}
+// Montage de toutes tes routes (identique à ton fichier d'origine, mais sécurisé pour Vercel)
+app.use("/health", healthRouter);
+app.use("/api/me", meRouter);
+app.use("/api/countries", countriesRouter);
+app.use("/api/services", servicesRouter);
+app.use("/api/orders", ordersRouter);
+app.use("/api/payments", paymentsRouter);
+app.use("/api/topups", topupsRouter);
+app.use("/api/stats", statsRouter);
+app.use("/api/contact", contactRouter);
 
-function resolveRouteModule(mod: any) {
-  return mod?.default ?? mod?.router ?? mod;
-}
-
-async function safeLoadRoute(path: string, file: string, name: string) {
-  try {
-    const mod = await import(file);
-    const router = resolveRouteModule(mod);
-
-    if (isExpressRouter(router)) {
-      app.use(path, router);
-      console.log(`✅ [OK] Route "${name}" chargée sur ${path}`);
-    } else {
-      console.error(
-        `❌ [ERREUR] "${name}" n'exporte pas un Router Express valide.`
-      );
-    }
-  } catch (err) {
-    console.error(`🚨 [CRITIQUE] Erreur au chargement de "${name}" :`, err);
-  }
-}
-
-async function bootstrap() {
-  // Route santé
-  await safeLoadRoute("/health", "./health.js", "health");
-
-  // Routes métier
-  await safeLoadRoute("/me", "./me.js", "me");
-  await safeLoadRoute("/countries", "./countries.js", "countries");
-  await safeLoadRoute("/services", "./services.js", "services");
-  await safeLoadRoute("/orders", "./orders.js", "orders");
-  await safeLoadRoute("/payments", "./payments.js", "payments");
-  await safeLoadRoute("/topups", "./topups.js", "topups");
-  await safeLoadRoute("/stats", "./stats.js", "stats");
-  await safeLoadRoute("/contact", "./contact.js", "contact");
-}
-
-bootstrap().catch((err) => {
-  console.error("🚨 Bootstrap fatal :", err);
-});
-
-// Fallback 404
+// Fallback 404 pour les routes introuvables
 app.use((req, res) => {
   res.status(404).json({
     ok: false,
@@ -63,7 +37,7 @@ app.use((req, res) => {
   });
 });
 
-// Gestion d'erreurs globale
+// Gestion d'erreurs globale du serveur
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("🔥 Erreur Express :", err);
   res.status(500).json({
