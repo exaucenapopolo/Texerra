@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { firestoreDb } from "../lib/firebase-admin.js";
-import { CreateOrderBody } from "@workspace/api-zod";
+import { z } from "zod"; // <-- On utilise Zod directement
 import crypto from "crypto";
 import { buyNumber, checkOrder, cancelOrder, finishOrder, GRIZZLY_COUNTRIES } from "../lib/grizzlysms.js";
 import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
@@ -9,9 +9,14 @@ import { requireAuth } from "../lib/requireAuth.js";
 
 const router = Router();
 
+// Définition locale du schéma de validation (qui remplace @workspace/api-zod)
+const CreateOrderBody = z.object({
+  countryCode: z.string().min(1, "Le code pays est requis"),
+  serviceCode: z.string().min(1, "Le code service est requis"),
+});
+
 /**
- * Atomically refund the order price to the user balance using a Firestore transaction.
- * Prevents double-refund if already cancelled or expired.
+ * Remboursement atomique du solde utilisateur dans Firestore en cas d'annulation ou d'expiration.
  */
 async function atomicRefundOrder(orderId: string, userId: string, priceNum: number, newStatus: "cancelled" | "expired"): Promise<boolean> {
   const orderRef = firestoreDb.collection("orders").doc(orderId);
@@ -23,19 +28,17 @@ async function atomicRefundOrder(orderId: string, userId: string, priceNum: numb
     
     const orderData = orderDoc.data();
     if (!orderData || (orderData.status !== 'active' && orderData.status !== 'pending_payment')) {
-      return false; // Already processed
+      return false; // Déjà traité
     }
 
     const userDoc = await transaction.get(userRef);
     const currentBalance = userDoc.exists ? parseFloat(userDoc.data()?.balance ?? "0") : 0;
 
-    // Update order status
     transaction.update(orderRef, {
       status: newStatus,
       updatedAt: new Date().toISOString(),
     });
 
-    // Credit balance back
     transaction.set(userRef, {
       balance: (currentBalance + priceNum).toFixed(4),
       updatedAt: new Date().toISOString(),
@@ -45,7 +48,7 @@ async function atomicRefundOrder(orderId: string, userId: string, priceNum: numb
   });
 }
 
-// GET /api/orders — orders for the authenticated user
+// GET /api/orders — Récupérer les commandes de l'utilisateur authentifié
 router.get("/", requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId as string;
@@ -62,24 +65,22 @@ router.get("/", requireAuth, async (req, res) => {
       };
     });
 
-    // Sort by creation date descending
     orders.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
     res.json(orders);
   } catch (err) {
     const logger = (req as any).log || console;
-    logger.error({ err }, "Failed to fetch orders from Firestore");
+    logger.error({ err }, "Échec de la récupération des commandes");
     res.status(500).json({ error: "Impossible de récupérer les commandes" });
   }
 });
 
-// POST /api/orders — create order and immediately buy number (deducts from balance)
+// POST /api/orders — Créer une commande et acheter un numéro
 router.post("/", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
 
   const parsed = CreateOrderBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Données invalides" });
+    res.status(400).json({ error: "Données invalides", details: parsed.error.format() });
     return;
   }
 
@@ -91,7 +92,6 @@ router.post("/", requireAuth, async (req, res) => {
     return;
   }
 
-  // Fetch price
   let priceEur: number;
   try {
     const prices = await getCachedPrices();
@@ -103,7 +103,7 @@ router.post("/", requireAuth, async (req, res) => {
     priceEur = p;
   } catch (err: any) {
     const logger = (req as any).log || console;
-    logger.error({ err }, "Failed to fetch prices");
+    logger.error({ err }, "Échec de la récupération des prix");
     res.status(500).json({ error: "Impossible de récupérer les prix" });
     return;
   }
@@ -111,20 +111,15 @@ router.post("/", requireAuth, async (req, res) => {
   const userRef = firestoreDb.collection("users").doc(userId);
   let orderId = crypto.randomUUID();
 
-  // Check and deduct balance atomically using a Firestore transaction
   try {
     await firestoreDb.runTransaction(async (transaction) => {
       const userDoc = await transaction.get(userRef);
-      if (!userDoc.exists) {
-        throw new Error("user_not_found");
-      }
+      if (!userDoc.exists) throw new Error("user_not_found");
 
       const userData = userDoc.data();
       const currentBalance = parseFloat(userData?.balance ?? "0");
 
-      if (currentBalance < priceEur) {
-        throw new Error("insufficient_balance");
-      }
+      if (currentBalance < priceEur) throw new Error("insufficient_balance");
 
       transaction.update(userRef, {
         balance: (currentBalance - priceEur).toFixed(4),
@@ -148,7 +143,6 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     grizzlyOrder = await buyNumber(countryId, serviceCode);
   } catch (err: any) {
-    // Refund balance on failure atomically
     await firestoreDb.runTransaction(async (transaction) => {
       const userDoc = await transaction.get(userRef);
       if (userDoc.exists) {
@@ -161,7 +155,7 @@ router.post("/", requireAuth, async (req, res) => {
     });
 
     const logger = (req as any).log || console;
-    logger.error({ err }, "Failed to buy GrizzlySMS number");
+    logger.error({ err }, "Échec de l'achat du numéro GrizzlySMS");
     if (err.message === "no_numbers") {
       res.status(503).json({ error: "no_numbers" });
     } else if (err.message === "no_balance") {
@@ -195,7 +189,6 @@ router.post("/", requireAuth, async (req, res) => {
     expiresAt,
   });
 
-  // Email de confirmation — non-bloquant
   const userDoc = await userRef.get();
   const userData = userDoc.data();
   if (userData?.email) {
@@ -212,7 +205,7 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/orders/:id — get order + poll SMS + auto-refund on expire
+// GET /api/orders/:id — Récupérer une commande spécifique et vérifier le SMS
 router.get("/:id", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const orderId = String(req.params.id);
@@ -233,7 +226,6 @@ router.get("/:id", requireAuth, async (req, res) => {
 
   const expiresAtDate = new Date(order.expiresAt);
 
-  // Auto-expire if past expiry time and still active
   if (order.status === "active" && order.expiresAt && new Date() > expiresAtDate) {
     if (order.externalOrderId) {
       cancelOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
@@ -247,7 +239,6 @@ router.get("/:id", requireAuth, async (req, res) => {
     return;
   }
 
-  // Poll GrizzlySMS for SMS if order is active and no code yet
   if (order.status === "active" && order.externalOrderId && !order.smsCode) {
     try {
       const result = await checkOrder(parseInt(order.externalOrderId, 10));
@@ -279,14 +270,14 @@ router.get("/:id", requireAuth, async (req, res) => {
       }
     } catch (err) {
       const logger = (req as any).log || console;
-      logger.warn({ err }, "GrizzlySMS checkOrder error (non-fatal)");
+      logger.warn({ err }, "Erreur lors de la vérification GrizzlySMS");
     }
   }
 
   res.json({ ...order, price: order.price ? parseFloat(order.price) : null });
 });
 
-// POST /api/orders/:id/cancel — cancel order (refund to balance, atomic)
+// POST /api/orders/:id/cancel — Annuler une commande et rembourser
 router.post("/:id/cancel", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const orderId = String(req.params.id);
@@ -305,12 +296,10 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
     return;
   }
 
-  // Cancel at provider (non-blocking)
   if (order.externalOrderId) {
     cancelOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
   }
 
-  // Atomic refund — prevents double-refund if already cancelled
   if (order.price && order.userId) {
     const refunded = await atomicRefundOrder(orderId, order.userId, parseFloat(order.price), "cancelled");
     if (!refunded) {
@@ -321,7 +310,6 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
     const freshData = freshDoc.data()!;
     res.json({ ...freshData, price: freshData.price ? parseFloat(freshData.price) : null });
 
-    // Email d'annulation avec remboursement — non-bloquant
     const userDoc = await firestoreDb.collection("users").doc(userId).get();
     const u = userDoc.data();
     if (u?.email) {
@@ -338,7 +326,6 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
     return;
   }
 
-  // No price to refund, just cancel
   await orderRef.update({
     status: "cancelled",
     updatedAt: new Date().toISOString(),
@@ -348,7 +335,6 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
   const updatedData = updatedDoc.data()!;
   res.json({ ...updatedData, price: updatedData.price ? parseFloat(updatedData.price) : null });
 
-  // Email d'annulation sans remboursement — non-bloquant
   const userDoc2 = await firestoreDb.collection("users").doc(userId).get();
   const u2 = userDoc2.data();
   if (u2?.email) {
@@ -365,4 +351,4 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 });
 
 export default router;
-           
+                  
