@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { firestoreDb } from "../lib/firebase-admin";
+// Ajout des extensions .js pour la compatibilité ESM sur Vercel
+import { firestoreDb } from "../lib/firebase-admin.js";
 import { z } from "zod";
 import crypto from "crypto";
 import {
@@ -8,10 +9,10 @@ import {
   cancelOrder,
   finishOrder,
   GRIZZLY_COUNTRIES,
-} from "../lib/grizzlysms";
-import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache";
-import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer";
-import { requireAuth } from "../lib/requireAuth";
+} from "../lib/grizzlysms.js";
+import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
+import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer.js";
+import { requireAuth } from "../lib/requireAuth.js";
 
 const router = Router();
 
@@ -376,4 +377,4 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 });
 
 export default router;
-      
+  
