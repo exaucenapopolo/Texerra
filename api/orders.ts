@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { firestoreDb } from "../lib/firebase-admin.js";
+import { firestoreDb } from "../lib/firebase-admin";
 import { z } from "zod";
 import crypto from "crypto";
 import {
@@ -8,23 +8,12 @@ import {
   cancelOrder,
   finishOrder,
   GRIZZLY_COUNTRIES,
-} from "../lib/grizzlysms.js";
-import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
-import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer.js";
-import * as requireAuthModule from "../lib/requireAuth.js";
+} from "../lib/grizzlysms";
+import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache";
+import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer";
+import { requireAuth } from "../lib/requireAuth";
 
 const router = Router();
-
-// Support robuste pour l'import de requireAuth (qu'il soit default ou nommé)
-const requireAuth =
-  (requireAuthModule as any).default ??
-  (requireAuthModule as any).requireAuth;
-
-if (typeof requireAuth !== "function") {
-  throw new Error(
-    'Le middleware "../lib/requireAuth.js" doit exporter une fonction valide (default ou requireAuth).'
-  );
-}
 
 // Définition locale du schéma de validation
 const CreateOrderBody = z.object({
@@ -387,4 +376,4 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 });
 
 export default router;
-                                     
+      
