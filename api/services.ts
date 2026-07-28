@@ -1,5 +1,5 @@
-import { Router } from "express";
-import { getCachedPrices, computeSellingPrice, MIN_PRICE_EUR, countryIdFromCode } from "../lib/priceCache.js";
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { getCachedPrices, computeSellingPrice, countryIdFromCode } from "../lib/priceCache.js";
 import { SERVICE_CATALOG } from "../lib/grizzlysms.js";
 
 /**
@@ -13,9 +13,16 @@ const POPULAR_RANK: Record<string, number> = {};
   "vi", "td", "nf", "ub", "ri", "si", "ma", "yx", "ok",
 ].forEach((code, i) => { POPULAR_RANK[code] = i; });
 
-const router = Router();
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Configuration des en-têtes CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-router.get("/", async (req, res) => {
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   const countryCode = req.query.countryCode as string | undefined;
 
   try {
@@ -94,14 +101,9 @@ router.get("/", async (req, res) => {
       return a.name.localeCompare(b.name, "fr");
     });
 
-    res.json(sorted);
+    return res.status(200).json(sorted);
   } catch (err) {
-    // Utilisation d'un logger sécurisé compatible Express
-    const logger = (req as any).log || console;
-    logger.error({ err }, "Failed to fetch services from GrizzlySMS");
-    res.status(502).json({ error: "Impossible de récupérer les services" });
+    console.error("Failed to fetch services from GrizzlySMS", err);
+    return res.status(502).json({ error: "Impossible de récupérer les services" });
   }
-});
-
-export default router;
-        
+}
