@@ -1,59 +1,75 @@
-import express from "express";
+import express, { Router } from "express";
 import cors from "cors";
 
-// Importation de tes routeurs
-import healthRouter from "./health.js";
-import countriesRouter from "./countries.js";
-import servicesRouter from "./services.js";
-import ordersRouter from "./orders.js";
-import paymentsRouter from "./payments.js";
-import topupsRouter from "./topups.js";
-import meRouter from "./me.js";
-import statsRouter from "./stats.js";
-import contactRouter from "./contact.js";
-
-// Création de l'application Express
 const app = express();
 
-// Middlewares globaux
 app.use(cors());
 app.use(express.json());
 
-/**
- * Fonction de montage ultra-sécurisée :
- * Si le routeur est valide, on l'ajoute. S'il est undefined, on crée une mini-route 
- * de secours pour empêcher le serveur de planter et identifier le coupable.
- */
-const safeMount = (path: string, router: any, name: string) => {
-  if (typeof router === "function") {
-    app.use(path, router);
-    console.log(`✅ Route [${name}] chargée avec succès sur ${path}`);
-  } else {
-    console.error(`🚨 ERREUR : Le routeur "${name}" (${path}) est UNDEFINED ! Vérifie que le fichier ${name}.ts se termine bien par "export default router;".`);
-    
-    // Empêche le plantage de Vercel en injectant une réponse d'erreur propre
-    app.use(path, (req, res) => {
-      res.status(500).json({ error: `La route ${name} est temporairement indisponible (problème d'exportation).` });
-    });
-  }
-};
-
-// Montage sécurisé de la route de santé
-if (typeof healthRouter === "function") {
-  app.use(healthRouter);
-} else {
-  console.error("🚨 ERREUR : healthRouter est invalide ou undefined.");
+function isExpressRouter(value: unknown): value is Router {
+  return (
+    typeof value === "function" &&
+    typeof (value as any).use === "function" &&
+    typeof (value as any).handle === "function"
+  );
 }
 
-// Montage sécurisé de toutes tes routes métiers
-safeMount("/me", meRouter, "me");
-safeMount("/countries", countriesRouter, "countries");
-safeMount("/services", servicesRouter, "services");
-safeMount("/orders", ordersRouter, "orders");
-safeMount("/payments", paymentsRouter, "payments");
-safeMount("/topups", topupsRouter, "topups");
-safeMount("/stats", statsRouter, "stats");
-safeMount("/contact", contactRouter, "contact");
+function resolveRouteModule(mod: any) {
+  return mod?.default ?? mod?.router ?? mod;
+}
 
-// Exportation de l'application pour Vercel
+async function safeLoadRoute(path: string, file: string, name: string) {
+  try {
+    const mod = await import(file);
+    const router = resolveRouteModule(mod);
+
+    if (isExpressRouter(router)) {
+      app.use(path, router);
+      console.log(`✅ [OK] Route "${name}" chargée sur ${path}`);
+    } else {
+      console.error(
+        `❌ [ERREUR] "${name}" n'exporte pas un Router Express valide.`
+      );
+    }
+  } catch (err) {
+    console.error(`🚨 [CRITIQUE] Erreur au chargement de "${name}" :`, err);
+  }
+}
+
+async function bootstrap() {
+  // Route santé
+  await safeLoadRoute("/health", "./health.js", "health");
+
+  // Routes métier
+  await safeLoadRoute("/me", "./me.js", "me");
+  await safeLoadRoute("/countries", "./countries.js", "countries");
+  await safeLoadRoute("/services", "./services.js", "services");
+  await safeLoadRoute("/orders", "./orders.js", "orders");
+  await safeLoadRoute("/payments", "./payments.js", "payments");
+  await safeLoadRoute("/topups", "./topups.js", "topups");
+  await safeLoadRoute("/stats", "./stats.js", "stats");
+  await safeLoadRoute("/contact", "./contact.js", "contact");
+}
+
+bootstrap().catch((err) => {
+  console.error("🚨 Bootstrap fatal :", err);
+});
+
+// Fallback 404
+app.use((req, res) => {
+  res.status(404).json({
+    ok: false,
+    message: "Route introuvable",
+  });
+});
+
+// Gestion d'erreurs globale
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("🔥 Erreur Express :", err);
+  res.status(500).json({
+    ok: false,
+    message: "Erreur serveur interne",
+  });
+});
+
 export default app;
