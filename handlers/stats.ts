@@ -1,21 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, getDocs } from "firebase/firestore";
+import { firestoreDb } from "../lib/firebase-admin.js";
 import { getCachedPrices } from "../lib/priceCache.js";
 
 // Configuration Firebase pour le serveur (connecté à ton projet texerra-d2506)
-const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY,
-  authDomain: "texerra-d2506.firebaseapp.com",
-  projectId: "texerra-d2506",
-  storageBucket: "texerra-d2506.firebasestorage.app",
-  messagingSenderId: "711713247381",
-  appId: "1:711713247381:web:3c74d9207fa152d9f70b9c",
-};
-
-// Initialisation sécurisée de Firebase pour l'API
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const firestoreDb = getFirestore(app);
+// Note : En utilisant le SDK Admin (firestoreDb), l'authentification se fait de manière 
+// sécurisée via les variables d'environnement du serveur et ignore les règles de restrictions.
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Configuration des en-têtes CORS
@@ -30,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Récupération en parallèle des commandes depuis Firestore et des prix en cache
     const [ordersSnapshot, prices] = await Promise.all([
-      getDocs(collection(firestoreDb, "orders")),
+      firestoreDb.collection("orders").get(),
       getCachedPrices(),
     ]);
 
