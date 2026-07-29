@@ -1,7 +1,7 @@
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 
-// 1. Importation avec l'extension .js obligatoire pour Vercel (ESM)
+// Importation ESM avec extension .js obligatoire pour Vercel
 import healthRouter from "./health.js";
 import meRouter from "./me.js";
 import countriesRouter from "./countries.js";
@@ -14,11 +14,19 @@ import contactRouter from "./contact.js";
 
 const app = express();
 
-// 2. Configuration des middlewares de base
+// Middlewares de base
 app.use(cors());
 app.use(express.json());
 
-// 3. Montage standard et direct de tes routes
+// Route de test
+app.get("/", (_req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    message: "API is running",
+  });
+});
+
+// Montage des routes
 app.use("/health", healthRouter);
 app.use("/api/me", meRouter);
 app.use("/api/countries", countriesRouter);
@@ -29,23 +37,23 @@ app.use("/api/topups", topupsRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/contact", contactRouter);
 
-// 4. Gestion des routes introuvables (Fallback 404)
-app.use((req, res) => {
+// 404 fallback
+app.use((req: Request, res: Response) => {
   res.status(404).json({
     ok: false,
     message: "Route introuvable",
+    path: req.originalUrl,
   });
 });
 
-// 5. Gestion d'erreurs globale
-app.use((err: any, req: any, res: any, next: any) => {
+// Gestion globale des erreurs
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error("🔥 Erreur Express :", err);
+
   res.status(500).json({
     ok: false,
     message: "Erreur serveur interne",
   });
 });
 
-// 6. L'export crucial pour Vercel
 export default app;
-        
