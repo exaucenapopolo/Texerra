@@ -131,8 +131,11 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/topups/initiate — Création du lien de paiement
-router.post("/initiate", requireAuth, async (req, res) => {
+// ---------------------------------------------------------
+// CORRECTION ICI : Remplacement de "/initiate" par "/"
+// POST /api/topups — Création du lien de paiement
+// ---------------------------------------------------------
+router.post("/", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const { amountEur, name, email, mobile, countryIso } = req.body as {
     amountEur?: number;
@@ -397,4 +400,4 @@ router.get("/:id/status", requireAuth, async (req, res) => {
 });
 
 export default router;
-                                      
+  
