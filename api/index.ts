@@ -1,16 +1,18 @@
+// Fichier : api/index.ts
+
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 
-// Importation ESM avec extension .js obligatoire pour Vercel
-import healthRouter from "./health.js";
-import meRouter from "./me.js";
-import countriesRouter from "./countries.js";
-import servicesRouter from "./services.js";
-import ordersRouter from "./orders.js";
-import paymentsRouter from "./payments.js";
-import topupsRouter from "./topups.js";
-import statsRouter from "./stats.js";
-import contactRouter from "./contact.js";
+// Importation ESM : On pointe maintenant vers le dossier "../handlers"
+import healthRouter from "../handlers/health.js";
+import meRouter from "../handlers/me.js";
+import countriesRouter from "../handlers/countries.js";
+import servicesRouter from "../handlers/services.js";
+import ordersRouter from "../handlers/orders.js";
+import paymentsRouter from "../handlers/payments.js";
+import topupsRouter from "../handlers/topups.js";
+import statsRouter from "../handlers/stats.js";
+import contactRouter from "../handlers/contact.js";
 
 const app = express();
 
@@ -26,7 +28,7 @@ app.get("/", (_req: Request, res: Response) => {
   });
 });
 
-// Montage des routes
+// Montage des routes (Express s'occupe de rediriger le trafic vers les bons fichiers)
 app.use("/health", healthRouter);
 app.use("/api/me", meRouter);
 app.use("/api/countries", countriesRouter);
