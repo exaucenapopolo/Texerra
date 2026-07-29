@@ -66,24 +66,26 @@ async function atomicCredit(topupId: string, userId: string, amountEur: string |
 
   try {
     return await firestoreDb.runTransaction(async (transaction) => {
+      // 1. ÉTAPE DE LECTURE : TOUS LES .get() DOIVENT ÊTRE ICI EN PREMIER (Règle Firestore)
       const topupDoc = await transaction.get(topupRef);
+      const userDoc = await transaction.get(userRef);
+
       if (!topupDoc.exists) return false;
       const topupData = topupDoc.data();
       if (topupData?.status !== "pending") return false;
 
-      // Mise à jour du statut de la recharge
-      transaction.update(topupRef, {
-        status: "completed",
-        updatedAt: new Date().toISOString(),
-      });
-
-      // Mise à jour atomique du solde utilisateur
-      const userDoc = await transaction.get(userRef);
+      // Calcul du nouveau solde en mémoire
       let currentBalance = 0;
       if (userDoc.exists) {
         currentBalance = parseFloat(userDoc.data()?.balance ?? "0");
       }
       const newBalance = (currentBalance + eurVal).toFixed(4);
+
+      // 2. ÉTAPE D'ÉCRITURE : TOUTES LES MODIFICATIONS ARRIVENT APRÈS LES LECTURES
+      transaction.update(topupRef, {
+        status: "completed",
+        updatedAt: new Date().toISOString(),
+      });
 
       if (userDoc.exists) {
         transaction.update(userRef, {
@@ -131,10 +133,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------
-// CORRECTION ICI : Remplacement de "/initiate" par "/"
 // POST /api/topups — Création du lien de paiement
-// ---------------------------------------------------------
 router.post("/", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const { amountEur, name, email, mobile, countryIso } = req.body as {
@@ -400,4 +399,4 @@ router.get("/:id/status", requireAuth, async (req, res) => {
 });
 
 export default router;
-  
+       
