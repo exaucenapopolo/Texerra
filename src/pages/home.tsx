@@ -1,11 +1,11 @@
 import { Link } from "wouter";
-import { ArrowRight, ChevronDown, CheckCircle2, Bell, Shield, Zap, HeadphonesIcon } from "lucide-react";
+import { Shield, Zap, Globe2, HeadphonesIcon, ArrowRight, MessageSquare, ChevronDown, TrendingUp, Star, Users, CheckCircle2, Bell } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useMeta } from "../lib/use-meta";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
-// Types de données
+// Types de données pour remplacer l'ancien client externe
 interface Stats {
   totalOrders: number;
   totalCountries: number;
@@ -65,230 +65,155 @@ const gridItem = {
   show: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.45, ease } },
 };
 
-/* --- NOUVEAUX COMPOSANTS SVG PREMIUM (Pour la section Pourquoi) --- */
+/* --- COMPOSANTS D'ILLUSTRATIONS PROFESSIONNELLES --- */
 
-const AbstractTrust = () => (
-  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
-    <motion.rect x="4" y="4" width="32" height="32" rx="16" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
-    <motion.path d="M20 12 L20 28 M12 20 L28 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ duration: 0.8, ease }} />
-    <circle cx="20" cy="20" r="4" fill="currentColor" fillOpacity="0.2" />
+const IllusTrust = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-primary">
+    <motion.path d="M50 10 L90 30 L90 60 C90 80 50 95 50 95 C50 95 10 80 10 60 L10 30 Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.5 }}/>
+    <motion.circle cx="50" cy="50" r="15" fill="none" stroke="currentColor" strokeWidth="4" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 0.5, type: "spring" }}/>
+    <motion.path d="M10 30 L90 30" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" initial={{ opacity: 0 }} whileInView={{ opacity: 0.5 }} transition={{ delay: 1 }}/>
   </svg>
 );
 
-const AbstractPremium = () => (
-  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
-    <motion.path d="M10 30 L20 10 L30 30 Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.5, ease }} />
-    <motion.path d="M10 20 L30 20" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 4" animate={{ x: [-2, 2, -2] }} transition={{ duration: 4, repeat: Infinity }} />
+const IllusLocal = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-blue-500">
+    <motion.circle cx="50" cy="50" r="40" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" strokeDasharray="10 5" animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }}/>
+    <motion.path d="M50 10 L50 90 M10 50 L90 50" stroke="currentColor" strokeWidth="2" strokeOpacity="0.5"/>
+    <motion.circle cx="50" cy="50" r="8" fill="currentColor" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 0.3 }}/>
   </svg>
 );
 
-const AbstractPartner = () => (
-  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
-    <motion.circle cx="15" cy="20" r="8" fill="none" stroke="currentColor" strokeWidth="1.5" initial={{ x: -10, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ duration: 0.6, ease }} />
-    <motion.circle cx="25" cy="20" r="8" fill="none" stroke="currentColor" strokeWidth="1.5" initial={{ x: 10, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ duration: 0.6, ease }} />
-    <circle cx="20" cy="20" r="2" fill="currentColor" />
+const IllusTarget = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-emerald-500">
+    <motion.path d="M50 15 A 35 35 0 1 1 49.9 15" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="10 15" animate={{ rotate: -360 }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }}/>
+    <motion.path d="M50 85 L50 65 M50 35 L50 15 M15 50 L35 50 M65 50 L85 50" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
+    <motion.circle cx="50" cy="50" r="10" fill="currentColor" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.5 }}/>
   </svg>
 );
 
-const AbstractGlobal = () => (
-  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
-    <motion.ellipse cx="20" cy="20" rx="14" ry="6" fill="none" stroke="currentColor" strokeWidth="1.5" animate={{ rotate: 180 }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }} />
-    <motion.ellipse cx="20" cy="20" rx="6" ry="14" fill="none" stroke="currentColor" strokeWidth="1.5" animate={{ rotate: 180 }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }} />
-    <circle cx="20" cy="20" r="2" fill="currentColor" />
+const IllusBlock = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-red-400">
+    <motion.rect x="25" y="45" width="50" height="40" rx="8" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" initial={{ y: 10, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ duration: 0.5 }}/>
+    <motion.path d="M35 45 V 35 A 15 15 0 0 1 65 35 V 45" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ delay: 0.5, duration: 0.8 }}/>
+    <motion.line x1="20" y1="20" x2="80" y2="80" stroke="currentColor" strokeWidth="4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ delay: 1, duration: 0.5 }}/>
   </svg>
 );
 
-/* --- NOUVEAU COMPOSANT : PHONE AD (SVG Publicité Téléphone) --- */
-const PremiumPhoneAd = () => {
-  return (
-    <section className="py-24 bg-[#FCFCFD] overflow-hidden relative border-t border-border">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-      <div className="max-w-7xl mx-auto px-6 relative flex flex-col md:flex-row items-center justify-between gap-12">
-        
-        <div className="flex-1 md:pr-12 z-10">
-          <motion.div {...fadeUp(0)}>
-            <div className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Expérience sans couture</div>
-            <h2 className="text-3xl md:text-5xl font-extrabold text-foreground mb-6 leading-tight">
-              Une technologie invisible,<br />un impact immédiat.
-            </h2>
-            <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-              Nous avons conçu une interface qui s'efface pour laisser place à l'essentiel : votre réputation. Recevez vos vérifications instantanément, sur une plateforme pensée pour l'excellence.
-            </p>
-          </motion.div>
-        </div>
-
-        <div className="flex-1 flex justify-center z-10 w-full">
-          <motion.div
-            animate={{ y: [0, -15, 0], rotateX: [10, 15, 10], rotateY: [-15, -10, -15] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            style={{ perspective: "1000px" }}
-            className="relative"
-          >
-            {/* L'ombre sous le téléphone */}
-            <motion.div 
-               animate={{ scale: [1, 0.9, 1], opacity: [0.3, 0.1, 0.3] }}
-               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-               className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-48 h-8 bg-black/20 blur-xl rounded-full"
-            />
-
-            {/* Le châssis du téléphone */}
-            <div className="w-[280px] h-[580px] bg-[#111] rounded-[45px] p-2.5 shadow-2xl relative border-[3px] border-[#333]">
-              {/* L'écran */}
-              <div className="w-full h-full bg-white rounded-[35px] overflow-hidden relative flex flex-col">
-                
-                {/* Dynamic Island / Notch */}
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20"></div>
-
-                {/* Contenu de l'écran (Simulation App) */}
-                <div className="flex-1 bg-[#F5F5F7] p-5 pt-16 flex flex-col gap-4">
-                  
-                  {/* Header App */}
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="w-20 h-4 bg-gray-200 rounded-full"></div>
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Shield className="w-4 h-4 text-primary" />
-                    </div>
-                  </div>
-
-                  {/* Message OTP 1 */}
-                  <motion.div 
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5, duration: 0.5 }}
-                    className="bg-white p-4 rounded-2xl rounded-tl-sm shadow-sm border border-gray-100 max-w-[85%]"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WA" className="w-4 h-4" />
-                      <span className="text-[10px] font-bold text-gray-400">WhatsApp Business</span>
-                    </div>
-                    <p className="text-sm font-medium text-gray-800">Votre code est : <span className="font-bold text-black tracking-widest">492 103</span></p>
-                  </motion.div>
-
-                  {/* Message OTP 2 */}
-                  <motion.div 
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 1.5, duration: 0.5 }}
-                    className="bg-white p-4 rounded-2xl rounded-tl-sm shadow-sm border border-gray-100 max-w-[85%]"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <img src="https://cdn.simpleicons.org/google/4285F4" alt="Google" className="w-4 h-4" />
-                      <span className="text-[10px] font-bold text-gray-400">Google Workspace</span>
-                    </div>
-                    <p className="text-sm font-medium text-gray-800">G- <span className="font-bold text-black tracking-widest">883921</span> est votre code.</p>
-                  </motion.div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  );
+const MiniIllus = ({ type }: { type: 'building' | 'phone' | 'cart' | 'lock' | 'app' | 'user' | 'card' | 'world' | 'check' }) => {
+  const baseClasses = "w-8 h-8 shrink-0 text-primary";
+  
+  switch(type) {
+    case 'building': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 7h6M9 11h6M9 15h6"/></svg>;
+    case 'phone': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/></svg>;
+    case 'cart': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>;
+    case 'lock': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>;
+    case 'app': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="4" width="16" height="16" rx="4" ry="4"/><path d="M9 12l2 2 4-4"/></svg>;
+    case 'user': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    case 'card': return <svg className="w-14 h-14 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>;
+    case 'world': return <svg className="w-14 h-14 text-orange-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
+    case 'check': return <svg className="w-14 h-14 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>;
+    default: return null;
+  }
 };
 
-/* --- NOUVEAU COMPOSANT : GLOBAL NETWORK AD --- */
-const GlobalNetworkAd = () => {
-  return (
-    <section className="py-24 bg-[#0a0a0a] overflow-hidden relative">
-      <div className="absolute inset-0 flex justify-center items-center opacity-30">
-        <svg viewBox="0 0 1000 400" className="w-full h-full min-w-[1000px]">
-           <motion.path 
-              d="M0 200 C 200 50, 300 350, 500 200 C 700 50, 800 350, 1000 200" 
-              fill="none" stroke="var(--primary)" strokeWidth="1" strokeDasharray="5 5"
-              animate={{ strokeDashoffset: [100, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-           />
-           <motion.path 
-              d="M0 200 C 200 350, 300 50, 500 200 C 700 350, 800 50, 1000 200" 
-              fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1"
-           />
-           {/* Nœuds lumineux */}
-           <circle cx="250" cy="200" r="4" fill="var(--primary)" />
-           <circle cx="500" cy="200" r="6" fill="#fff" className="animate-pulse" />
-           <circle cx="750" cy="200" r="4" fill="var(--primary)" />
-        </svg>
-      </div>
+/* --- ILLUSTRATION EXPÉRIENCE SANS COUTURE --- */
+
+const SeamlessExperienceIllust = () => (
+  <div className="w-full max-w-4xl mx-auto my-8 relative">
+    <svg viewBox="0 0 800 300" className="w-full h-auto drop-shadow-xl" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Connexions de fond */}
+      <path d="M 150 150 C 300 50, 500 250, 650 150" stroke="#e2e8f0" strokeWidth="4" strokeDasharray="8 8" />
       
-      <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
-        <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-6">
-          Une infrastructure pensée pour la fiabilité.
-        </h2>
-        <p className="text-gray-400 text-lg leading-relaxed max-w-2xl mx-auto mb-10">
-          Nos systèmes routent intelligemment vos messages à travers des opérateurs télécoms de premier rang mondial. Aucune coupure. Aucune latence. Seulement le code dont vous avez besoin, à l'instant où vous en avez besoin.
-        </p>
-      </div>
-    </section>
-  );
-};
+      {/* Particules flottantes */}
+      <motion.circle cx="300" cy="100" r="6" fill="#fb923c" animate={{ y: [-10, 10, -10] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} />
+      <motion.circle cx="500" cy="200" r="8" fill="#60a5fa" animate={{ y: [10, -10, 10] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} />
+      
+      {/* Utilisateur 1 : Entreprise */}
+      <g transform="translate(150, 150)">
+        <motion.circle cx="0" cy="0" r="55" fill="#ffffff" stroke="#f1f5f9" strokeWidth="6" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ type: "spring", delay: 0.1 }} />
+        <circle cx="0" cy="-12" r="16" fill="#f97316" />
+        <path d="M -26 28 C -26 5, 26 5, 26 28 Z" fill="#fdba74" />
+        {/* Badge succès */}
+        <motion.g initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+          <circle cx="35" cy="-35" r="16" fill="#10b981" />
+          <path d="M 28 -35 L 33 -30 L 42 -40" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </motion.g>
+      </g>
 
+      {/* Utilisateur 2 : Client */}
+      <g transform="translate(650, 150)">
+        <motion.circle cx="0" cy="0" r="55" fill="#ffffff" stroke="#f1f5f9" strokeWidth="6" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ type: "spring", delay: 0.2 }} />
+        <circle cx="0" cy="-12" r="16" fill="#3b82f6" />
+        <path d="M -26 28 C -26 5, 26 5, 26 28 Z" fill="#93c5fd" />
+        {/* Badge favori */}
+        <motion.g initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ type: "spring", delay: 0.5 }}>
+          <circle cx="-35" cy="-35" r="16" fill="#ef4444" />
+          <path d="M -39 -35 C -42 -38, -37 -42, -35 -39 C -33 -42, -28 -38, -31 -35 L -35 -30 Z" fill="#ffffff" />
+        </motion.g>
+      </g>
 
-/* --- COMPOSANT DE PREUVE SOCIALE (Trafic en direct Aléatoire Intelligent) --- */
+      {/* Hub Central (Plateforme) */}
+      <g transform="translate(400, 150)">
+        <motion.circle cx="0" cy="0" r="65" fill="#ffffff" stroke="#e2e8f0" strokeWidth="6" 
+          initial={{ scale: 0.8, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} transition={{ type: "spring", delay: 0.3 }} />
+        {/* Icône */}
+        <path d="M -20 -15 h 40 M -20 0 h 40 M -20 15 h 25" stroke="#cbd5e1" strokeWidth="5" strokeLinecap="round" />
+        {/* Anneau rotatif */}
+        <motion.circle cx="0" cy="0" r="80" stroke="#f97316" strokeWidth="3" strokeDasharray="15 15" fill="none" strokeOpacity="0.5"
+          animate={{ rotate: 360 }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }} />
+      </g>
+
+      {/* Paquets de données animés illustrant la fluidité */}
+      <motion.g animate={{ x: [150, 400], y: [150, 150], opacity: [0, 1, 0] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}>
+        <circle cx="0" cy="0" r="8" fill="#f97316" />
+      </motion.g>
+      <motion.g animate={{ x: [400, 650], y: [150, 150], opacity: [0, 1, 0] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.75, ease: "linear" }}>
+        <circle cx="0" cy="0" r="8" fill="#3b82f6" />
+      </motion.g>
+    </svg>
+  </div>
+);
+
+/* --- COMPOSANT DE PREUVE SOCIALE (Trafic en direct) --- */
 
 function LiveTraffic() {
   const [notification, setNotification] = useState<{ country: string, service: string, time: number } | null>(null);
-  const recentHistory = useRef<{country: string, service: string}[]>([]);
 
   useEffect(() => {
-    // Base de données étendue
     const countries = [
       { flag: '🇺🇸', name: 'États-Unis' }, { flag: '🇫🇷', name: 'France' },
       { flag: '🇬🇧', name: 'Royaume-Uni' }, { flag: '🇨🇩', name: 'RDC' },
-      { flag: '🇳🇬', name: 'Nigeria' }, { flag: '🇨🇮', name: 'Côte d\'Ivoire' },
-      { flag: '🇸🇳', name: 'Sénégal' }, { flag: '🇨🇲', name: 'Cameroun' },
-      { flag: '🇲🇦', name: 'Maroc' }, { flag: '🇨🇦', name: 'Canada' },
-      { flag: '🇩🇪', name: 'Allemagne' }, { flag: '🇿🇦', name: 'Afrique du Sud' },
-      { flag: '🇦🇪', name: 'Émirats Arabes' }, { flag: '🇮🇳', name: 'Inde' },
-      { flag: '🇧🇪', name: 'Belgique' }
+      { flag: '🇳🇬', name: 'Nigeria' }, { flag: '🇨🇮', name: 'Côte d\'Ivoire' }
     ];
-    
-    const services = [
-      'WhatsApp', 'WhatsApp Business', 'Instagram', 'Telegram', 
-      'Google', 'TikTok', 'Facebook', 'LinkedIn', 'PayPal', 
-      'Tinder', 'Amazon', 'Microsoft', 'Uber', 'Airbnb'
-    ];
-
-    let timeoutId: NodeJS.Timeout;
+    const services = ['WhatsApp', 'Instagram', 'Telegram', 'Google', 'TikTok'];
 
     const generateNotification = () => {
-      // Filtrage intelligent pour éviter les répétitions récentes
-      let availableCountries = countries.filter(c => !recentHistory.current.some(h => h.country === c.name));
-      if (availableCountries.length === 0) availableCountries = countries; // Sécurité si tout l'historique est plein
-
-      let availableServices = services.filter(s => !recentHistory.current.some(h => h.service === s));
-      if (availableServices.length === 0) availableServices = services;
-
-      const randomCountry = availableCountries[Math.floor(Math.random() * availableCountries.length)];
-      const randomService = availableServices[Math.floor(Math.random() * availableServices.length)];
-      
-      // Temps de livraison réaliste (entre 4 et 45 secondes)
-      const randomDeliveryTime = Math.floor(Math.random() * 41) + 4; 
+      const randomCountry = countries[Math.floor(Math.random() * countries.length)];
+      const randomService = services[Math.floor(Math.random() * services.length)];
+      const randomTime = Math.floor(Math.random() * 20) + 5; // Entre 5 et 25 secondes
 
       setNotification({
         country: `${randomCountry.flag} ${randomCountry.name}`,
         service: randomService,
-        time: randomDeliveryTime
+        time: randomTime
       });
 
-      // Mettre à jour l'historique (on garde les 6 derniers en mémoire)
-      recentHistory.current.push({ country: randomCountry.name, service: randomService });
-      if (recentHistory.current.length > 6) {
-        recentHistory.current.shift();
-      }
-
-      // La notification disparaît après 7 secondes pour paraître plus naturelle
-      setTimeout(() => setNotification(null), 7000);
-
-      // Calcul du prochain délai (Totalement aléatoire entre 12 secondes et 2 minutes)
-      // Cela évite l'effet "robot"
-      const nextDelay = Math.floor(Math.random() * 108000) + 12000;
-      timeoutId = setTimeout(generateNotification, nextDelay);
+      // La notification disparaît après 6 secondes
+      setTimeout(() => setNotification(null), 6000);
     };
 
-    // Première notification apparaît aléatoirement entre 4 et 12 secondes après le chargement
-    timeoutId = setTimeout(generateNotification, Math.floor(Math.random() * 8000) + 4000);
+    // Première notification après 3 secondes
+    const initialTimeout = setTimeout(generateNotification, 3000);
 
-    return () => clearTimeout(timeoutId);
+    // Ensuite, une notification toutes les 15 à 25 secondes
+    const interval = setInterval(() => {
+      generateNotification();
+    }, Math.floor(Math.random() * 10000) + 15000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -484,9 +409,56 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Le problème (Conservé intact avec les nouvelles icônes) ── */}
+      {/* ── Problème (Totalement restauré et gardé intact !) ── */}
       <section className="py-20 bg-secondary/40 border-y border-border">
-        {/* ... (Contenu identique à la version précédente avec IllusTrust, IllusLocal, etc.) ... */}
+        <div className="max-w-5xl mx-auto px-6">
+          <motion.div {...fadeUp(0)} className="text-center max-w-3xl mx-auto">
+            <p className="text-xs uppercase tracking-widest text-primary font-bold mb-5">Le problème</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-6 leading-tight">
+              Trop d'entreprises perdent en crédibilité dès le premier contact.
+            </h2>
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              Un numéro inadapté peut suffire pour vos proches. Mais pour convaincre un client, un partenaire ou accéder à une plateforme internationale — il vous faut le bon numéro, dans le bon pays.
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={gridVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true }}
+            className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12"
+          >
+            {[
+              {
+                Graphic: IllusTrust,
+                title: "Moins de confiance",
+                desc: "Un numéro inconnu ou mal perçu donne une impression peu professionnelle et freine la relation avant même le premier échange.",
+              },
+              {
+                Graphic: IllusLocal,
+                title: "Image trop locale",
+                desc: "Paraître trop régional peut limiter vos opportunités avec des acteurs nationaux et internationaux qui doutent de votre sérieux.",
+              },
+              {
+                Graphic: IllusTarget,
+                title: "Clients dans un autre pays",
+                desc: "Votre activité est dans un pays, mais votre clientèle principale est dans un autre ? Avoir un numéro local dans ce pays peut être très rassurant et renforcer votre crédibilité.",
+              },
+              {
+                Graphic: IllusBlock,
+                title: "Accès bloqué",
+                desc: "Certaines plateformes exigent un numéro d'un pays précis pour s'inscrire ou activer un compte professionnel.",
+              },
+            ].map((item, i) => (
+              <motion.div key={i} variants={gridItem} className="bg-white border border-border rounded-2xl p-6 flex flex-col hover:border-primary/20 transition-colors">
+                <item.Graphic />
+                <h3 className="font-bold text-sm mb-2 text-foreground">{item.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
       </section>
 
       {/* ── Services disponibles ── */}
@@ -523,9 +495,12 @@ export default function Home() {
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     ) : (
-                      <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center" />
+                      <MessageSquare className="w-7 h-7 text-primary/50" />
                     )}
                     <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-tight">{service.name}</span>
+                    {service.priceFrom != null && (
+                      <span className="text-xs font-bold text-primary">{service.priceFrom.toFixed(2)}€</span>
+                    )}
                   </Link>
                 </motion.div>
               );
@@ -543,10 +518,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Pourquoi TEXERRA (Rendu Professionnel avec lignes épurées) ── */}
-      <section id="pourquoi" className="py-24 bg-white border-t border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div {...fadeUp(0)} className="text-center mb-20">
+      {/* ── Pourquoi TEXERRA ── */}
+      <section id="pourquoi" className="py-24 bg-secondary/30 border-y border-border">
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.div {...fadeUp(0)} className="text-center mb-14">
             <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pourquoi TEXERRA ?</p>
             <h2 className="text-4xl md:text-5xl font-extrabold text-foreground mb-5">
               Ce que vous gagnez vraiment
@@ -561,54 +536,55 @@ export default function Home() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, margin: "-60px" }}
-            className="grid md:grid-cols-2 lg:grid-cols-4 gap-8"
+            className="grid md:grid-cols-2 lg:grid-cols-4 gap-5"
           >
             {[
               {
-                Graphic: AbstractTrust,
+                icon: Star,
+                color: "bg-amber-50 text-amber-600",
                 title: "Inspirez confiance plus vite",
                 desc: "Un numéro du bon pays positionne immédiatement votre entreprise comme sérieuse, locale et établie.",
               },
               {
-                Graphic: AbstractPremium,
+                icon: TrendingUp,
+                color: "bg-primary/8 text-primary",
                 title: "Image plus premium",
                 desc: "Présentez-vous avec l'assurance d'une entreprise implantée là où se trouvent vos clients.",
               },
               {
-                Graphic: AbstractPartner,
+                icon: Users,
+                color: "bg-blue-50 text-blue-600",
                 title: "Convainquez prospects & partenaires",
                 desc: "Vos interlocuteurs vous prendront davantage au sérieux. Plus d'opportunités, moins de barrières.",
               },
               {
-                Graphic: AbstractGlobal,
+                icon: Globe2,
+                color: "bg-emerald-50 text-emerald-600",
                 title: "Présence internationale",
                 desc: "Obtenez un numéro de n'importe quel pays — États-Unis, France, UK, RDC, Nigeria et 205+ autres.",
               },
             ].map((item, i) => (
-              <motion.div key={i} variants={gridItem} className="group relative flex flex-col p-8 rounded-3xl bg-secondary/20 hover:bg-white border border-transparent hover:border-border transition-all duration-300 hover:shadow-xl hover:shadow-primary/5">
-                <item.Graphic />
-                <h3 className="text-lg font-bold mb-3 text-foreground group-hover:text-primary transition-colors">{item.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+              <motion.div key={i} variants={gridItem} className="bg-white border border-border rounded-2xl p-7 hover:border-primary/30 hover:shadow-sm transition-all duration-200">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-5 ${item.color}`}>
+                  <item.icon className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-sm mb-2.5 text-foreground leading-snug">{item.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* ── NOUVELLE SECTION PUBLICITÉ TÉLÉPHONE ── */}
-      <PremiumPhoneAd />
-
-      {/* ── À qui s'adresse TEXERRA (Design liste épuré et sérieux) ── */}
-      <section className="py-24 bg-white border-t border-border">
+      {/* ── À qui s'adresse TEXERRA ── */}
+      <section className="py-24 bg-white">
         <div className="max-w-6xl mx-auto px-6">
-          <motion.div {...fadeUp(0)} className="mb-16 md:flex md:items-end md:justify-between gap-10">
-            <div className="max-w-2xl">
-              <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pour qui ?</p>
-              <h2 className="text-3xl md:text-5xl font-extrabold text-foreground mb-4 leading-tight">
-                TEXERRA s'adresse à tout le monde
-              </h2>
-            </div>
-            <p className="text-muted-foreground text-lg max-w-md pb-2">
+          <motion.div {...fadeUp(0)} className="text-center mb-12">
+            <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pour qui ?</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-4">
+              TEXERRA s'adresse à tout le monde
+            </h2>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
               Que vous ayez besoin d'un numéro pour votre image, pour vérifier un compte ou simplement pour un usage personnel — TEXERRA a ce qu'il vous faut.
             </p>
           </motion.div>
@@ -618,71 +594,111 @@ export default function Home() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true }}
-            className="grid md:grid-cols-2 gap-x-12 gap-y-8"
+            className="grid sm:grid-cols-2 md:grid-cols-3 gap-4"
           >
             {[
-              { title: "Entrepreneurs & dirigeants", desc: "Obtenez un numéro du pays où se trouvent vos clients ou partenaires pour inspirer plus de confiance." },
-              { title: "Agences & freelances", desc: "Gérez des comptes clients sur plusieurs plateformes avec une image professionnelle et internationale." },
-              { title: "E-commerçants", desc: "Donnez à votre boutique en ligne une présence locale dans les marchés que vous ciblez." },
-              { title: "Vérification de compte", desc: "Recevez un code OTP pour activer un compte sur n'importe quelle plateforme. Simple, rapide, discret." },
-              { title: "Accès aux plateformes", desc: "WhatsApp Business, Instagram, Google, TikTok, Telegram — obtenez le numéro requis pour vous inscrire." },
-              { title: "Usage personnel", desc: "Besoin d'un numéro d'un pays précis ? Que ce soit pour vous ou votre activité — choisissez simplement le pays et commandez." },
+              {
+                type: 'building' as const,
+                title: "Entrepreneurs & dirigeants",
+                desc: "Obtenez un numéro du pays où se trouvent vos clients ou partenaires pour inspirer plus de confiance.",
+              },
+              {
+                type: 'phone' as const,
+                title: "Agences & freelances",
+                desc: "Gérez des comptes clients sur plusieurs plateformes avec une image professionnelle et internationale.",
+              },
+              {
+                type: 'cart' as const,
+                title: "E-commerçants",
+                desc: "Donnez à votre boutique en ligne une présence locale dans les marchés que vous ciblez.",
+              },
+              {
+                type: 'lock' as const,
+                title: "Vérification de compte",
+                desc: "Recevez un code OTP pour activer un compte sur n'importe quelle plateforme. Simple, rapide, discret.",
+              },
+              {
+                type: 'app' as const,
+                title: "Accès aux plateformes",
+                desc: "WhatsApp Business, Instagram, Google, TikTok, Telegram — obtenez le numéro requis pour vous inscrire.",
+              },
+              {
+                type: 'user' as const,
+                title: "Usage personnel",
+                desc: "Besoin d'un numéro d'un pays précis ? Que ce soit pour vous ou votre activité — choisissez simplement le pays et commandez.",
+              },
             ].map((item, i) => (
               <motion.div
                 key={i}
                 variants={gridItem}
-                className="group relative pl-6 border-l-2 border-border hover:border-primary transition-colors duration-300 py-2"
+                className="flex flex-col gap-3 bg-white border border-border rounded-2xl px-6 py-5 hover:border-primary/30 hover:shadow-sm transition-all duration-200"
               >
-                <h3 className="text-lg font-bold text-foreground mb-2">{item.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/5 rounded-lg border border-primary/10">
+                    <MiniIllus type={item.type} />
+                  </div>
+                  <span className="text-sm font-bold text-foreground">{item.title}</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">{item.desc}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* ── Comment ça marche (Épuré sans icônes) ── */}
-      <section className="py-24 relative bg-secondary/30 border-y border-border overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent pointer-events-none" />
-        <div className="max-w-7xl mx-auto px-6 relative">
-          <motion.div {...fadeUp(0)} className="text-center mb-20">
+      {/* ── Comment ça marche ── */}
+      <section className="py-24 relative bg-secondary/30 border-y border-border">
+        <div className="max-w-7xl mx-auto px-6">
+          <motion.div {...fadeUp(0)} className="text-center mb-14">
             <div className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Simple & rapide</div>
             <h2 className="text-4xl md:text-5xl font-extrabold mb-4 text-foreground">Comment ça marche</h2>
             <p className="text-muted-foreground text-lg max-w-md mx-auto">Trois étapes. Moins de 60 secondes.</p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-10 relative">
-            <div className="hidden md:block absolute top-12 left-[calc(50%/3+3rem)] right-[calc(50%/3+3rem)] h-px bg-border" />
+          <div className="grid md:grid-cols-3 gap-5 relative">
+            <div className="hidden md:block absolute top-11 left-[calc(50%/3+3rem)] right-[calc(50%/3+3rem)] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
 
             {[
               {
                 step: "01",
+                type: "card" as const,
                 title: "Rechargez votre solde",
                 desc: "Orange Money, MTN Mobile Money, carte bancaire. Votre solde ne expire jamais.",
+                accent: "border-blue-200 hover:border-blue-300 hover:shadow-md",
+                stepColor: "text-blue-200",
               },
               {
                 step: "02",
+                type: "world" as const,
                 title: "Choisissez le service et le pays",
                 desc: "Sélectionnez WhatsApp, Instagram, Google ou autre — et le pays du numéro voulu.",
+                accent: "border-orange-200 hover:border-orange-300 hover:shadow-md",
+                stepColor: "text-orange-200",
               },
               {
                 step: "03",
+                type: "check" as const,
                 title: "Recevez le code instantanément",
                 desc: "Le code SMS apparaît en temps réel sur votre tableau de bord. Votre numéro est activé.",
+                accent: "border-emerald-200 hover:border-emerald-300 hover:shadow-md",
+                stepColor: "text-emerald-200",
               },
             ].map((item, i) => (
               <motion.div
                 key={item.step}
                 {...fadeUp(i * 0.1)}
-                className="relative bg-white border border-border rounded-3xl p-10 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 flex flex-col h-full"
+                className={`relative bg-white border ${item.accent} rounded-3xl p-8 transition-all duration-300 flex flex-col h-full`}
               >
-                <div className="mb-8">
-                  <span className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-gray-200 to-gray-400 font-mono leading-none select-none">
+                <div className="flex items-start gap-4 mb-6">
+                  <span className={`text-5xl font-black ${item.stepColor} font-mono leading-none select-none shrink-0`}>
                     {item.step}
                   </span>
+                  <div className="mt-1">
+                    <MiniIllus type={item.type} />
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold mb-3 text-foreground">{item.title}</h3>
-                <p className="text-muted-foreground text-base leading-relaxed">{item.desc}</p>
+                <h3 className="text-base font-bold mb-2 text-foreground">{item.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -741,35 +757,72 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── NOUVELLE SECTION: GLOBAL NETWORK AD ── */}
-      <GlobalNetworkAd />
+      {/* ── Expérience sans couture (NOUVEAU - Directement sous Couverture mondiale) ── */}
+      <section className="py-24 bg-secondary/20 border-t border-border overflow-hidden">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <motion.div {...fadeUp(0)}>
+            <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Connexion globale</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-4">
+              Une expérience sans couture
+            </h2>
+          </motion.div>
+          
+          {/* L'illustration pure, aucun gros bloc de texte, tel que demandé */}
+          <motion.div {...fadeUp(0.2)}>
+            <SeamlessExperienceIllust />
+          </motion.div>
+        </div>
+      </section>
 
       {/* ── Features strip ── */}
-      <section className="py-20 border-y border-border bg-white">
+      <section className="py-20 border-y border-border bg-secondary/40">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div
             variants={gridVariants}
             initial="hidden"
             whileInView="show"
             viewport={{ once: true }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-12"
+            className="grid grid-cols-2 md:grid-cols-4 gap-8"
           >
             {[
-              { icon: Zap, title: "Activation < 60s", desc: "Numéro actif en quelques secondes" },
-              { icon: Shield, title: "100% confidentiel", desc: "Aucune donnée personnelle requise" },
-              { icon: CheckCircle2, title: "Solde permanent", desc: "Votre crédit ne expire jamais" },
-              { icon: HeadphonesIcon, title: "Support 24/7", desc: "Réponse en moins d'une heure" },
+              { icon: Zap, title: "Activation < 60s", desc: "Numéro actif en quelques secondes", cls: "text-amber-600 bg-amber-100" },
+              { icon: Shield, title: "100% confidentiel", desc: "Aucune donnée personnelle requise", cls: "text-emerald-600 bg-emerald-100" },
+              { icon: CheckCircle2, title: "Solde permanent", desc: "Votre crédit ne expire jamais", cls: "text-blue-600 bg-blue-100" },
+              { icon: HeadphonesIcon, title: "Support 24/7", desc: "Réponse en moins d'une heure", cls: "text-primary bg-primary/10" },
             ].map(f => (
-              <motion.div key={f.title} variants={gridItem} className="flex flex-col gap-4">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-secondary/50 border border-border shrink-0">
-                  <f.icon className="w-5 h-5 text-primary" />
+              <motion.div key={f.title} variants={gridItem} className="flex flex-col gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${f.cls} shrink-0`}>
+                  <f.icon className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="font-bold text-base mb-1 text-foreground">{f.title}</div>
-                  <div className="text-sm text-muted-foreground leading-relaxed">{f.desc}</div>
+                  <div className="font-bold text-sm mb-1 text-foreground">{f.title}</div>
+                  <div className="text-xs text-muted-foreground leading-relaxed">{f.desc}</div>
                 </div>
               </motion.div>
             ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ── Vision de marque ── */}
+      <section className="py-24 bg-white">
+        <div className="max-w-3xl mx-auto px-6 text-center">
+          <motion.div {...fadeUp(0)}>
+            <div className="flex justify-center mb-8">
+              <svg className="w-16 h-16 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+              </svg>
+            </div>
+            <blockquote className="text-2xl md:text-3xl font-bold text-foreground leading-snug mb-6">
+              "Nous pensons que chaque entreprise mérite d'être perçue avec le même niveau de professionnalisme que les grandes entreprises internationales."
+            </blockquote>
+            <p className="text-muted-foreground text-base">
+              C'est pourquoi TEXERRA existe — pour effacer les frontières perçues et donner à chaque entrepreneur la posture qu'il mérite, où qu'il soit.
+            </p>
+            <div className="mt-8 pt-8 border-t border-border">
+              <p className="text-xs uppercase tracking-widest text-primary font-bold">L'équipe TEXERRA</p>
+            </div>
           </motion.div>
         </div>
       </section>
