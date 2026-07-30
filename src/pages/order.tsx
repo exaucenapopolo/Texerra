@@ -87,9 +87,12 @@ const steps = [
 type SelectedService = { code: string; name: string; priceFrom?: number | null; icon?: string | null };
 type SelectedCountry = { code: string; name: string; flag: string; dialCode?: string | null };
 
-// Fonctions utilitaires fetch pour l'API backend standard
-async function fetchApi<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+// Modification 1 : Ajout du paramètre "token" et des headers d'authentification
+async function fetchApi<T>(url: string, token?: string): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(url, { headers });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw { status: res.status, data: errorData };
@@ -97,10 +100,14 @@ async function fetchApi<T>(url: string): Promise<T> {
   return res.json();
 }
 
-async function postApi<T, B>(url: string, body: B): Promise<T> {
+// Modification 2 : Ajout du paramètre "token" pour les requêtes POST
+async function postApi<T, B>(url: string, body: B, token?: string): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -122,6 +129,9 @@ export default function Order() {
   const queryClient = useQueryClient();
   const { user: firebaseUser } = useAuth();
   const isSignedIn = !!firebaseUser;
+
+  // Modification 3 : Fonction utilitaire pour récupérer le jeton d'authentification de l'utilisateur
+  const getToken = async () => (firebaseUser ? await firebaseUser.getIdToken() : undefined);
 
   const [step, setStep] = useState(1);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -168,37 +178,37 @@ export default function Order() {
     setCountrySearch("");
   };
 
-  // Requêtes autonomes avec useQuery
+  // Modification 4 : Intégration de getToken() dans chaque appel API
   const { data: me } = useQuery<UserProfile>({
-    queryKey: ["/api/me"],
-    queryFn: () => fetchApi<UserProfile>("/api/me"),
+    queryKey: ["/api/me", isSignedIn],
+    queryFn: async () => fetchApi<UserProfile>("/api/me", await getToken()),
     enabled: isSignedIn,
   });
 
   const { data: allServices, isLoading: loadingServices } = useQuery<Service[]>({
     queryKey: ["/api/services"],
-    queryFn: () => fetchApi<Service[]>("/api/services"),
+    queryFn: async () => fetchApi<Service[]>("/api/services", await getToken()),
   });
 
   const countriesParams = selectedService ? `?serviceCode=${selectedService.code}` : "";
   const { data: countries, isLoading: loadingCountries } = useQuery<Country[]>({
     queryKey: ["/api/countries", selectedService?.code],
-    queryFn: () => fetchApi<Country[]>(`/api/countries${countriesParams}`),
+    queryFn: async () => fetchApi<Country[]>(`/api/countries${countriesParams}`, await getToken()),
     enabled: !!selectedService,
   });
 
   const servicesForCountryParams = selectedCountry ? `?countryCode=${selectedCountry.code}` : "";
   const { data: servicesForCountry, isLoading: loadingServicesForCountry } = useQuery<Service[]>({
     queryKey: ["/api/services", selectedCountry?.code],
-    queryFn: () => fetchApi<Service[]>(`/api/services${servicesForCountryParams}`),
+    queryFn: async () => fetchApi<Service[]>(`/api/services${servicesForCountryParams}`, await getToken()),
     enabled: !!selectedCountry,
     staleTime: 30_000,
   });
 
-  // Mutation pour créer une commande
+  // Modification 5 : Sécurisation de la création de commande
   const createOrder = useMutation({
-    mutationFn: (data: { serviceCode: string; countryCode: string }) =>
-      postApi<OrderResponse, { serviceCode: string; countryCode: string }>("/api/orders", data),
+    mutationFn: async (data: { serviceCode: string; countryCode: string }) =>
+      postApi<OrderResponse, { serviceCode: string; countryCode: string }>("/api/orders", data, await getToken()),
     onSuccess: (data) => {
       setOrderId(data.id);
       setStep(3);
@@ -218,10 +228,10 @@ export default function Order() {
     },
   });
 
-  // Suivi de la commande en temps réel
+  // Modification 6 : Sécurisation du suivi de commande
   const { data: order } = useQuery<OrderResponse>({
     queryKey: ["/api/orders", orderId],
-    queryFn: () => fetchApi<OrderResponse>(`/api/orders/${orderId}`),
+    queryFn: async () => fetchApi<OrderResponse>(`/api/orders/${orderId}`, await getToken()),
     enabled: !!orderId && step === 3,
     refetchInterval: (query) => {
       const d = query.state.data;
@@ -437,8 +447,7 @@ export default function Order() {
                   <span className="text-xs text-muted-foreground ml-2">— choisissez un pays</span>
                 </div>
               </div>
-
-              <div className="p-5 sm:p-6">
+<div className="p-5 sm:p-6">
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -701,7 +710,7 @@ export default function Order() {
           </motion.div>
         )}
 
-        {step === 3 && (
+         {step === 3 && (
           <motion.div key="step3" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.28 }}>
             <div className="bg-white border border-border rounded-2xl p-5 sm:p-8 shadow-sm">
               <div className="max-w-md mx-auto">
@@ -822,4 +831,4 @@ export default function Order() {
       </AnimatePresence>
     </div>
   );
-}
+                    }
