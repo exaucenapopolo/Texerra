@@ -1,6 +1,6 @@
 import { Link } from "wouter";
-import { Shield, Zap, Globe2, HeadphonesIcon, ArrowRight, MessageSquare, ChevronDown, TrendingUp, Star, Users, CheckCircle2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Shield, Zap, Globe2, HeadphonesIcon, ArrowRight, MessageSquare, ChevronDown, TrendingUp, Star, Users, CheckCircle2, Bell } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { useMeta } from "../lib/use-meta";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -64,6 +64,130 @@ const gridItem = {
   hidden: { opacity: 0, scale: 0.94, y: 14 },
   show: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.45, ease } },
 };
+
+/* --- COMPOSANTS D'ILLUSTRATIONS PROFESSIONNELLES (Remplacement des Emojis) --- */
+
+const IllusTrust = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-primary">
+    <motion.path d="M50 10 L90 30 L90 60 C90 80 50 95 50 95 C50 95 10 80 10 60 L10 30 Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.5 }}/>
+    <motion.circle cx="50" cy="50" r="15" fill="none" stroke="currentColor" strokeWidth="4" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 0.5, type: "spring" }}/>
+    <motion.path d="M10 30 L90 30" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" initial={{ opacity: 0 }} whileInView={{ opacity: 0.5 }} transition={{ delay: 1 }}/>
+  </svg>
+);
+
+const IllusLocal = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-blue-500">
+    <motion.circle cx="50" cy="50" r="40" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" strokeDasharray="10 5" animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }}/>
+    <motion.path d="M50 10 L50 90 M10 50 L90 50" stroke="currentColor" strokeWidth="2" strokeOpacity="0.5"/>
+    <motion.circle cx="50" cy="50" r="8" fill="currentColor" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 0.3 }}/>
+  </svg>
+);
+
+const IllusTarget = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-emerald-500">
+    <motion.path d="M50 15 A 35 35 0 1 1 49.9 15" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="10 15" animate={{ rotate: -360 }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }}/>
+    <motion.path d="M50 85 L50 65 M50 35 L50 15 M15 50 L35 50 M65 50 L85 50" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
+    <motion.circle cx="50" cy="50" r="10" fill="currentColor" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.5 }}/>
+  </svg>
+);
+
+const IllusBlock = () => (
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-red-400">
+    <motion.rect x="25" y="45" width="50" height="40" rx="8" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" initial={{ y: 10, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ duration: 0.5 }}/>
+    <motion.path d="M35 45 V 35 A 15 15 0 0 1 65 35 V 45" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ delay: 0.5, duration: 0.8 }}/>
+    <motion.line x1="20" y1="20" x2="80" y2="80" stroke="currentColor" strokeWidth="4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ delay: 1, duration: 0.5 }}/>
+  </svg>
+);
+
+const MiniIllus = ({ type }: { type: 'building' | 'phone' | 'cart' | 'lock' | 'app' | 'user' | 'card' | 'world' | 'check' }) => {
+  const baseClasses = "w-8 h-8 shrink-0 text-primary";
+  
+  switch(type) {
+    case 'building': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 7h6M9 11h6M9 15h6"/></svg>;
+    case 'phone': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><path d="M12 18h.01"/></svg>;
+    case 'cart': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>;
+    case 'lock': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>;
+    case 'app': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="4" width="16" height="16" rx="4" ry="4"/><path d="M9 12l2 2 4-4"/></svg>;
+    case 'user': return <svg className={baseClasses} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    case 'card': return <svg className="w-14 h-14 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>;
+    case 'world': return <svg className="w-14 h-14 text-orange-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
+    case 'check': return <svg className="w-14 h-14 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>;
+    default: return null;
+  }
+};
+
+/* --- COMPOSANT DE PREUVE SOCIALE (Trafic en direct) --- */
+
+function LiveTraffic() {
+  const [notification, setNotification] = useState<{ country: string, service: string, time: number } | null>(null);
+
+  useEffect(() => {
+    const countries = [
+      { flag: '🇺🇸', name: 'États-Unis' }, { flag: '🇫🇷', name: 'France' },
+      { flag: '🇬🇧', name: 'Royaume-Uni' }, { flag: '🇨🇩', name: 'RDC' },
+      { flag: '🇳🇬', name: 'Nigeria' }, { flag: '🇨🇮', name: 'Côte d\'Ivoire' }
+    ];
+    const services = ['WhatsApp', 'Instagram', 'Telegram', 'Google', 'TikTok'];
+
+    const generateNotification = () => {
+      const randomCountry = countries[Math.floor(Math.random() * countries.length)];
+      const randomService = services[Math.floor(Math.random() * services.length)];
+      const randomTime = Math.floor(Math.random() * 20) + 5; // Entre 5 et 25 secondes
+
+      setNotification({
+        country: `${randomCountry.flag} ${randomCountry.name}`,
+        service: randomService,
+        time: randomTime
+      });
+
+      // La notification disparaît après 6 secondes
+      setTimeout(() => setNotification(null), 6000);
+    };
+
+    // Première notification après 3 secondes
+    const initialTimeout = setTimeout(generateNotification, 3000);
+
+    // Ensuite, une notification toutes les 15 à 25 secondes
+    const interval = setInterval(() => {
+      generateNotification();
+    }, Math.floor(Math.random() * 10000) + 15000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, []);
+
+  return (
+    <AnimatePresence>
+      {notification && (
+        <motion.div
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+          className="fixed bottom-6 left-6 z-50 bg-white border border-border shadow-2xl rounded-2xl p-4 flex items-center gap-4 max-w-sm pointer-events-none"
+        >
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <Bell className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground leading-tight">
+              Achat vérifié
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Un numéro <span className="font-medium text-foreground">{notification.service}</span> de {notification.country} vient d'être activé.
+            </p>
+            <p className="text-[10px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Code livré en {notification.time} secondes
+            </p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 function SmsDemo() {
   return (
@@ -133,14 +257,12 @@ export default function Home() {
     canonical: "https://texerra.site/",
   });
 
-  // États locaux de remplacement pour les données d'API
   const [stats, setStats] = useState<Stats | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [showAllCountries, setShowAllCountries] = useState(false);
 
   useEffect(() => {
-    // Récupération sécurisée des données si des routes API existent
     fetch("/api/stats").then(res => res.json()).then(setStats).catch(() => {});
     fetch("/api/services").then(res => res.json()).then(setServices).catch(() => {});
     fetch("/api/countries").then(res => res.json()).then(setCountries).catch(() => {});
@@ -150,6 +272,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col">
+      <LiveTraffic />
 
       {/* ── Hero ── */}
       <section className="relative min-h-[94vh] flex items-center overflow-hidden">
@@ -250,28 +373,28 @@ export default function Home() {
           >
             {[
               {
-                icon: "😟",
+                Graphic: IllusTrust,
                 title: "Moins de confiance",
                 desc: "Un numéro inconnu ou mal perçu donne une impression peu professionnelle et freine la relation avant même le premier échange.",
               },
               {
-                icon: "🌍",
+                Graphic: IllusLocal,
                 title: "Image trop locale",
                 desc: "Paraître trop régional peut limiter vos opportunités avec des acteurs nationaux et internationaux qui doutent de votre sérieux.",
               },
               {
-                icon: "📍",
+                Graphic: IllusTarget,
                 title: "Clients dans un autre pays",
                 desc: "Votre activité est dans un pays, mais votre clientèle principale est dans un autre ? Avoir un numéro local dans ce pays peut être très rassurant et renforcer votre crédibilité.",
               },
               {
-                icon: "🚫",
+                Graphic: IllusBlock,
                 title: "Accès bloqué",
                 desc: "Certaines plateformes exigent un numéro d'un pays précis pour s'inscrire ou activer un compte professionnel.",
               },
             ].map((item, i) => (
-              <motion.div key={i} variants={gridItem} className="bg-white border border-border rounded-2xl p-6">
-                <div className="text-3xl mb-3">{item.icon}</div>
+              <motion.div key={i} variants={gridItem} className="bg-white border border-border rounded-2xl p-6 flex flex-col hover:border-primary/20 transition-colors">
+                <item.Graphic />
                 <h3 className="font-bold text-sm mb-2 text-foreground">{item.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
@@ -417,32 +540,32 @@ export default function Home() {
           >
             {[
               {
-                emoji: "🏢",
+                type: 'building' as const,
                 title: "Entrepreneurs & dirigeants",
                 desc: "Obtenez un numéro du pays où se trouvent vos clients ou partenaires pour inspirer plus de confiance.",
               },
               {
-                emoji: "📱",
+                type: 'phone' as const,
                 title: "Agences & freelances",
                 desc: "Gérez des comptes clients sur plusieurs plateformes avec une image professionnelle et internationale.",
               },
               {
-                emoji: "🛒",
+                type: 'cart' as const,
                 title: "E-commerçants",
                 desc: "Donnez à votre boutique en ligne une présence locale dans les marchés que vous ciblez.",
               },
               {
-                emoji: "🔐",
+                type: 'lock' as const,
                 title: "Vérification de compte",
                 desc: "Recevez un code OTP pour activer un compte sur n'importe quelle plateforme. Simple, rapide, discret.",
               },
               {
-                emoji: "📲",
+                type: 'app' as const,
                 title: "Accès aux plateformes",
                 desc: "WhatsApp Business, Instagram, Google, TikTok, Telegram — obtenez le numéro requis pour vous inscrire.",
               },
               {
-                emoji: "👤",
+                type: 'user' as const,
                 title: "Usage personnel",
                 desc: "Besoin d'un numéro d'un pays précis ? Que ce soit pour vous ou votre activité — choisissez simplement le pays et commandez.",
               },
@@ -450,13 +573,15 @@ export default function Home() {
               <motion.div
                 key={i}
                 variants={gridItem}
-                className="flex flex-col gap-2.5 bg-white border border-border rounded-2xl px-6 py-5 hover:border-primary/30 hover:shadow-sm transition-all duration-200"
+                className="flex flex-col gap-3 bg-white border border-border rounded-2xl px-6 py-5 hover:border-primary/30 hover:shadow-sm transition-all duration-200"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl shrink-0">{item.emoji}</span>
+                  <div className="p-2 bg-primary/5 rounded-lg border border-primary/10">
+                    <MiniIllus type={item.type} />
+                  </div>
                   <span className="text-sm font-bold text-foreground">{item.title}</span>
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">{item.desc}</p>
               </motion.div>
             ))}
           </motion.div>
@@ -478,7 +603,7 @@ export default function Home() {
             {[
               {
                 step: "01",
-                emoji: "💳",
+                type: "card" as const,
                 title: "Rechargez votre solde",
                 desc: "Orange Money, MTN Mobile Money, carte bancaire. Votre solde ne expire jamais.",
                 accent: "border-blue-200 hover:border-blue-300 hover:shadow-md",
@@ -486,15 +611,15 @@ export default function Home() {
               },
               {
                 step: "02",
-                emoji: "🌍",
+                type: "world" as const,
                 title: "Choisissez le service et le pays",
                 desc: "Sélectionnez WhatsApp, Instagram, Google ou autre — et le pays du numéro voulu.",
-                accent: "border-primary/20 hover:border-primary/35 hover:shadow-md",
+                accent: "border-orange-200 hover:border-orange-300 hover:shadow-md",
                 stepColor: "text-orange-200",
               },
               {
                 step: "03",
-                emoji: "✅",
+                type: "check" as const,
                 title: "Recevez le code instantanément",
                 desc: "Le code SMS apparaît en temps réel sur votre tableau de bord. Votre numéro est activé.",
                 accent: "border-emerald-200 hover:border-emerald-300 hover:shadow-md",
@@ -504,13 +629,15 @@ export default function Home() {
               <motion.div
                 key={item.step}
                 {...fadeUp(i * 0.1)}
-                className={`relative bg-white border ${item.accent} rounded-3xl p-8 transition-all duration-300`}
+                className={`relative bg-white border ${item.accent} rounded-3xl p-8 transition-all duration-300 flex flex-col h-full`}
               >
-                <div className="flex items-start gap-3 mb-5">
+                <div className="flex items-start gap-4 mb-6">
                   <span className={`text-5xl font-black ${item.stepColor} font-mono leading-none select-none shrink-0`}>
                     {item.step}
                   </span>
-                  <span className="text-3xl mt-0.5">{item.emoji}</span>
+                  <div className="mt-1">
+                    <MiniIllus type={item.type} />
+                  </div>
                 </div>
                 <h3 className="text-base font-bold mb-2 text-foreground">{item.title}</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">{item.desc}</p>
@@ -606,7 +733,12 @@ export default function Home() {
       <section className="py-24 bg-white">
         <div className="max-w-3xl mx-auto px-6 text-center">
           <motion.div {...fadeUp(0)}>
-            <div className="text-5xl mb-8">🌍</div>
+            <div className="flex justify-center mb-8">
+              <svg className="w-16 h-16 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+              </svg>
+            </div>
             <blockquote className="text-2xl md:text-3xl font-bold text-foreground leading-snug mb-6">
               "Nous pensons que chaque entreprise mérite d'être perçue avec le même niveau de professionnalisme que les grandes entreprises internationales."
             </blockquote>
