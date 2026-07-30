@@ -164,6 +164,7 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     grizzlyOrder = await buyNumber(countryId, serviceCode);
   } catch (err: any) {
+    // 🛡️ Remboursement automatique en cas d'échec du fournisseur
     await firestoreDb.runTransaction(async (transaction) => {
       const userDoc = await transaction.get(userRef);
       if (userDoc.exists) {
@@ -175,14 +176,16 @@ router.post("/", requireAuth, async (req, res) => {
       }
     });
 
-    const logger = (req as any).log || console;
-    logger.error({ err }, "Échec de l'achat du numéro GrizzlySMS");
+    // 🔍 Journalisation détaillée pour capturer la vraie cause dans les logs de l'hébergeur
+    console.error("❌ ERREUR FOURNISSEUR GRIZZLY :", err.message || err);
+
     if (err.message === "no_numbers") {
       res.status(503).json({ error: "no_numbers" });
     } else if (err.message === "no_balance") {
       res.status(503).json({ error: "no_balance" });
     } else {
-      res.status(502).json({ error: "provider_error" });
+      // On renvoie le message d'erreur exact pour t'aider à diagnostiquer
+      res.status(502).json({ error: "provider_error", details: err.message || "Erreur inconnue du fournisseur" });
     }
     return;
   }
@@ -377,4 +380,4 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 });
 
 export default router;
-  
+        
