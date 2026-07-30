@@ -22,10 +22,31 @@ const ICON_COLORS: Record<string, string> = {
   ebay: "E43137", etsy: "F16521", coinbase: "0052FF",
 };
 
-function svcIconUrl(icon: string | null | undefined): string | null {
-  if (!icon) return null;
-  const color = ICON_COLORS[icon] ?? "555555";
-  return `https://cdn.simpleicons.org/${icon}/${color}`;
+// Nouvelle fonction pour convertir les abréviations en noms complets pour les logos
+const normalizeService = (code: string) => {
+  const codeLower = code.toLowerCase();
+  const map: Record<string, string> = {
+    'wa': 'whatsapp',
+    'fb': 'facebook',
+    'ig': 'instagram',
+    'tg': 'telegram',
+    'tt': 'tiktok',
+    'go': 'google',
+    'am': 'amazon',
+    'nf': 'netflix',
+    'pp': 'paypal',
+    'tw': 'x', // Twitter/X
+    'dc': 'discord'
+  };
+  return map[codeLower] || codeLower;
+};
+
+function svcIconUrl(code: string | null | undefined, overrideUrl?: string | null): string | null {
+  if (overrideUrl) return overrideUrl;
+  if (!code) return null;
+  const normalized = normalizeService(code);
+  const color = ICON_COLORS[normalized] ?? "555555";
+  return `https://cdn.simpleicons.org/${normalized}/${color}`;
 }
 
 const STATUS_CONFIG = {
@@ -90,6 +111,7 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState<string>("");
   const [remaining, setRemaining] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
 
   const { data: order } = useQuery<Order>({
     queryKey: [`/api/orders/${orderId}`],
@@ -143,7 +165,7 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
 
   const cfg = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.active;
   const StatusIcon = cfg.icon;
-  const iconUrl = svcIconUrl(order.serviceIcon ?? null);
+  const iconUrl = svcIconUrl(order.serviceCode, order.serviceIcon);
 
   const copyText = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -152,17 +174,16 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
   };
 
   return (
-    <motion.div variants={listItem} className="bg-white border border-border/80 rounded-2xl p-5 shadow-sm hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 transition-all duration-300 relative overflow-hidden group">
-      {/* Ligne d'accentuation en haut */}
+    <motion.div variants={listItem} className="bg-white border border-border/80 rounded-2xl p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all duration-300 relative overflow-hidden group">
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 shadow-inner">
-            {iconUrl ? (
-              <img src={iconUrl} alt={order.serviceCode || ""} className="w-7 h-7 object-contain drop-shadow-sm" />
+          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
+            {!imageError && iconUrl ? (
+              <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-7 h-7 object-contain drop-shadow-sm" />
             ) : (
-              <span className="text-sm font-bold text-muted-foreground">{order.serviceCode?.toUpperCase().slice(0, 2)}</span>
+              <span className="text-sm font-bold text-muted-foreground uppercase">{order.serviceCode?.slice(0, 2)}</span>
             )}
           </div>
           <div>
@@ -178,24 +199,24 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
             </div>
           </div>
         </div>
-        <div className="text-right">
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${cfg.color} shadow-sm`}>
+        <div className="text-right flex flex-col items-end">
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide shadow-sm ${cfg.color}`}>
             <StatusIcon className={`w-3.5 h-3.5 ${order.status === "active" ? "animate-spin" : ""}`} />
             {cfg.label}
           </div>
           {remaining && order.status === "active" && (
-            <div className="text-xs text-muted-foreground mt-1.5 font-mono bg-secondary/50 inline-block px-2 py-0.5 rounded-md">{remaining}</div>
+            <div className="text-xs text-muted-foreground mt-2 font-mono bg-secondary/80 px-2 py-0.5 rounded-md border border-border/50">{remaining}</div>
           )}
         </div>
       </div>
 
       {order.phoneNumber && (
-        <div className="flex items-center justify-between gap-3 mb-4 bg-secondary/50 rounded-xl px-4 py-3 border border-border/50 group-hover:bg-secondary transition-colors">
+        <div className="flex items-center justify-between gap-3 mb-4 bg-secondary/40 rounded-xl px-4 py-3 border border-border/50 group-hover:bg-secondary/60 transition-colors">
           <div className="flex flex-col">
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Numéro attribué</span>
             <span className="font-mono font-bold text-base tracking-wide text-foreground">{order.phoneNumber}</span>
           </div>
-          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm border border-border text-muted-foreground hover:text-primary hover:border-primary/30 transition-all active:scale-95">
+          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border border-border text-muted-foreground hover:text-primary hover:border-primary/30 transition-all active:scale-95">
             {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
@@ -218,11 +239,95 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
         <button
           onClick={() => cancelMutation.mutate()}
           disabled={cancelMutation.isPending}
-          className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-muted-foreground hover:text-destructive hover:bg-red-50 border border-border hover:border-red-200 rounded-xl transition-all active:scale-[0.98]"
+          className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-muted-foreground hover:text-destructive hover:bg-red-50 border border-transparent hover:border-red-200 rounded-xl transition-all active:scale-[0.98]"
         >
           {cancelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
           Annuler et rembourser
         </button>
+      )}
+    </motion.div>
+  );
+}
+
+// Nouveau composant dédié pour l'historique des commandes passées
+function PastOrderCard({ order }: { order: Order }) {
+  const [copied, setCopied] = useState<string>("");
+  const [imageError, setImageError] = useState(false);
+  
+  const cfg = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.cancelled;
+  const StatusIcon = cfg.icon;
+  const date = new Date(order.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+  const iconUrl = svcIconUrl(order.serviceCode, order.serviceIcon);
+
+  const copyText = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(""), 2000);
+  };
+
+  return (
+    <motion.div variants={listItem} className="bg-white border border-border/80 rounded-2xl p-5 flex flex-col gap-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-300">
+      
+      {/* En-tête : Logo, Service, Prix, Date et Statut */}
+      <div className="flex justify-between items-start">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-secondary/80 flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
+            {!imageError && iconUrl ? (
+              <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-6 h-6 object-contain" />
+            ) : (
+              <span className="text-sm font-bold text-muted-foreground uppercase">{order.serviceCode?.slice(0, 2)}</span>
+            )}
+          </div>
+          <div>
+            <div className="font-bold text-base capitalize text-foreground flex items-center gap-2">
+              {order.serviceCode}
+              {order.price !== undefined && (
+                <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-muted-foreground font-semibold border border-border/50">
+                  {Number(order.price).toFixed(2)} €
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+              <Globe className="w-3 h-3 text-muted-foreground/70" /> {order.countryCode}
+              <span className="w-1 h-1 rounded-full bg-border" />
+              <span>{date}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide shadow-sm ${cfg.color}`}>
+          <StatusIcon className="w-3.5 h-3.5" />
+          {cfg.label}
+        </div>
+      </div>
+
+      {/* Corps : Numéro et Code avec boutons de copie distincts */}
+      {(order.phoneNumber || order.smsCode) && (
+        <div className="flex flex-col sm:flex-row gap-3 mt-1">
+          {order.phoneNumber && (
+            <div className="flex-1 flex items-center justify-between gap-3 bg-secondary/40 rounded-xl px-4 py-3 border border-border/50 hover:bg-secondary/60 transition-colors group">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Numéro utilisé</div>
+                <div className="font-mono font-bold text-sm tracking-wide text-foreground">{order.phoneNumber}</div>
+              </div>
+              <button onClick={() => copyText(order.phoneNumber!, "phone")} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm border border-border text-muted-foreground hover:text-primary transition-all active:scale-95 group-hover:border-primary/30">
+                {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+
+          {order.smsCode && (
+            <div className="flex-1 flex items-center justify-between gap-3 bg-green-50/80 rounded-xl px-4 py-3 border border-green-200 hover:bg-green-100 transition-colors group">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-green-700 tracking-wider mb-0.5">Code SMS reçu</div>
+                <div className="font-mono font-black text-lg tracking-[0.1em] text-green-800">{order.smsCode}</div>
+              </div>
+              <button onClick={() => copyText(order.smsCode!, "code")} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm border border-green-200 text-green-600 hover:text-green-700 hover:bg-green-50 transition-all active:scale-95">
+                {copied === "code" ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </motion.div>
   );
@@ -366,7 +471,6 @@ function ProfileTab({ me }: { me: UserProfile }) {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-xl mx-auto sm:mx-0">
       <div className="bg-white border border-border/80 rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm relative overflow-hidden">
-        {/* Décoration d'arrière-plan */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-5 relative z-10">
@@ -388,7 +492,6 @@ function ProfileTab({ me }: { me: UserProfile }) {
         <hr className="border-border/60" />
 
         <div className="space-y-6 relative z-10">
-          {/* Nom */}
           <div className="group">
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 block">Nom affiché</label>
             {editing === "name" ? (
@@ -420,7 +523,6 @@ function ProfileTab({ me }: { me: UserProfile }) {
             )}
           </div>
 
-          {/* Téléphone */}
           <div className="group">
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5" /> Numéro de téléphone
@@ -459,7 +561,6 @@ function ProfileTab({ me }: { me: UserProfile }) {
             )}
           </div>
 
-          {/* Devise */}
           <div>
             <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5">
               <Globe className="w-3.5 h-3.5" /> Devise locale
@@ -542,7 +643,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-5">
         <div>
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-2 text-foreground tracking-tight">Tableau de bord</h1>
@@ -561,7 +661,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Tab bar (Pill style) */}
       <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -589,7 +688,6 @@ export default function Dashboard() {
             <RechargesTab />
           ) : (
             <>
-              {/* Stats cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
                 <div className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-3xl p-6 shadow-sm group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
@@ -619,7 +717,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Active orders */}
               {activeOrders.length > 0 && (
                 <div className="mb-12">
                   <h2 className="text-lg font-extrabold mb-5 flex items-center gap-2 text-foreground">
@@ -632,7 +729,6 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Order history */}
               <div>
                 <h2 className="text-lg font-extrabold mb-5 text-foreground flex items-center gap-2">
                   <div className="p-2 bg-secondary rounded-lg"><ShoppingBag className="w-5 h-5 text-muted-foreground" /></div>
@@ -642,7 +738,7 @@ export default function Dashboard() {
                 {loadingOrders ? (
                   <div className="space-y-4">
                     {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-24 bg-secondary/50 animate-pulse rounded-2xl" />
+                      <div key={i} className="h-28 bg-secondary/50 animate-pulse rounded-2xl" />
                     ))}
                   </div>
                 ) : pastOrders.length === 0 && activeOrders.length === 0 ? (
@@ -657,57 +753,10 @@ export default function Dashboard() {
                     </Link>
                   </motion.div>
                 ) : (
-                  <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-3">
-                    {pastOrders.map(o => {
-                      const cfg = STATUS_CONFIG[o.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.cancelled;
-                      const StatusIcon = cfg.icon;
-                      const date = new Date(o.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-                      return (
-                        <motion.div variants={listItem} key={o.id} className="group bg-white border border-border/60 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 hover:shadow-md hover:border-primary/30 transition-all duration-300">
-                          
-                          {/* Info bloc gauche */}
-                          <div className="flex items-center gap-4 flex-1 min-w-0">
-                            <div className="w-12 h-12 rounded-xl bg-secondary/80 flex items-center justify-center shrink-0 text-sm font-bold text-muted-foreground shadow-inner group-hover:bg-primary/5 transition-colors">
-                              {o.serviceCode?.toUpperCase().slice(0, 2)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold text-base capitalize truncate text-foreground flex items-center gap-2">
-                                {o.serviceCode}
-                                {o.price !== undefined && (
-                                  <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-muted-foreground font-semibold">{Number(o.price).toFixed(2)} €</span>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="flex items-center gap-1"><Globe className="w-3 h-3"/> {o.countryCode}</span>
-                                {o.phoneNumber && (
-                                  <>
-                                    <span className="w-1 h-1 rounded-full bg-border hidden sm:block" />
-                                    <span className="font-mono text-foreground font-medium">{o.phoneNumber}</span>
-                                  </>
-                                )}
-                                <span className="w-1 h-1 rounded-full bg-border" />
-                                <span>{date}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Bloc droit (SMS & Statut) */}
-                          <div className="flex flex-row-reverse sm:flex-col items-center sm:items-end justify-between gap-3 sm:gap-2 w-full sm:w-auto border-t sm:border-t-0 border-border/50 pt-3 sm:pt-0">
-                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${cfg.color}`}>
-                              <StatusIcon className="w-3.5 h-3.5" />
-                              {cfg.label}
-                            </div>
-                            
-                            {o.smsCode && (
-                              <div className="bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm">
-                                <span className="text-[10px] uppercase font-bold opacity-80 hidden sm:inline">Code :</span>
-                                <span className="font-mono font-black tracking-widest">{o.smsCode}</span>
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                  <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-4">
+                    {pastOrders.map(o => (
+                      <PastOrderCard key={o.id} order={o} />
+                    ))}
                   </motion.div>
                 )}
               </div>
