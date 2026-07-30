@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMeta } from "../lib/use-meta";
 import { auth } from "../lib/firebase";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Clock, XCircle, Loader2, Copy, RefreshCw, Plus, Wallet,
   ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard, TrendingUp
@@ -29,11 +29,22 @@ function svcIconUrl(icon: string | null | undefined): string | null {
 }
 
 const STATUS_CONFIG = {
-  pending_payment: { label: "En attente", color: "text-amber-700 bg-amber-100 border-amber-200", icon: Clock },
-  active: { label: "En attente SMS", color: "text-blue-700 bg-blue-100 border-blue-200", icon: RefreshCw },
-  completed: { label: "SMS reçu", color: "text-green-700 bg-green-100 border-green-200", icon: CheckCircle2 },
-  cancelled: { label: "Annulée", color: "text-muted-foreground bg-muted border-border", icon: XCircle },
-  expired: { label: "Expirée", color: "text-destructive bg-destructive/10 border-destructive/20", icon: XCircle },
+  pending_payment: { label: "En attente", color: "text-amber-700 bg-amber-50 ring-1 ring-amber-200", icon: Clock },
+  active: { label: "En attente SMS", color: "text-blue-700 bg-blue-50 ring-1 ring-blue-200", icon: RefreshCw },
+  completed: { label: "SMS reçu", color: "text-green-700 bg-green-50 ring-1 ring-green-200", icon: CheckCircle2 },
+  cancelled: { label: "Annulée", color: "text-muted-foreground bg-muted/50 ring-1 ring-border", icon: XCircle },
+  expired: { label: "Expirée", color: "text-destructive bg-destructive/10 ring-1 ring-destructive/20", icon: XCircle },
+};
+
+// Configuration des animations de liste
+const listContainer = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+};
+
+const listItem = {
+  hidden: { opacity: 0, y: 15 },
+  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
 };
 
 function timeRemaining(expiresAt: string | null | undefined): string | null {
@@ -98,6 +109,22 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (!res.ok) throw new Error("Erreur annulation");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    }
+  });
+
   useEffect(() => {
     if (order?.status === "completed" || order?.status === "expired" || order?.status === "cancelled") {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
@@ -112,7 +139,7 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
     return () => clearInterval(timer);
   }, [order?.expiresAt, order?.status]);
 
-  if (!order) return <div className="h-32 bg-secondary animate-pulse rounded-2xl" />;
+  if (!order) return <div className="h-40 bg-secondary/50 animate-pulse rounded-2xl" />;
 
   const cfg = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.active;
   const StatusIcon = cfg.icon;
@@ -125,54 +152,77 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white border border-border rounded-2xl p-5 hover:border-primary/25 hover:shadow-sm transition-all">
-      <div className="flex items-start justify-between gap-4 mb-4">
+    <motion.div variants={listItem} className="bg-white border border-border/80 rounded-2xl p-5 shadow-sm hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 transition-all duration-300 relative overflow-hidden group">
+      {/* Ligne d'accentuation en haut */}
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 to-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      
+      <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 shadow-inner">
             {iconUrl ? (
-              <img src={iconUrl} alt={order.serviceCode || ""} className="w-6 h-6 object-contain" />
+              <img src={iconUrl} alt={order.serviceCode || ""} className="w-7 h-7 object-contain drop-shadow-sm" />
             ) : (
               <span className="text-sm font-bold text-muted-foreground">{order.serviceCode?.toUpperCase().slice(0, 2)}</span>
             )}
           </div>
           <div>
-            <div className="font-semibold text-sm capitalize">{order.serviceCode}</div>
-            <div className="text-xs text-muted-foreground">
-              {order.countryCode}
-              {order.price !== undefined && <span className="ml-2">· {Number(order.price).toFixed(2)} €</span>}
+            <div className="font-bold text-base capitalize text-foreground">{order.serviceCode}</div>
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+              <span>{order.countryCode}</span>
+              {order.price !== undefined && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-border" />
+                  <span className="font-medium">{Number(order.price).toFixed(2)} €</span>
+                </>
+              )}
             </div>
           </div>
         </div>
         <div className="text-right">
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold ${cfg.color}`}>
-            <StatusIcon className={`w-3 h-3 ${order.status === "active" ? "animate-spin" : ""}`} />
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${cfg.color} shadow-sm`}>
+            <StatusIcon className={`w-3.5 h-3.5 ${order.status === "active" ? "animate-spin" : ""}`} />
             {cfg.label}
           </div>
           {remaining && order.status === "active" && (
-            <div className="text-xs text-muted-foreground mt-1 font-mono">{remaining}</div>
+            <div className="text-xs text-muted-foreground mt-1.5 font-mono bg-secondary/50 inline-block px-2 py-0.5 rounded-md">{remaining}</div>
           )}
         </div>
       </div>
 
       {order.phoneNumber && (
-        <div className="flex items-center justify-between gap-3 mb-3 bg-secondary rounded-xl px-4 py-3">
-          <span className="font-mono font-bold text-sm tracking-wide">{order.phoneNumber}</span>
-          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="text-muted-foreground hover:text-foreground transition-colors">
+        <div className="flex items-center justify-between gap-3 mb-4 bg-secondary/50 rounded-xl px-4 py-3 border border-border/50 group-hover:bg-secondary transition-colors">
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Numéro attribué</span>
+            <span className="font-mono font-bold text-base tracking-wide text-foreground">{order.phoneNumber}</span>
+          </div>
+          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white shadow-sm border border-border text-muted-foreground hover:text-primary hover:border-primary/30 transition-all active:scale-95">
             {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
       )}
 
       {order.smsCode && (
-        <div className="flex items-center justify-between gap-3 mb-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-          <div>
-            <div className="text-xs text-green-600 font-semibold mb-0.5">Code de vérification</div>
-            <span className="font-mono font-black text-lg tracking-[0.1em] text-green-700">{order.smsCode}</span>
+        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex items-center justify-between gap-3 mb-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-full -mr-8 -mt-8 blur-xl" />
+          <div className="relative z-10">
+            <div className="text-[10px] uppercase font-bold text-green-700 tracking-wider mb-0.5">Code de vérification</div>
+            <span className="font-mono font-black text-xl tracking-[0.15em] text-green-800 drop-shadow-sm">{order.smsCode}</span>
           </div>
-          <button onClick={() => copyText(order.smsCode!, "code")} className="text-green-600 hover:text-green-700 transition-colors">
+          <button onClick={() => copyText(order.smsCode!, "code")} className="relative z-10 w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border border-green-200 text-green-600 hover:bg-green-600 hover:text-white transition-all active:scale-95">
             {copied === "code" ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           </button>
-        </div>
+        </motion.div>
+      )}
+
+      {order.status === "active" && (
+        <button
+          onClick={() => cancelMutation.mutate()}
+          disabled={cancelMutation.isPending}
+          className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-muted-foreground hover:text-destructive hover:bg-red-50 border border-border hover:border-red-200 rounded-xl transition-all active:scale-[0.98]"
+        >
+          {cancelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+          Annuler et rembourser
+        </button>
       )}
     </motion.div>
   );
@@ -192,16 +242,16 @@ function RechargesTab() {
   });
 
   const topupStatusConfig = {
-    pending: { label: "En attente", color: "text-amber-700 bg-amber-100 border-amber-200" },
-    completed: { label: "Crédité", color: "text-green-700 bg-green-100 border-green-200" },
-    failed: { label: "Échoué", color: "text-red-700 bg-red-50 border-red-200" },
+    pending: { label: "En attente", color: "text-amber-700 bg-amber-50 ring-1 ring-amber-200" },
+    completed: { label: "Crédité", color: "text-green-700 bg-green-50 ring-1 ring-green-200" },
+    failed: { label: "Échoué", color: "text-red-700 bg-red-50 ring-1 ring-red-200" },
   };
 
   if (isLoading) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-16 bg-secondary animate-pulse rounded-2xl" />
+          <div key={i} className="h-20 bg-secondary/50 animate-pulse rounded-2xl" />
         ))}
       </div>
     );
@@ -209,41 +259,43 @@ function RechargesTab() {
 
   if (!topups || topups.length === 0) {
     return (
-      <div className="text-center py-20 bg-white border border-border rounded-3xl shadow-sm">
-        <div className="w-14 h-14 rounded-2xl bg-primary/8 flex items-center justify-center mx-auto mb-4">
-          <CreditCard className="w-7 h-7 text-primary" />
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-20 bg-white border border-border/80 rounded-3xl shadow-sm">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5 shadow-inner">
+          <CreditCard className="w-8 h-8 text-primary" />
         </div>
-        <h3 className="font-bold mb-2 text-foreground">Aucune recharge</h3>
-        <p className="text-muted-foreground text-sm mb-6">Votre historique de recharges apparaîtra ici.</p>
-        <Link href="/wallet" className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+        <h3 className="text-lg font-bold mb-2 text-foreground">Aucune recharge effectuée</h3>
+        <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">Votre historique de recharges financières apparaîtra ici une fois que vous aurez approvisionné votre compte.</p>
+        <Link href="/wallet" className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 text-sm">
           Recharger mon solde <ArrowRight className="w-4 h-4" />
         </Link>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="space-y-2.5">
+    <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-3">
       {topups.map(t => {
         const cfg = topupStatusConfig[t.status as keyof typeof topupStatusConfig] ?? topupStatusConfig.pending;
         const date = new Date(t.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
         const time = new Date(t.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
         return (
-          <div key={t.id} className="bg-white border border-border rounded-2xl px-5 py-4 flex items-center gap-4 hover:shadow-sm transition-all">
-            <div className="w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-4 h-4 text-primary" />
+          <motion.div variants={listItem} key={t.id} className="bg-white border border-border/80 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:shadow-md hover:border-primary/30 transition-all duration-300">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 shadow-inner">
+              <TrendingUp className="w-5 h-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm text-foreground">{Number(t.amountEur).toFixed(2)} € rechargés</div>
-              <div className="text-xs text-muted-foreground">{date} à {time}</div>
+              <div className="font-bold text-base text-foreground">Recharge de {Number(t.amountEur).toFixed(2)} €</div>
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                <Clock className="w-3 h-3" /> {date} à {time}
+              </div>
             </div>
-            <div className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${cfg.color}`}>
+            <div className={`shrink-0 inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${cfg.color}`}>
               {cfg.label}
             </div>
-          </div>
+          </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 }
 
@@ -312,146 +364,134 @@ function ProfileTab({ me }: { me: UserProfile }) {
   const localCurrency = getCurrency(me.currency ?? "EUR");
 
   return (
-    <div className="max-w-lg">
-      <div className="bg-white border border-border rounded-2xl p-6 space-y-5 shadow-sm">
-        <div className="flex items-center gap-5">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-xl mx-auto sm:mx-0">
+      <div className="bg-white border border-border/80 rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm relative overflow-hidden">
+        {/* Décoration d'arrière-plan */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5 relative z-10">
           {me.avatarUrl ? (
-            <img src={me.avatarUrl} alt={me.name ?? ""} className="w-16 h-16 rounded-full object-cover border-2 border-border" />
+            <img src={me.avatarUrl} alt={me.name ?? ""} className="w-20 h-20 rounded-2xl object-cover border-2 border-white shadow-md" />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-accent/15 flex items-center justify-center text-xl font-extrabold text-primary border-2 border-primary/15">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-2xl font-extrabold text-primary shadow-inner">
               {initials}
             </div>
           )}
           <div>
-            <div className="font-bold text-lg text-foreground">{me.name ?? me.email}</div>
-            <div className="text-sm text-muted-foreground">{me.email}</div>
+            <div className="font-extrabold text-xl text-foreground mb-1">{me.name ?? "Mon Profil"}</div>
+            <div className="inline-flex items-center px-3 py-1 rounded-full bg-secondary text-sm text-muted-foreground font-medium">
+              {me.email}
+            </div>
           </div>
         </div>
 
-        <hr className="border-border" />
+        <hr className="border-border/60" />
 
-        {/* Nom */}
-        <div>
-          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Nom affiché</label>
-          {editing === "name" ? (
-            <div className="space-y-3">
-              <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus
-                className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all"
-                placeholder="Votre nom" />
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <div className="flex gap-2">
-                <button onClick={handleSaveName} disabled={updateMutation.isPending}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
-                  {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  Enregistrer
-                </button>
-                <button onClick={handleCancel}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
-                  <X className="w-4 h-4" /> Annuler
-                </button>
+        <div className="space-y-6 relative z-10">
+          {/* Nom */}
+          <div className="group">
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 block">Nom affiché</label>
+            {editing === "name" ? (
+              <div className="space-y-3">
+                <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus
+                  className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all shadow-sm"
+                  placeholder="Votre nom" />
+                {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button onClick={handleSaveName} disabled={updateMutation.isPending}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white font-bold rounded-xl text-sm hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/20 active:scale-95 disabled:opacity-50">
+                    {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Enregistrer
+                  </button>
+                  <button onClick={handleCancel}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-colors active:scale-95">
+                    <X className="w-4 h-4" /> Annuler
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-secondary rounded-xl">
-              <span className="text-sm font-medium">{me.name ?? <span className="text-muted-foreground italic">Non défini</span>}</span>
-              <button onClick={() => { setEditing("name"); setError(""); }}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                <Pencil className="w-3.5 h-3.5" /> Modifier
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Email */}
-        <div>
-          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Adresse e-mail</label>
-          <div className="flex items-center gap-3 px-4 py-3 bg-secondary/60 rounded-xl border border-dashed border-border">
-            <span className="text-sm text-muted-foreground">{me.email}</span>
-          </div>
-        </div>
-
-        {/* Téléphone */}
-        <div>
-          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Phone className="w-3.5 h-3.5" /> Numéro de téléphone
-          </label>
-          <p className="text-xs text-muted-foreground mb-2">Utilisé automatiquement pour les recharges de solde.</p>
-          {editing === "phone" ? (
-            <div className="space-y-3">
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} autoFocus
-                className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all"
-                placeholder="+237 6 XX XX XX XX" />
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              <div className="flex gap-2">
-                <button onClick={handleSavePhone} disabled={updateMutation.isPending}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
-                  {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  Enregistrer
-                </button>
-                <button onClick={handleCancel}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
-                  <X className="w-4 h-4" /> Annuler
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-secondary rounded-xl">
-              {me.phone ? (
-                <span className="text-sm font-mono font-medium">{me.phone}</span>
-              ) : (
-                <span className="text-sm text-muted-foreground italic">Non renseigné</span>
-              )}
-              <button onClick={() => { setEditing("phone"); setError(""); }}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                <Pencil className="w-3.5 h-3.5" /> {me.phone ? "Modifier" : "Ajouter"}
-              </button>
-            </div>
-          )}
-        </div>
-
-         {/* Devise */}
-        <div>
-          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5" /> Devise locale
-          </label>
-          <p className="text-xs text-muted-foreground mb-2">Affiche l'équivalent dans votre monnaie lors des recharges.</p>
-          <div className="relative">
-            <select value={me.currency ?? "EUR"} onChange={e => handleCurrencyChange(e.target.value)}
-              disabled={savingCurrency}
-              className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-sm focus:outline-none focus:border-primary/60 appearance-none cursor-pointer disabled:opacity-60 transition-all">
-              {CURRENCIES.map(c => (
-                <option key={c.code} value={c.code}>{c.symbol} — {c.name} ({c.code})</option>
-              ))}
-            </select>
-            {savingCurrency ? (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-spin" />
             ) : (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+              <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-secondary/30 border border-transparent group-hover:border-border/50 group-hover:bg-secondary/50 rounded-xl transition-all">
+                <span className="text-sm font-medium">{me.name ?? <span className="text-muted-foreground italic">Non défini</span>}</span>
+                <button onClick={() => { setEditing("name"); setError(""); }}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm border border-border/50">
+                  <Pencil className="w-3.5 h-3.5" /> Modifier
+                </button>
               </div>
             )}
           </div>
-          {localCurrency && localCurrency.code !== "EUR" && (
-            <p className="text-xs text-muted-foreground mt-1.5">
-              1 € ≈ {localCurrency.rateFromEur.toLocaleString("fr-FR")} {localCurrency.symbol}
-            </p>
-          )}
-        </div>
 
-        {/* Solde */}
-        <div>
-          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Solde du portefeuille</label>
-          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary/8 to-accent/5 border border-primary/15 rounded-xl">
-            <span className="text-lg font-extrabold gradient-text">{me.balance.toFixed(2)} €</span>
-            <Link href="/wallet" className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline">
-              Recharger <ArrowRight className="w-3 h-3" />
-            </Link>
+          {/* Téléphone */}
+          <div className="group">
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5" /> Numéro de téléphone
+            </label>
+            <p className="text-[11px] text-muted-foreground mb-2">Utilisé automatiquement pour vos recharges.</p>
+            {editing === "phone" ? (
+              <div className="space-y-3">
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} autoFocus
+                  className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all shadow-sm"
+                  placeholder="+237 6 XX XX XX XX" />
+                {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button onClick={handleSavePhone} disabled={updateMutation.isPending}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-white font-bold rounded-xl text-sm hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/20 active:scale-95 disabled:opacity-50">
+                    {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Enregistrer
+                  </button>
+                  <button onClick={handleCancel}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-colors active:scale-95">
+                    <X className="w-4 h-4" /> Annuler
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-secondary/30 border border-transparent group-hover:border-border/50 group-hover:bg-secondary/50 rounded-xl transition-all">
+                {me.phone ? (
+                  <span className="text-sm font-mono font-bold tracking-wide">{me.phone}</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground italic">Non renseigné</span>
+                )}
+                <button onClick={() => { setEditing("phone"); setError(""); }}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm border border-border/50">
+                  <Pencil className="w-3.5 h-3.5" /> {me.phone ? "Modifier" : "Ajouter"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Devise */}
+          <div>
+            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5" /> Devise locale
+            </label>
+            <p className="text-[11px] text-muted-foreground mb-2">Affiche l'équivalent dans votre monnaie lors des recharges.</p>
+            <div className="relative">
+              <select value={me.currency ?? "EUR"} onChange={e => handleCurrencyChange(e.target.value)}
+                disabled={savingCurrency}
+                className="w-full px-5 py-3.5 bg-secondary/50 border border-border/80 rounded-xl text-sm font-medium focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 appearance-none cursor-pointer disabled:opacity-60 transition-all shadow-sm hover:border-border">
+                {CURRENCIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.symbol} — {c.name} ({c.code})</option>
+                ))}
+              </select>
+              {savingCurrency ? (
+                <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-spin" />
+              ) : (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground bg-secondary/50 pl-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            {localCurrency && localCurrency.code !== "EUR" && (
+              <p className="text-xs font-medium text-muted-foreground mt-2 bg-secondary/40 inline-block px-2.5 py-1 rounded-md">
+                Taux indicatif : 1 € ≈ {localCurrency.rateFromEur.toLocaleString("fr-FR")} {localCurrency.symbol}
+              </p>
+            )}
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -501,144 +541,180 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold mb-1 text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">Gérez vos commandes et votre solde</p>
+          <h1 className="text-3xl sm:text-4xl font-extrabold mb-2 text-foreground tracking-tight">Tableau de bord</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Gérez vos commandes, votre solde et votre compte avec simplicité.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/wallet" className="flex items-center gap-2 bg-white border border-border px-4 py-2.5 rounded-xl text-sm font-semibold hover:border-primary/40 hover:shadow-sm transition-all">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
+          <Link href="/wallet" className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-border/80 px-5 py-3 rounded-2xl text-sm font-bold hover:border-primary/50 hover:shadow-md hover:shadow-primary/5 transition-all active:scale-95">
             <Wallet className="w-4 h-4 text-primary" />
             {loadingMe ? "—" : `${me?.balance?.toFixed(2) ?? "0.00"} €`}
-            <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+            <Plus className="w-4 h-4 text-muted-foreground" />
           </Link>
-          <Link href="/order" className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0_2px_10px_hsl(24_90%_52%/0.25)]">
+          <Link href="/order" className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 active:scale-95">
             <ShoppingBag className="w-4 h-4" />
             Commander
           </Link>
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 mb-8 border-b border-border">
+      {/* Tab bar (Pill style) */}
+      <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors -mb-px ${
-              tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${
+              tab === t.id 
+                ? "bg-primary text-white shadow-md shadow-primary/20" 
+                : "bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground border border-transparent hover:border-border/50"
             }`}>
             {t.icon} {t.label}
           </button>
         ))}
       </div>
 
-      {tab === "profile" ? (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          {loadingMe ? <div className="h-64 bg-secondary animate-pulse rounded-2xl" /> : me ? <ProfileTab me={me} /> : null}
-        </motion.div>
-      ) : tab === "topups" ? (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-          <RechargesTab />
-        </motion.div>
-      ) : (
-        <>
-          {/* Stats cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-primary/15 rounded-2xl p-5 shadow-sm">
-              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Solde</div>
-              {loadingMe ? (
-                <div className="h-8 w-24 bg-secondary animate-pulse rounded-lg" />
-              ) : (
-                <div className="text-3xl font-extrabold gradient-text">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
-              )}
-              <Link href="/wallet" className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline font-semibold">
-                Recharger <ArrowRight className="w-3 h-3" />
-              </Link>
-            </div>
-            <div className="bg-white border border-border rounded-2xl p-5 shadow-sm">
-              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Commandes actives</div>
-              <div className="text-3xl font-extrabold text-foreground">{activeOrders.length}</div>
-            </div>
-            <div className="bg-white border border-border rounded-2xl p-5 shadow-sm">
-              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Total commandes</div>
-              <div className="text-3xl font-extrabold text-foreground">{orders?.length ?? 0}</div>
-            </div>
-          </div>
-
-          {/* Active orders */}
-          {activeOrders.length > 0 && (
-            <div className="mb-10">
-              <h2 className="text-base font-bold mb-4 flex items-center gap-2 text-foreground">
-                <RefreshCw className="w-4 h-4 text-primary animate-spin" />
-                Commandes en cours
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {activeOrders.map(o => <ActiveOrderCard key={o.id} orderId={o.id} />)}
-              </div>
-            </div>
-          )}
-
-          {/* Order history */}
-          <div>
-            <h2 className="text-base font-bold mb-4 text-foreground">Historique des commandes</h2>
-            {loadingOrders ? (
-              <div className="space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-20 bg-secondary animate-pulse rounded-2xl" />
-                ))}
-              </div>
-            ) : pastOrders.length === 0 && activeOrders.length === 0 ? (
-              <div className="text-center py-20 bg-white border border-border rounded-3xl shadow-sm">
-                <div className="w-14 h-14 rounded-2xl bg-primary/8 flex items-center justify-center mx-auto mb-4">
-                  <ShoppingBag className="w-7 h-7 text-primary" />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
+          transition={{ duration: 0.2 }}
+        >
+          {tab === "profile" ? (
+            loadingMe ? <div className="h-72 bg-secondary/50 animate-pulse rounded-3xl" /> : me ? <ProfileTab me={me} /> : null
+          ) : tab === "topups" ? (
+            <RechargesTab />
+          ) : (
+            <>
+              {/* Stats cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
+                <div className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-3xl p-6 shadow-sm group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                    <Wallet size={80} className="text-primary" />
+                  </div>
+                  <div className="relative z-10">
+                    <div className="text-[11px] font-bold text-primary uppercase tracking-widest mb-2">Solde Actuel</div>
+                    {loadingMe ? (
+                      <div className="h-10 w-24 bg-primary/10 animate-pulse rounded-lg" />
+                    ) : (
+                      <div className="text-4xl font-black text-foreground drop-shadow-sm">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
+                    )}
+                    <Link href="/wallet" className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary bg-white/60 hover:bg-white px-3 py-1.5 rounded-lg font-bold transition-colors shadow-sm backdrop-blur-sm border border-primary/10">
+                      Recharger le compte <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
                 </div>
-                <h3 className="font-bold mb-2 text-foreground">Aucune commande</h3>
-                <p className="text-muted-foreground text-sm mb-6">Votre historique de commandes apparaîtra ici.</p>
-                <Link href="/order" className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors text-sm shadow-[0_4px_12px_hsl(24_90%_52%/0.25)]">
-                  Passer ma première commande <ArrowRight className="w-4 h-4" />
-                </Link>
+                
+                <div className="bg-white border border-border/80 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">En cours</div>
+                  <div className="text-4xl font-black text-foreground">{activeOrders.length}</div>
+                </div>
+                
+                <div className="bg-white border border-border/80 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Historique Total</div>
+                  <div className="text-4xl font-black text-foreground">{orders?.length ?? 0}</div>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-2.5">
-                {pastOrders.map(o => {
-                  const cfg = STATUS_CONFIG[o.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.cancelled;
-                  const StatusIcon = cfg.icon;
-                  const date = new Date(o.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-                  return (
-                    <div key={o.id} className="bg-white border border-border rounded-2xl px-5 py-4 flex items-center gap-4 hover:shadow-sm transition-all">
-                      <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center shrink-0 text-xs font-bold text-muted-foreground">
-                        {o.serviceCode?.toUpperCase().slice(0, 2)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm capitalize truncate text-foreground">{o.serviceCode}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {o.countryCode}
-                          {o.phoneNumber && <span className="ml-2 font-mono">{o.phoneNumber}</span>}
-                          <span className="ml-2">· {date}</span>
-                        </div>
-                        {o.smsCode && (
-                          <div className="text-xs font-mono font-bold text-green-600 mt-0.5">Code : {o.smsCode}</div>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${cfg.color}`}>
-                          <StatusIcon className="w-3 h-3" />
-                          {cfg.label}
-                        </div>
-                        {o.price !== undefined && (
-                          <div className="text-xs text-muted-foreground mt-1">{Number(o.price).toFixed(2)} €</div>
-                        )}
-                      </div>
+
+              {/* Active orders */}
+              {activeOrders.length > 0 && (
+                <div className="mb-12">
+                  <h2 className="text-lg font-extrabold mb-5 flex items-center gap-2 text-foreground">
+                    <div className="p-2 bg-primary/10 rounded-lg"><RefreshCw className="w-5 h-5 text-primary animate-spin" /></div>
+                    Commandes en cours d'activation
+                  </h2>
+                  <motion.div variants={listContainer} initial="hidden" animate="show" className="grid gap-5 sm:grid-cols-2">
+                    {activeOrders.map(o => <ActiveOrderCard key={o.id} orderId={o.id} />)}
+                  </motion.div>
+                </div>
+              )}
+
+              {/* Order history */}
+              <div>
+                <h2 className="text-lg font-extrabold mb-5 text-foreground flex items-center gap-2">
+                  <div className="p-2 bg-secondary rounded-lg"><ShoppingBag className="w-5 h-5 text-muted-foreground" /></div>
+                  Toutes les commandes
+                </h2>
+                
+                {loadingOrders ? (
+                  <div className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="h-24 bg-secondary/50 animate-pulse rounded-2xl" />
+                    ))}
+                  </div>
+                ) : pastOrders.length === 0 && activeOrders.length === 0 ? (
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-24 bg-white border border-border/80 rounded-3xl shadow-sm">
+                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-5 shadow-inner">
+                      <ShoppingBag className="w-8 h-8 text-primary" />
                     </div>
-                  );
-                })}
+                    <h3 className="text-xl font-bold mb-2 text-foreground">Votre historique est vide</h3>
+                    <p className="text-muted-foreground text-sm mb-8 max-w-sm mx-auto">Toutes vos commandes et réceptions de codes SMS seront conservées ici.</p>
+                    <Link href="/order" className="inline-flex items-center gap-2 px-8 py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/30 active:translate-y-0 text-sm">
+                      Démarrer une commande <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </motion.div>
+                ) : (
+                  <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-3">
+                    {pastOrders.map(o => {
+                      const cfg = STATUS_CONFIG[o.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.cancelled;
+                      const StatusIcon = cfg.icon;
+                      const date = new Date(o.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+                      return (
+                        <motion.div variants={listItem} key={o.id} className="group bg-white border border-border/60 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 hover:shadow-md hover:border-primary/30 transition-all duration-300">
+                          
+                          {/* Info bloc gauche */}
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="w-12 h-12 rounded-xl bg-secondary/80 flex items-center justify-center shrink-0 text-sm font-bold text-muted-foreground shadow-inner group-hover:bg-primary/5 transition-colors">
+                              {o.serviceCode?.toUpperCase().slice(0, 2)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-base capitalize truncate text-foreground flex items-center gap-2">
+                                {o.serviceCode}
+                                {o.price !== undefined && (
+                                  <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-muted-foreground font-semibold">{Number(o.price).toFixed(2)} €</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="flex items-center gap-1"><Globe className="w-3 h-3"/> {o.countryCode}</span>
+                                {o.phoneNumber && (
+                                  <>
+                                    <span className="w-1 h-1 rounded-full bg-border hidden sm:block" />
+                                    <span className="font-mono text-foreground font-medium">{o.phoneNumber}</span>
+                                  </>
+                                )}
+                                <span className="w-1 h-1 rounded-full bg-border" />
+                                <span>{date}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Bloc droit (SMS & Statut) */}
+                          <div className="flex flex-row-reverse sm:flex-col items-center sm:items-end justify-between gap-3 sm:gap-2 w-full sm:w-auto border-t sm:border-t-0 border-border/50 pt-3 sm:pt-0">
+                            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${cfg.color}`}>
+                              <StatusIcon className="w-3.5 h-3.5" />
+                              {cfg.label}
+                            </div>
+                            
+                            {o.smsCode && (
+                              <div className="bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm">
+                                <span className="text-[10px] uppercase font-bold opacity-80 hidden sm:inline">Code :</span>
+                                <span className="font-mono font-black tracking-widest">{o.smsCode}</span>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </motion.div>
+                )}
               </div>
-            )}
-          </div>
-        </>
-      )}
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
-              }
+}
