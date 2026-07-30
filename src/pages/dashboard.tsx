@@ -2,10 +2,6 @@ import { useState, useEffect } from "react";
 import { useMeta } from "../lib/use-meta";
 import { auth } from "../lib/firebase";
 import { motion } from "framer-motion";
-import {
-  CheckCircle2, Clock, XCircle, Loader2, Copy, RefreshCw, Plus, Wallet,
-  ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard, TrendingUp
-} from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { CURRENCIES, getCurrency } from "../lib/currencies";
@@ -29,11 +25,11 @@ function svcIconUrl(icon: string | null | undefined): string | null {
 }
 
 const STATUS_CONFIG = {
-  pending_payment: { label: "En attente", color: "text-amber-700 bg-amber-100 border-amber-200", icon: Clock },
-  active: { label: "En attente SMS", color: "text-blue-700 bg-blue-100 border-blue-200", icon: RefreshCw },
-  completed: { label: "SMS reçu", color: "text-green-700 bg-green-100 border-green-200", icon: CheckCircle2 },
-  cancelled: { label: "Annulée", color: "text-muted-foreground bg-muted border-border", icon: XCircle },
-  expired: { label: "Expirée", color: "text-destructive bg-destructive/10 border-destructive/20", icon: XCircle },
+  pending_payment: { label: "En attente", color: "text-amber-700 bg-amber-100 border-amber-200" },
+  active: { label: "En attente SMS", color: "text-blue-700 bg-blue-100 border-blue-200" },
+  completed: { label: "SMS reçu", color: "text-green-700 bg-green-100 border-green-200" },
+  cancelled: { label: "Annulée", color: "text-muted-foreground bg-muted border-border" },
+  expired: { label: "Expirée", color: "text-destructive bg-destructive/10 border-destructive/20" },
 };
 
 function timeRemaining(expiresAt: string | null | undefined): string | null {
@@ -75,6 +71,66 @@ export interface UserProfile {
   balance: number;
 }
 
+/* --- Nouvelles illustrations professionnelles animées --- */
+const PhoneIllustration = () => (
+  <div className="relative w-28 h-28 mx-auto mb-6">
+    <motion.div
+      animate={{ y: [0, -6, 0] }}
+      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+      className="absolute inset-0 flex items-center justify-center"
+    >
+      <svg viewBox="0 0 100 100" fill="none" className="w-full h-full drop-shadow-lg">
+        <rect x="25" y="10" width="50" height="80" rx="8" className="fill-white stroke-border" strokeWidth="2" />
+        <rect x="35" y="15" width="30" height="4" rx="2" className="fill-secondary" />
+        {/* Bulle SMS qui apparaît */}
+        <motion.rect x="32" y="30" width="36" height="18" rx="4" className="fill-primary/20"
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5, duration: 0.5, ease: "easeOut" }}
+        />
+        <motion.rect x="38" y="35" width="20" height="3" rx="1.5" className="fill-primary/60"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
+        />
+        <motion.rect x="38" y="41" width="12" height="2" rx="1" className="fill-primary/40"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
+        />
+      </svg>
+    </motion.div>
+    <motion.div
+      animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.1, 0.3] }}
+      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+      className="absolute -inset-4 bg-primary/10 rounded-full -z-10 blur-2xl"
+    />
+  </div>
+);
+
+const WalletIllustration = () => (
+  <div className="relative w-28 h-28 mx-auto mb-6">
+    <motion.div
+      animate={{ y: [0, -6, 0] }}
+      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+      className="absolute inset-0 flex items-center justify-center"
+    >
+      <svg viewBox="0 0 100 100" fill="none" className="w-full h-full drop-shadow-lg">
+        <rect x="15" y="25" width="70" height="50" rx="6" className="fill-white stroke-border" strokeWidth="2" />
+        <rect x="15" y="40" width="70" height="12" className="fill-secondary" />
+        <motion.rect x="60" y="55" width="35" height="20" rx="4" className="fill-primary"
+          initial={{ x: 20, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ type: "spring", delay: 0.2, bounce: 0.4 }}
+        />
+        <circle cx="85" cy="65" r="3" className="fill-white" />
+      </svg>
+    </motion.div>
+    <motion.div
+      animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.1, 0.2] }}
+      transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+      className="absolute -inset-4 bg-primary/10 rounded-full -z-10 blur-2xl"
+    />
+  </div>
+);
+/* -------------------------------------------------------- */
+
 function ActiveOrderCard({ orderId }: { orderId: string }) {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState<string>("");
@@ -115,7 +171,6 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
   if (!order) return <div className="h-32 bg-secondary animate-pulse rounded-2xl" />;
 
   const cfg = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.active;
-  const StatusIcon = cfg.icon;
   const iconUrl = svcIconUrl(order.serviceIcon ?? null);
 
   const copyText = (text: string, key: string) => {
@@ -144,8 +199,8 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
           </div>
         </div>
         <div className="text-right">
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold ${cfg.color}`}>
-            <StatusIcon className={`w-3 h-3 ${order.status === "active" ? "animate-spin" : ""}`} />
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${cfg.color}`}>
+            <div className={`w-2 h-2 rounded-full bg-current ${order.status === "active" ? "animate-pulse" : ""}`} />
             {cfg.label}
           </div>
           {remaining && order.status === "active" && (
@@ -157,8 +212,8 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
       {order.phoneNumber && (
         <div className="flex items-center justify-between gap-3 mb-3 bg-secondary rounded-xl px-4 py-3">
           <span className="font-mono font-bold text-sm tracking-wide">{order.phoneNumber}</span>
-          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="text-muted-foreground hover:text-foreground transition-colors">
-            {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="text-xs font-semibold text-muted-foreground hover:text-foreground px-3 py-1.5 bg-black/5 hover:bg-black/10 rounded-lg transition-colors">
+            {copied === "phone" ? "Copié !" : "Copier"}
           </button>
         </div>
       )}
@@ -169,8 +224,8 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
             <div className="text-xs text-green-600 font-semibold mb-0.5">Code de vérification</div>
             <span className="font-mono font-black text-lg tracking-[0.1em] text-green-700">{order.smsCode}</span>
           </div>
-          <button onClick={() => copyText(order.smsCode!, "code")} className="text-green-600 hover:text-green-700 transition-colors">
-            {copied === "code" ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          <button onClick={() => copyText(order.smsCode!, "code")} className="text-xs font-semibold text-green-700 hover:text-green-800 px-3 py-1.5 bg-green-200/50 hover:bg-green-200 rounded-lg transition-colors">
+            {copied === "code" ? "Copié !" : "Copier"}
           </button>
         </div>
       )}
@@ -210,13 +265,11 @@ function RechargesTab() {
   if (!topups || topups.length === 0) {
     return (
       <div className="text-center py-20 bg-white border border-border rounded-3xl shadow-sm">
-        <div className="w-14 h-14 rounded-2xl bg-primary/8 flex items-center justify-center mx-auto mb-4">
-          <CreditCard className="w-7 h-7 text-primary" />
-        </div>
+        <WalletIllustration />
         <h3 className="font-bold mb-2 text-foreground">Aucune recharge</h3>
         <p className="text-muted-foreground text-sm mb-6">Votre historique de recharges apparaîtra ici.</p>
-        <Link href="/wallet" className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors text-sm">
-          Recharger mon solde <ArrowRight className="w-4 h-4" />
+        <Link href="/wallet" className="inline-flex items-center px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+          Recharger mon solde
         </Link>
       </div>
     );
@@ -230,14 +283,11 @@ function RechargesTab() {
         const time = new Date(t.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
         return (
           <div key={t.id} className="bg-white border border-border rounded-2xl px-5 py-4 flex items-center gap-4 hover:shadow-sm transition-all">
-            <div className="w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-4 h-4 text-primary" />
-            </div>
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-sm text-foreground">{Number(t.amountEur).toFixed(2)} € rechargés</div>
               <div className="text-xs text-muted-foreground">{date} à {time}</div>
             </div>
-            <div className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${cfg.color}`}>
+            <div className={`shrink-0 inline-flex items-center px-3 py-1 rounded-full border text-xs font-semibold ${cfg.color}`}>
               {cfg.label}
             </div>
           </div>
@@ -341,13 +391,12 @@ function ProfileTab({ me }: { me: UserProfile }) {
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex gap-2">
                 <button onClick={handleSaveName} disabled={updateMutation.isPending}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
-                  {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  Enregistrer
+                  className="flex-1 flex items-center justify-center py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
+                  {updateMutation.isPending ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"></span> : "Enregistrer"}
                 </button>
                 <button onClick={handleCancel}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
-                  <X className="w-4 h-4" /> Annuler
+                  className="px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
+                  Annuler
                 </button>
               </div>
             </div>
@@ -355,8 +404,8 @@ function ProfileTab({ me }: { me: UserProfile }) {
             <div className="flex items-center justify-between gap-3 px-4 py-3 bg-secondary rounded-xl">
               <span className="text-sm font-medium">{me.name ?? <span className="text-muted-foreground italic">Non défini</span>}</span>
               <button onClick={() => { setEditing("name"); setError(""); }}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                <Pencil className="w-3.5 h-3.5" /> Modifier
+                className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors">
+                Modifier
               </button>
             </div>
           )}
@@ -372,8 +421,8 @@ function ProfileTab({ me }: { me: UserProfile }) {
 
         {/* Téléphone */}
         <div>
-          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Phone className="w-3.5 h-3.5" /> Numéro de téléphone
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
+            Numéro de téléphone
           </label>
           <p className="text-xs text-muted-foreground mb-2">Utilisé automatiquement pour les recharges de solde.</p>
           {editing === "phone" ? (
@@ -384,13 +433,12 @@ function ProfileTab({ me }: { me: UserProfile }) {
               {error && <p className="text-xs text-destructive">{error}</p>}
               <div className="flex gap-2">
                 <button onClick={handleSavePhone} disabled={updateMutation.isPending}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
-                  {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  Enregistrer
+                  className="flex-1 flex items-center justify-center py-2.5 bg-primary text-white font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50">
+                  {updateMutation.isPending ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block"></span> : "Enregistrer"}
                 </button>
                 <button onClick={handleCancel}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
-                  <X className="w-4 h-4" /> Annuler
+                  className="px-4 py-2.5 border border-border rounded-xl text-sm font-medium hover:bg-secondary transition-colors">
+                  Annuler
                 </button>
               </div>
             </div>
@@ -402,8 +450,8 @@ function ProfileTab({ me }: { me: UserProfile }) {
                 <span className="text-sm text-muted-foreground italic">Non renseigné</span>
               )}
               <button onClick={() => { setEditing("phone"); setError(""); }}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                <Pencil className="w-3.5 h-3.5" /> {me.phone ? "Modifier" : "Ajouter"}
+                className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors">
+                {me.phone ? "Modifier" : "Ajouter"}
               </button>
             </div>
           )}
@@ -411,8 +459,8 @@ function ProfileTab({ me }: { me: UserProfile }) {
 
          {/* Devise */}
         <div>
-          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5" /> Devise locale
+          <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">
+            Devise locale
           </label>
           <p className="text-xs text-muted-foreground mb-2">Affiche l'équivalent dans votre monnaie lors des recharges.</p>
           <div className="relative">
@@ -424,7 +472,9 @@ function ProfileTab({ me }: { me: UserProfile }) {
               ))}
             </select>
             {savingCurrency ? (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-spin" />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin inline-block"></span>
+              </div>
             ) : (
               <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -445,8 +495,8 @@ function ProfileTab({ me }: { me: UserProfile }) {
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Solde du portefeuille</label>
           <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary/8 to-accent/5 border border-primary/15 rounded-xl">
             <span className="text-lg font-extrabold gradient-text">{me.balance.toFixed(2)} €</span>
-            <Link href="/wallet" className="flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline">
-              Recharger <ArrowRight className="w-3 h-3" />
+            <Link href="/wallet" className="text-xs text-primary font-semibold hover:underline">
+              Recharger →
             </Link>
           </div>
         </div>
@@ -494,10 +544,10 @@ export default function Dashboard() {
   const activeOrders = orders?.filter(o => o.status === "active" || o.status === "pending_payment") ?? [];
   const pastOrders = orders?.filter(o => o.status !== "active" && o.status !== "pending_payment") ?? [];
 
-  const tabs: { id: DashTab; label: string; icon: React.ReactNode }[] = [
-    { id: "orders", label: "Commandes", icon: <ShoppingBag className="w-4 h-4" /> },
-    { id: "topups", label: "Recharges", icon: <CreditCard className="w-4 h-4" /> },
-    { id: "profile", label: "Mon Profil", icon: <User className="w-4 h-4" /> },
+  const tabs: { id: DashTab; label: string }[] = [
+    { id: "orders", label: "Commandes" },
+    { id: "topups", label: "Recharges" },
+    { id: "profile", label: "Mon Profil" },
   ];
 
   return (
@@ -510,26 +560,23 @@ export default function Dashboard() {
           <p className="text-muted-foreground text-sm">Gérez vos commandes et votre solde</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/wallet" className="flex items-center gap-2 bg-white border border-border px-4 py-2.5 rounded-xl text-sm font-semibold hover:border-primary/40 hover:shadow-sm transition-all">
-            <Wallet className="w-4 h-4 text-primary" />
+          <Link href="/wallet" className="flex items-center px-4 py-2.5 bg-white border border-border rounded-xl text-sm font-semibold hover:border-primary/40 hover:shadow-sm transition-all">
             {loadingMe ? "—" : `${me?.balance?.toFixed(2) ?? "0.00"} €`}
-            <Plus className="w-3.5 h-3.5 text-muted-foreground" />
           </Link>
-          <Link href="/order" className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0_2px_10px_hsl(24_90%_52%/0.25)]">
-            <ShoppingBag className="w-4 h-4" />
+          <Link href="/order" className="px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-[0_2px_10px_hsl(24_90%_52%/0.25)]">
             Commander
           </Link>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 mb-8 border-b border-border">
+      <div className="flex items-center gap-4 mb-8 border-b border-border px-1">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+            className={`py-3 text-sm font-semibold border-b-2 transition-colors -mb-px ${
               tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}>
-            {t.icon} {t.label}
+            {t.label}
           </button>
         ))}
       </div>
@@ -553,8 +600,8 @@ export default function Dashboard() {
               ) : (
                 <div className="text-3xl font-extrabold gradient-text">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
               )}
-              <Link href="/wallet" className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline font-semibold">
-                Recharger <ArrowRight className="w-3 h-3" />
+              <Link href="/wallet" className="mt-2 inline-flex text-xs text-primary hover:underline font-semibold">
+                Recharger →
               </Link>
             </div>
             <div className="bg-white border border-border rounded-2xl p-5 shadow-sm">
@@ -571,7 +618,7 @@ export default function Dashboard() {
           {activeOrders.length > 0 && (
             <div className="mb-10">
               <h2 className="text-base font-bold mb-4 flex items-center gap-2 text-foreground">
-                <RefreshCw className="w-4 h-4 text-primary animate-spin" />
+                <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
                 Commandes en cours
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -591,20 +638,17 @@ export default function Dashboard() {
               </div>
             ) : pastOrders.length === 0 && activeOrders.length === 0 ? (
               <div className="text-center py-20 bg-white border border-border rounded-3xl shadow-sm">
-                <div className="w-14 h-14 rounded-2xl bg-primary/8 flex items-center justify-center mx-auto mb-4">
-                  <ShoppingBag className="w-7 h-7 text-primary" />
-                </div>
+                <PhoneIllustration />
                 <h3 className="font-bold mb-2 text-foreground">Aucune commande</h3>
                 <p className="text-muted-foreground text-sm mb-6">Votre historique de commandes apparaîtra ici.</p>
-                <Link href="/order" className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors text-sm shadow-[0_4px_12px_hsl(24_90%_52%/0.25)]">
-                  Passer ma première commande <ArrowRight className="w-4 h-4" />
+                <Link href="/order" className="inline-flex items-center px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors text-sm shadow-[0_4px_12px_hsl(24_90%_52%/0.25)]">
+                  Passer ma première commande
                 </Link>
               </div>
             ) : (
               <div className="space-y-2.5">
                 {pastOrders.map(o => {
                   const cfg = STATUS_CONFIG[o.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.cancelled;
-                  const StatusIcon = cfg.icon;
                   const date = new Date(o.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
                   return (
                     <div key={o.id} className="bg-white border border-border rounded-2xl px-5 py-4 flex items-center gap-4 hover:shadow-sm transition-all">
@@ -623,8 +667,8 @@ export default function Dashboard() {
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${cfg.color}`}>
-                          <StatusIcon className="w-3 h-3" />
+                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-semibold ${cfg.color}`}>
+                          <div className="w-2 h-2 rounded-full bg-current" />
                           {cfg.label}
                         </div>
                         {o.price !== undefined && (
@@ -641,4 +685,4 @@ export default function Dashboard() {
       )}
     </div>
   );
-              }
+}
