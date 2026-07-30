@@ -65,7 +65,7 @@ const gridItem = {
   show: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.45, ease } },
 };
 
-/* --- COMPOSANTS D'ILLUSTRATIONS PROFESSIONNELLES --- */
+/* --- COMPOSANTS D'ILLUSTRATIONS DU FICHIER DE BASE (Conservés) --- */
 
 const IllusTrust = () => (
   <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-primary">
@@ -115,6 +115,129 @@ const MiniIllus = ({ type }: { type: 'building' | 'phone' | 'cart' | 'lock' | 'a
     default: return null;
   }
 };
+
+/* --- NOUVEAUX COMPOSANTS SVG PREMIUM (Pour la section Pourquoi) --- */
+
+const AbstractTrust = () => (
+  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
+    <motion.rect x="4" y="4" width="32" height="32" rx="16" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
+    <motion.path d="M20 12 L20 28 M12 20 L28 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ duration: 0.8, ease }} />
+    <circle cx="20" cy="20" r="4" fill="currentColor" fillOpacity="0.2" />
+  </svg>
+);
+
+const AbstractPremium = () => (
+  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
+    <motion.path d="M10 30 L20 10 L30 30 Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.5, ease }} />
+    <motion.path d="M10 20 L30 20" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 4" animate={{ x: [-2, 2, -2] }} transition={{ duration: 4, repeat: Infinity }} />
+  </svg>
+);
+
+const AbstractPartner = () => (
+  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
+    <motion.circle cx="15" cy="20" r="8" fill="none" stroke="currentColor" strokeWidth="1.5" initial={{ x: -10, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ duration: 0.6, ease }} />
+    <motion.circle cx="25" cy="20" r="8" fill="none" stroke="currentColor" strokeWidth="1.5" initial={{ x: 10, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ duration: 0.6, ease }} />
+    <circle cx="20" cy="20" r="2" fill="currentColor" />
+  </svg>
+);
+
+const AbstractGlobal = () => (
+  <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
+    <motion.ellipse cx="20" cy="20" rx="14" ry="6" fill="none" stroke="currentColor" strokeWidth="1.5" animate={{ rotate: 180 }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }} />
+    <motion.ellipse cx="20" cy="20" rx="6" ry="14" fill="none" stroke="currentColor" strokeWidth="1.5" animate={{ rotate: 180 }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }} />
+    <circle cx="20" cy="20" r="2" fill="currentColor" />
+  </svg>
+);
+
+/* --- NOUVEAU COMPOSANT : PHONE AD (SVG Publicité Téléphone) --- */
+const PremiumPhoneAd = () => {
+  return (
+    <section className="py-24 bg-[#FCFCFD] overflow-hidden relative border-t border-border">
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+      <div className="max-w-7xl mx-auto px-6 relative flex flex-col md:flex-row items-center justify-between gap-12">
+        
+        <div className="flex-1 md:pr-12 z-10">
+          <motion.div {...fadeUp(0)}>
+            <div className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Expérience sans couture</div>
+            <h2 className="text-3xl md:text-5xl font-extrabold text-foreground mb-6 leading-tight">
+              Une technologie invisible,<br />un impact immédiat.
+            </h2>
+            <p className="text-muted-foreground text-lg leading-relaxed mb-6">
+              Nous avons conçu une interface qui s'efface pour laisser place à l'essentiel : votre réputation. Recevez vos vérifications instantanément, sur une plateforme pensée pour l'excellence.
+            </p>
+          </motion.div>
+        </div>
+
+        <div className="flex-1 flex justify-center z-10 w-full">
+          <motion.div
+            animate={{ y: [0, -15, 0], rotateX: [10, 15, 10], rotateY: [-15, -10, -15] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            style={{ perspective: "1000px" }}
+            className="relative"
+          >
+            {/* L'ombre sous le téléphone */}
+            <motion.div 
+               animate={{ scale: [1, 0.9, 1], opacity: [0.3, 0.1, 0.3] }}
+               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+               className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-48 h-8 bg-black/20 blur-xl rounded-full"
+            />
+
+            {/* Le châssis du téléphone */}
+            <div className="w-[280px] h-[580px] bg-[#111] rounded-[45px] p-2.5 shadow-2xl relative border-[3px] border-[#333]">
+              {/* L'écran */}
+              <div className="w-full h-full bg-white rounded-[35px] overflow-hidden relative flex flex-col">
+                
+                {/* Dynamic Island / Notch */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20"></div>
+
+                {/* Contenu de l'écran (Simulation App) */}
+                <div className="flex-1 bg-[#F5F5F7] p-5 pt-16 flex flex-col gap-4">
+                  
+                  {/* Header App */}
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="w-20 h-4 bg-gray-200 rounded-full"></div>
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-primary" />
+                    </div>
+                  </div>
+
+                  {/* Message OTP 1 */}
+                  <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5, duration: 0.5 }}
+                    className="bg-white p-4 rounded-2xl rounded-tl-sm shadow-sm border border-gray-100 max-w-[85%]"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WA" className="w-4 h-4" />
+                      <span className="text-[10px] font-bold text-gray-400">WhatsApp Business</span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-800">Votre code est : <span className="font-bold text-black tracking-widest">492 103</span></p>
+                  </motion.div>
+
+                  {/* Message OTP 2 */}
+                  <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 1.5, duration: 0.5 }}
+                    className="bg-white p-4 rounded-2xl rounded-tl-sm shadow-sm border border-gray-100 max-w-[85%]"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <img src="https://cdn.simpleicons.org/google/4285F4" alt="Google" className="w-4 h-4" />
+                      <span className="text-[10px] font-bold text-gray-400">Google Workspace</span>
+                    </div>
+                    <p className="text-sm font-medium text-gray-800">G- <span className="font-bold text-black tracking-widest">883921</span> est votre code.</p>
+                  </motion.div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 
 /* --- ILLUSTRATION EXPÉRIENCE SANS COUTURE --- */
 
@@ -518,10 +641,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Pourquoi TEXERRA ── */}
-      <section id="pourquoi" className="py-24 bg-secondary/30 border-y border-border">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div {...fadeUp(0)} className="text-center mb-14">
+      {/* ── NOUVELLE SECTION PUBLICITÉ TÉLÉPHONE (AJOUTÉE ICI COMME DEMANDÉ) ── */}
+      <PremiumPhoneAd />
+
+      {/* ── Pourquoi TEXERRA (Design Professionnel importé du second fichier) ── */}
+      <section id="pourquoi" className="py-24 bg-white border-t border-border">
+        <div className="max-w-7xl mx-auto px-6">
+          <motion.div {...fadeUp(0)} className="text-center mb-20">
             <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pourquoi TEXERRA ?</p>
             <h2 className="text-4xl md:text-5xl font-extrabold text-foreground mb-5">
               Ce que vous gagnez vraiment
@@ -536,55 +662,51 @@ export default function Home() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true, margin: "-60px" }}
-            className="grid md:grid-cols-2 lg:grid-cols-4 gap-5"
+            className="grid md:grid-cols-2 lg:grid-cols-4 gap-8"
           >
             {[
               {
-                icon: Star,
-                color: "bg-amber-50 text-amber-600",
+                Graphic: AbstractTrust,
                 title: "Inspirez confiance plus vite",
                 desc: "Un numéro du bon pays positionne immédiatement votre entreprise comme sérieuse, locale et établie.",
               },
               {
-                icon: TrendingUp,
-                color: "bg-primary/8 text-primary",
+                Graphic: AbstractPremium,
                 title: "Image plus premium",
                 desc: "Présentez-vous avec l'assurance d'une entreprise implantée là où se trouvent vos clients.",
               },
               {
-                icon: Users,
-                color: "bg-blue-50 text-blue-600",
+                Graphic: AbstractPartner,
                 title: "Convainquez prospects & partenaires",
                 desc: "Vos interlocuteurs vous prendront davantage au sérieux. Plus d'opportunités, moins de barrières.",
               },
               {
-                icon: Globe2,
-                color: "bg-emerald-50 text-emerald-600",
+                Graphic: AbstractGlobal,
                 title: "Présence internationale",
                 desc: "Obtenez un numéro de n'importe quel pays — États-Unis, France, UK, RDC, Nigeria et 205+ autres.",
               },
             ].map((item, i) => (
-              <motion.div key={i} variants={gridItem} className="bg-white border border-border rounded-2xl p-7 hover:border-primary/30 hover:shadow-sm transition-all duration-200">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-5 ${item.color}`}>
-                  <item.icon className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-sm mb-2.5 text-foreground leading-snug">{item.title}</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+              <motion.div key={i} variants={gridItem} className="group relative flex flex-col p-8 rounded-3xl bg-secondary/20 hover:bg-white border border-transparent hover:border-border transition-all duration-300 hover:shadow-xl hover:shadow-primary/5">
+                <item.Graphic />
+                <h3 className="text-lg font-bold mb-3 text-foreground group-hover:text-primary transition-colors">{item.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* ── À qui s'adresse TEXERRA ── */}
-      <section className="py-24 bg-white">
+      {/* ── À qui s'adresse TEXERRA (Design liste épuré et sérieux) ── */}
+      <section className="py-24 bg-white border-t border-border">
         <div className="max-w-6xl mx-auto px-6">
-          <motion.div {...fadeUp(0)} className="text-center mb-12">
-            <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pour qui ?</p>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-foreground mb-4">
-              TEXERRA s'adresse à tout le monde
-            </h2>
-            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+          <motion.div {...fadeUp(0)} className="mb-16 md:flex md:items-end md:justify-between gap-10">
+            <div className="max-w-2xl">
+              <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pour qui ?</p>
+              <h2 className="text-3xl md:text-5xl font-extrabold text-foreground mb-4 leading-tight">
+                TEXERRA s'adresse à tout le monde
+              </h2>
+            </div>
+            <p className="text-muted-foreground text-lg max-w-md pb-2">
               Que vous ayez besoin d'un numéro pour votre image, pour vérifier un compte ou simplement pour un usage personnel — TEXERRA a ce qu'il vous faut.
             </p>
           </motion.div>
@@ -594,59 +716,30 @@ export default function Home() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true }}
-            className="grid sm:grid-cols-2 md:grid-cols-3 gap-4"
+            className="grid md:grid-cols-2 gap-x-12 gap-y-8"
           >
             {[
-              {
-                type: 'building' as const,
-                title: "Entrepreneurs & dirigeants",
-                desc: "Obtenez un numéro du pays où se trouvent vos clients ou partenaires pour inspirer plus de confiance.",
-              },
-              {
-                type: 'phone' as const,
-                title: "Agences & freelances",
-                desc: "Gérez des comptes clients sur plusieurs plateformes avec une image professionnelle et internationale.",
-              },
-              {
-                type: 'cart' as const,
-                title: "E-commerçants",
-                desc: "Donnez à votre boutique en ligne une présence locale dans les marchés que vous ciblez.",
-              },
-              {
-                type: 'lock' as const,
-                title: "Vérification de compte",
-                desc: "Recevez un code OTP pour activer un compte sur n'importe quelle plateforme. Simple, rapide, discret.",
-              },
-              {
-                type: 'app' as const,
-                title: "Accès aux plateformes",
-                desc: "WhatsApp Business, Instagram, Google, TikTok, Telegram — obtenez le numéro requis pour vous inscrire.",
-              },
-              {
-                type: 'user' as const,
-                title: "Usage personnel",
-                desc: "Besoin d'un numéro d'un pays précis ? Que ce soit pour vous ou votre activité — choisissez simplement le pays et commandez.",
-              },
+              { title: "Entrepreneurs & dirigeants", desc: "Obtenez un numéro du pays où se trouvent vos clients ou partenaires pour inspirer plus de confiance." },
+              { title: "Agences & freelances", desc: "Gérez des comptes clients sur plusieurs plateformes avec une image professionnelle et internationale." },
+              { title: "E-commerçants", desc: "Donnez à votre boutique en ligne une présence locale dans les marchés que vous ciblez." },
+              { title: "Vérification de compte", desc: "Recevez un code OTP pour activer un compte sur n'importe quelle plateforme. Simple, rapide, discret." },
+              { title: "Accès aux plateformes", desc: "WhatsApp Business, Instagram, Google, TikTok, Telegram — obtenez le numéro requis pour vous inscrire." },
+              { title: "Usage personnel", desc: "Besoin d'un numéro d'un pays précis ? Que ce soit pour vous ou votre activité — choisissez simplement le pays et commandez." },
             ].map((item, i) => (
               <motion.div
                 key={i}
                 variants={gridItem}
-                className="flex flex-col gap-3 bg-white border border-border rounded-2xl px-6 py-5 hover:border-primary/30 hover:shadow-sm transition-all duration-200"
+                className="flex flex-col gap-3 py-4 border-b border-border/40 last:border-0"
               >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/5 rounded-lg border border-primary/10">
-                    <MiniIllus type={item.type} />
-                  </div>
-                  <span className="text-sm font-bold text-foreground">{item.title}</span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed mt-1">{item.desc}</p>
+                <span className="text-base font-bold text-foreground">{item.title}</span>
+                <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* ── Comment ça marche ── */}
+      {/* ── Comment ça marche (Gardé intact) ── */}
       <section className="py-24 relative bg-secondary/30 border-y border-border">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div {...fadeUp(0)} className="text-center mb-14">
@@ -705,7 +798,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Couverture mondiale ── */}
+      {/* ── Couverture mondiale (Gardé intact) ── */}
       <section id="pays" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div {...fadeUp(0)} className="text-center mb-14">
@@ -757,7 +850,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Expérience sans couture (NOUVEAU - Directement sous Couverture mondiale) ── */}
+      {/* ── Expérience sans couture (Gardé intact comme demandé, avec son super SVG) ── */}
       <section className="py-24 bg-secondary/20 border-t border-border overflow-hidden">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <motion.div {...fadeUp(0)}>
@@ -767,14 +860,13 @@ export default function Home() {
             </h2>
           </motion.div>
           
-          {/* L'illustration pure, aucun gros bloc de texte, tel que demandé */}
           <motion.div {...fadeUp(0.2)}>
             <SeamlessExperienceIllust />
           </motion.div>
         </div>
       </section>
 
-      {/* ── Features strip ── */}
+      {/* ── Features strip (Gardé intact) ── */}
       <section className="py-20 border-y border-border bg-secondary/40">
         <div className="max-w-7xl mx-auto px-6">
           <motion.div
@@ -804,7 +896,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Vision de marque ── */}
+      {/* ── Vision de marque (Gardé intact) ── */}
       <section className="py-24 bg-white">
         <div className="max-w-3xl mx-auto px-6 text-center">
           <motion.div {...fadeUp(0)}>
@@ -827,7 +919,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── FAQ ── */}
+      {/* ── FAQ (Gardé intact) ── */}
       <section id="faq" className="py-24 bg-secondary/30 border-t border-border">
         <div className="max-w-3xl mx-auto px-6">
           <motion.div {...fadeUp(0)} className="text-center mb-14">
@@ -884,7 +976,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── CTA Banner ── */}
+      {/* ── CTA Banner (Gardé intact) ── */}
       <section className="py-24 px-6">
         <div className="max-w-4xl mx-auto">
           <motion.div
