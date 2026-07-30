@@ -98,22 +98,6 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
     },
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: async () => {
-      const token = await auth.currentUser?.getIdToken().catch(() => null);
-      const res = await fetch(`/api/orders/${orderId}/cancel`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (!res.ok) throw new Error("Erreur annulation");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
-    }
-  });
-
   useEffect(() => {
     if (order?.status === "completed" || order?.status === "expired" || order?.status === "cancelled") {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
@@ -189,16 +173,6 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
             {copied === "code" ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
-      )}
-
-      {order.status === "active" && (
-        <button
-          onClick={() => cancelMutation.mutate()}
-          disabled={cancelMutation.isPending}
-          className="w-full mt-2 py-2 text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-red-50 border border-border hover:border-red-200 rounded-xl transition-all"
-        >
-          {cancelMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin inline" /> : "Annuler et rembourser"}
-        </button>
       )}
     </motion.div>
   );
@@ -435,7 +409,7 @@ function ProfileTab({ me }: { me: UserProfile }) {
           )}
         </div>
 
-        {/* Devise */}
+         {/* Devise */}
         <div>
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5" /> Devise locale
@@ -667,4 +641,4 @@ export default function Dashboard() {
       )}
     </div>
   );
-}
+              }
