@@ -249,7 +249,6 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
   );
 }
 
-// Nouveau composant dédié pour l'historique des commandes passées
 function PastOrderCard({ order }: { order: Order }) {
   const [copied, setCopied] = useState<string>("");
   const [imageError, setImageError] = useState(false);
@@ -599,11 +598,16 @@ function ProfileTab({ me }: { me: UserProfile }) {
 type DashTab = "orders" | "topups" | "profile";
 
 export default function Dashboard() {
+  // CONFIGURATION SEO MISE À JOUR :
+  // noindex: true est conservé pour la confidentialité.
+  // image: est ajouté pour l'aperçu du lien lors du partage.
   useMeta({
     title: "Tableau de bord — Mes commandes et mon solde | Texerra",
     description: "Gérez vos commandes de numéros virtuels, suivez vos codes SMS reçus et consultez votre historique de recharges sur Texerra.",
     canonical: "https://texerra.site/dashboard",
     noindex: true,
+    image: "https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png",
+    type: "website"
   });
 
   const { data: me, isLoading: loadingMe } = useQuery<UserProfile>({
