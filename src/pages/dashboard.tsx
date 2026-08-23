@@ -131,22 +131,6 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
     },
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: async () => {
-      const token = await auth.currentUser?.getIdToken().catch(() => null);
-      const res = await fetch(`/api/orders/${orderId}/cancel`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      if (!res.ok) throw new Error("Erreur annulation");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
-    }
-  });
-
   useEffect(() => {
     if (order?.status === "completed" || order?.status === "expired" || order?.status === "cancelled") {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
@@ -233,17 +217,6 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
             {copied === "code" ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
           </button>
         </motion.div>
-      )}
-
-      {order.status === "active" && (
-        <button
-          onClick={() => cancelMutation.mutate()}
-          disabled={cancelMutation.isPending}
-          className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-muted-foreground hover:text-destructive hover:bg-red-50 border border-transparent hover:border-red-200 rounded-xl transition-all active:scale-[0.98]"
-        >
-          {cancelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-          Annuler et rembourser
-        </button>
       )}
     </motion.div>
   );
