@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wouter";
+import { Switch, Route, useLocation, Router as WouterRouter, Redirect, Link } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "./lib/auth-context";
@@ -63,6 +64,451 @@ function firebaseErrorMsg(code: string): string {
   }
 }
 
+/* ────────────────────────────────────────────────────────────────── */
+/* NOUVEAU : Illustration Sign-In (téléphone premium avec OTP vérifié) */
+/* ────────────────────────────────────────────────────────────────── */
+function SignInIllustration() {
+  return (
+    <div className="relative w-full flex items-center justify-center">
+      <div className="absolute inset-0 -m-16 bg-gradient-to-tr from-primary/15 via-transparent to-orange-300/15 blur-3xl rounded-full pointer-events-none" />
+      <svg
+        viewBox="0 0 480 540"
+        className="w-full max-w-[440px] h-auto relative z-10"
+        fill="none"
+        role="img"
+        aria-label="Connexion sécurisée à Texerra SMS — code de vérification reçu"
+      >
+        <defs>
+          <linearGradient id="si-frame" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#2a2a2a" />
+            <stop offset="0.5" stopColor="#0a0a0a" />
+            <stop offset="1" stopColor="#2a2a2a" />
+          </linearGradient>
+          <linearGradient id="si-screen" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffffff" />
+            <stop offset="1" stopColor="#FAFAFA" />
+          </linearGradient>
+          <radialGradient id="si-glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#fb923c" stopOpacity="0.28" />
+            <stop offset="1" stopColor="#fb923c" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="si-badge" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#34d399" />
+            <stop offset="1" stopColor="#10b981" />
+          </linearGradient>
+        </defs>
+
+        {/* Halo de fond */}
+        <ellipse cx="240" cy="270" rx="220" ry="250" fill="url(#si-glow)" />
+
+        {/* Anneaux rotatifs de fond */}
+        <motion.circle
+          cx="240" cy="270" r="205"
+          stroke="#fed7aa" strokeWidth="1" strokeDasharray="4 8" fill="none" strokeOpacity="0.55"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
+          style={{ transformOrigin: "240px 270px" }}
+        />
+        <motion.circle
+          cx="240" cy="270" r="165"
+          stroke="#fdba74" strokeWidth="1" fill="none" strokeOpacity="0.28"
+          animate={{ rotate: -360 }}
+          transition={{ duration: 45, repeat: Infinity, ease: "linear" }}
+          style={{ transformOrigin: "240px 270px" }}
+        />
+
+        {/* Téléphone */}
+        <g transform="translate(240 270)">
+          <motion.g
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          >
+            {/* Cadre extérieur */}
+            <rect x="-105" y="-215" width="210" height="430" rx="36" fill="url(#si-frame)" />
+            {/* Reflet sur le cadre */}
+            <path
+              d="M -95 -205 Q -95 -200 -95 0 L -60 -205 Z"
+              fill="white" fillOpacity="0.05"
+            />
+
+            {/* Écran */}
+            <rect x="-98" y="-208" width="196" height="416" rx="30" fill="url(#si-screen)" />
+
+            {/* Notch / Dynamic Island */}
+            <rect x="-40" y="-200" width="80" height="20" rx="10" fill="#111" />
+
+            {/* Barre de statut */}
+            <text x="-78" y="-182" fontSize="9" fontWeight="600" fill="#000">9:41</text>
+            <rect x="60" y="-186" width="18" height="9" rx="2" fill="#000" opacity="0.85" />
+            <rect x="82" y="-186" width="10" height="9" rx="1.5" fill="#000" opacity="0.4" />
+
+            {/* En-tête app */}
+            <text x="-78" y="-152" fontSize="7" fill="#94a3b8" fontWeight="700" letterSpacing="1.6">TEXERRA SMS</text>
+            <text x="-78" y="-133" fontSize="14" fontWeight="800" fill="#000">Bienvenue</text>
+
+            {/* Carte OTP — WhatsApp vérifié */}
+            <rect x="-82" y="-110" width="164" height="118" rx="16" fill="#ffffff" stroke="#f1f5f9" strokeWidth="1" />
+
+            {/* Logo WhatsApp */}
+            <image href="https://cdn.simpleicons.org/whatsapp/25D366" x="-72" y="-100" width="22" height="22" />
+            <text x="-44" y="-84" fontSize="10" fontWeight="700" fill="#000">WhatsApp</text>
+            <text x="-44" y="-72" fontSize="7" fill="#10b981" fontWeight="600">✓ Vérifié</text>
+
+            {/* Code OTP */}
+            <text x="-72" y="-46" fontSize="7" fill="#94a3b8" fontWeight="600">Code de vérification</text>
+            <text
+              x="0" y="-8"
+              textAnchor="middle"
+              fontSize="26"
+              fontWeight="900"
+              fill="#000"
+              fontFamily="ui-monospace, monospace"
+              letterSpacing="3"
+            >
+              847 291
+            </text>
+
+            {/* Badge vert sur la carte */}
+            <motion.g
+              animate={{ scale: [1, 1.12, 1] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <circle cx="62" cy="-92" r="12" fill="url(#si-badge)" />
+              <path d="M 57 -92 L 60 -89 L 67 -96" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </motion.g>
+
+            {/* Barre succès */}
+            <rect x="-82" y="22" width="164" height="44" rx="12" fill="#ecfdf5" />
+            <circle cx="-64" cy="44" r="9" fill="#10b981" />
+            <path d="M -68 44 L -65 47 L -59 40" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <text x="-46" y="42" fontSize="9" fontWeight="700" fill="#065f46">Connexion réussie</text>
+            <text x="-46" y="55" fontSize="7" fill="#059669">Redirection vers votre espace…</text>
+
+            {/* Home indicator */}
+            <rect x="-30" y="196" width="60" height="4" rx="2" fill="#000" opacity="0.18" />
+          </motion.g>
+        </g>
+
+        {/* Bulles flottantes de services */}
+        <motion.g animate={{ y: [0, -8, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
+          <circle cx="62" cy="118" r="26" fill="#ffffff" stroke="#fed7aa" strokeWidth="1.5" />
+          <image href="https://cdn.simpleicons.org/google/4285F4" x="50" y="106" width="24" height="24" />
+        </motion.g>
+
+        <motion.g animate={{ y: [0, 8, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}>
+          <circle cx="418" cy="180" r="24" fill="#ffffff" stroke="#fed7aa" strokeWidth="1.5" />
+          <image href="https://cdn.simpleicons.org/telegram/26A5E4" x="408" y="170" width="20" height="20" />
+        </motion.g>
+
+        <motion.g animate={{ y: [0, -6, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}>
+          <circle cx="80" cy="410" r="22" fill="#ffffff" stroke="#fed7aa" strokeWidth="1.5" />
+          <image href="https://cdn.simpleicons.org/instagram/E1306C" x="71" y="401" width="18" height="18" />
+        </motion.g>
+
+        <motion.g animate={{ y: [0, 6, 0] }} transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}>
+          <circle cx="410" cy="410" r="28" fill="#ffffff" stroke="#fed7aa" strokeWidth="1.5" />
+          <text x="410" y="418" textAnchor="middle" fontSize="26">🇺🇸</text>
+        </motion.g>
+
+        {/* Carte flottante "code reçu" */}
+        <motion.g
+          animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <rect x="18" y="248" width="128" height="54" rx="12" fill="#ffffff" stroke="#fed7aa" strokeWidth="1" />
+          <circle cx="38" cy="268" r="9" fill="#ecfdf5" />
+          <path d="M 34 268 L 37 271 L 42 264" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <text x="54" y="272" fontSize="9" fontWeight="700" fill="#000">Code reçu</text>
+          <text x="54" y="286" fontSize="8" fill="#64748b" fontFamily="ui-monospace, monospace">847 291</text>
+        </motion.g>
+
+        {/* Particules */}
+        {[...Array(10)].map((_, i) => (
+          <motion.circle
+            key={i}
+            r="2"
+            fill="#fb923c"
+            cx={40 + (i * 47) % 400}
+            cy={40 + (i * 71) % 460}
+            animate={{ opacity: [0.2, 0.9, 0.2], scale: [1, 1.4, 1] }}
+            transition={{ duration: 2.5 + (i % 3), repeat: Infinity, delay: i * 0.3 }}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* NOUVEAU : Illustration Sign-Up (écosystème de services + drapeaux) */
+/* ────────────────────────────────────────────────────────────────── */
+function SignUpIllustration() {
+  const satellites = [
+    { angle: -90, slug: "whatsapp",  color: "25D366", r: 155, delay: 0 },
+    { angle: -30, slug: "google",    color: "4285F4", r: 175, delay: 0.4 },
+    { angle:  30, slug: "telegram",  color: "26A5E4", r: 155, delay: 0.8 },
+    { angle:  90, slug: "instagram", color: "E1306C", r: 175, delay: 1.2 },
+    { angle: 150, slug: "tiktok",    color: "000000", r: 155, delay: 1.6 },
+    { angle: 210, slug: "facebook",  color: "1877F2", r: 175, delay: 2.0 },
+  ];
+
+  const flags = [
+    { x: 70,  y: 90,  flag: "🇺🇸", delay: 0 },
+    { x: 400, y: 100, flag: "🇫🇷", delay: 0.5 },
+    { x: 55,  y: 380, flag: "🇨🇮", delay: 1.0 },
+    { x: 420, y: 400, flag: "🇬🇧", delay: 1.5 },
+    { x: 240, y: 55,  flag: "🇨🇲", delay: 2.0 },
+    { x: 240, y: 465, flag: "🇳🇬", delay: 2.5 },
+  ];
+
+  return (
+    <div className="relative w-full flex items-center justify-center">
+      <div className="absolute inset-0 -m-16 bg-gradient-to-tr from-primary/15 via-transparent to-orange-300/15 blur-3xl rounded-full pointer-events-none" />
+      <svg
+        viewBox="0 0 480 520"
+        className="w-full max-w-[440px] h-auto relative z-10"
+        fill="none"
+        role="img"
+        aria-label="Rejoignez Texerra SMS — un écosystème de services et de pays"
+      >
+        <defs>
+          <radialGradient id="su-glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#fb923c" stopOpacity="0.3" />
+            <stop offset="1" stopColor="#fb923c" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="su-core" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#fb923c" />
+            <stop offset="1" stopColor="#ea580c" />
+          </linearGradient>
+        </defs>
+
+        {/* Halo */}
+        <ellipse cx="240" cy="260" rx="220" ry="240" fill="url(#su-glow)" />
+
+        {/* Anneaux rotatifs */}
+        <motion.circle
+          cx="240" cy="260" r="190"
+          stroke="#fed7aa" strokeWidth="1" strokeDasharray="4 8" fill="none" strokeOpacity="0.55"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
+          style={{ transformOrigin: "240px 260px" }}
+        />
+        <motion.circle
+          cx="240" cy="260" r="150"
+          stroke="#fdba74" strokeWidth="1" fill="none" strokeOpacity="0.3"
+          animate={{ rotate: -360 }}
+          transition={{ duration: 50, repeat: Infinity, ease: "linear" }}
+          style={{ transformOrigin: "240px 260px" }}
+        />
+
+        {/* Lignes radiales vers les satellites */}
+        {satellites.map((s, i) => {
+          const rad = (s.angle * Math.PI) / 180;
+          const x = 240 + Math.cos(rad) * s.r;
+          const y = 260 + Math.sin(rad) * s.r;
+          return (
+            <motion.line
+              key={`line-${i}`}
+              x1="240" y1="260" x2={x} y2={y}
+              stroke="#f97316" strokeWidth="1" strokeOpacity="0.25"
+              strokeDasharray="3 5"
+              animate={{ strokeOpacity: [0.1, 0.55, 0.1] }}
+              transition={{ duration: 3, repeat: Infinity, delay: s.delay }}
+            />
+          );
+        })}
+
+        {/* Noyau central */}
+        <g transform="translate(240 260)">
+          <motion.circle
+            r="72" fill="#ffffff" stroke="#fed7aa" strokeWidth="2"
+            animate={{ scale: [1, 1.04, 1] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.circle
+            r="56" fill="url(#su-core)"
+            animate={{ scale: [1, 1.03, 1] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          />
+          {/* Logo / bouclier blanc */}
+          <motion.path
+            d="M -17 -22 L 17 -22 L 17 3 C 17 15 0 26 0 26 C 0 26 -17 15 -17 3 Z"
+            fill="#ffffff" fillOpacity="0.95"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
+          />
+          <motion.path
+            d="M -8 -5 L -3 1 L 9 -11"
+            stroke="#ea580c" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ delay: 0.9, duration: 0.5 }}
+          />
+
+          {/* Anneau pulsant */}
+          <motion.circle
+            r="88" stroke="#f97316" strokeWidth="2" strokeDasharray="6 10"
+            strokeOpacity="0.5" fill="none"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+          />
+        </g>
+
+        {/* Satellites : logos services */}
+        {satellites.map((s, i) => {
+          const rad = (s.angle * Math.PI) / 180;
+          const x = 240 + Math.cos(rad) * s.r;
+          const y = 260 + Math.sin(rad) * s.r;
+          return (
+            <motion.g
+              key={`sat-${i}`}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.3 + s.delay * 0.3, type: "spring", stiffness: 200 }}
+            >
+              <motion.g
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 3 + i * 0.2, repeat: Infinity, ease: "easeInOut", delay: i * 0.15 }}
+              >
+                <circle cx={x} cy={y} r="22" fill="#ffffff" stroke="#e5e7eb" strokeWidth="1.5" />
+                <image
+                  href={`https://cdn.simpleicons.org/${s.slug}/${s.color}`}
+                  x={x - 12} y={y - 12} width="24" height="24"
+                />
+              </motion.g>
+            </motion.g>
+          );
+        })}
+
+        {/* Drapeaux flottants */}
+        {flags.map((f, i) => (
+          <motion.g
+            key={`flag-${i}`}
+            animate={{ y: [0, -6, 0] }}
+            transition={{ duration: 3 + i * 0.3, repeat: Infinity, ease: "easeInOut", delay: f.delay }}
+          >
+            <circle cx={f.x} cy={f.y} r="18" fill="#ffffff" stroke="#fed7aa" strokeWidth="1.5" />
+            <text x={f.x} y={f.y + 6} textAnchor="middle" fontSize="18">{f.flag}</text>
+          </motion.g>
+        ))}
+
+        {/* Particules circulant du centre vers les satellites */}
+        {satellites.map((s, i) => {
+          const rad = (s.angle * Math.PI) / 180;
+          const x = 240 + Math.cos(rad) * s.r;
+          const y = 260 + Math.sin(rad) * s.r;
+          return (
+            <motion.circle
+              key={`pulse-${i}`}
+              cx="240" cy="260" r="3"
+              fill="#fb923c"
+              animate={{ cx: [240, x], cy: [260, y], opacity: [0, 1, 0] }}
+              transition={{ duration: 2.4, repeat: Infinity, delay: i * 0.35, ease: "easeOut" }}
+            />
+          );
+        })}
+
+        {/* Badge "712+ numéros activés" */}
+        <motion.g
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 1.2, type: "spring", stiffness: 200 }}
+        >
+          <rect x="20" y="230" width="130" height="56" rx="14" fill="#ffffff" stroke="#fed7aa" strokeWidth="1" />
+          <circle cx="42" cy="250" r="9" fill="#ecfdf5" />
+          <path d="M 38 250 L 41 253 L 46 246" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <text x="58" y="254" fontSize="9" fontWeight="700" fill="#000">712+ numéros</text>
+          <text x="58" y="268" fontSize="7" fill="#64748b">activés cette saison</text>
+        </motion.g>
+
+        {/* Badge "205+ pays" */}
+        <motion.g
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 1.6, type: "spring", stiffness: 200 }}
+        >
+          <rect x="330" y="230" width="130" height="56" rx="14" fill="#ffffff" stroke="#fed7aa" strokeWidth="1" />
+          <circle cx="352" cy="250" r="9" fill="#fff7ed" />
+          <text x="352" y="256" textAnchor="middle" fontSize="12">🌍</text>
+          <text x="368" y="254" fontSize="9" fontWeight="700" fill="#000">205+ pays</text>
+          <text x="368" y="268" fontSize="7" fill="#64748b">disponibles</text>
+        </motion.g>
+      </svg>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* NOUVEAU : Bouton Retour vers l'accueil                             */
+/* ────────────────────────────────────────────────────────────────── */
+function BackButton() {
+  return (
+    <Link
+      href="/"
+      className="absolute top-5 left-5 z-50 inline-flex items-center gap-2 px-4 py-2.5 bg-white/90 backdrop-blur-md border border-border rounded-full text-sm font-medium text-foreground hover:bg-white hover:border-primary/40 transition-all shadow-[0_2px_12px_rgba(0,0,0,0.06)] group"
+      aria-label="Retour à l'accueil"
+    >
+      <svg
+        className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M19 12H5M12 19l-7-7 7-7" />
+      </svg>
+      <span className="hidden sm:inline">Retour à l'accueil</span>
+      <span className="sm:hidden">Retour</span>
+    </Link>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* NOUVEAU : Layout d'authentification à deux colonnes                */
+/* ────────────────────────────────────────────────────────────────── */
+function AuthLayout({
+  illustration,
+  children,
+}: {
+  illustration: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative min-h-[100dvh] bg-background overflow-hidden">
+      <BackButton />
+
+      <div className="flex min-h-[100dvh]">
+        {/* Côté formulaire */}
+        <div
+          className="w-full lg:w-1/2 flex items-center justify-center px-4 py-20 lg:px-12"
+          style={{
+            backgroundImage: "radial-gradient(circle, hsl(24 25% 82% / 0.4) 1px, transparent 1px)",
+            backgroundSize: "20px 20px",
+          }}
+        >
+          {children}
+        </div>
+
+        {/* Côté illustration — visible uniquement sur desktop */}
+        <div className="hidden lg:flex lg:w-1/2 items-center justify-center px-12 relative overflow-hidden bg-gradient-to-br from-orange-50/70 via-amber-50/50 to-yellow-50/40 border-l border-border/60">
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:32px_32px]" />
+          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-orange-400/12 blur-[120px] pointer-events-none" />
+          <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-amber-400/10 blur-[120px] pointer-events-none" />
+          <div className="relative z-10 w-full max-w-[560px]">
+            {illustration}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* AuthCard — INCHANGÉ (100% conservé)                                */
+/* ────────────────────────────────────────────────────────────────── */
 function AuthCard({
   mode,
   switchUrl,
@@ -125,12 +571,12 @@ function AuthCard({
       <div className="flex flex-col items-center gap-3">
         <img
           src={`${window.location.origin}${basePath}/logo-full.png`}
-          alt="Texerra"
+          alt="Texerra SMS"
           className="h-10 w-auto"
         />
         <div className="text-center">
           <h1 className="text-foreground font-bold text-xl">
-            {mode === "sign-in" ? "Bienvenue sur Texerra" : "Créer un compte"}
+            {mode === "sign-in" ? "Bienvenue sur Texerra SMS" : "Créer un compte"}
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             {mode === "sign-in"
@@ -232,37 +678,41 @@ function AuthCard({
   );
 }
 
+/* ────────────────────────────────────────────────────────────────── */
+/* SignInPage — modifiée pour utiliser AuthLayout                     */
+/* ────────────────────────────────────────────────────────────────── */
 function SignInPage() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (user) return <Redirect to="/dashboard" />;
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-16"
-      style={{ backgroundImage: "radial-gradient(circle, hsl(24 25% 82% / 0.4) 1px, transparent 1px)", backgroundSize: "20px 20px" }}>
+    <AuthLayout illustration={<SignInIllustration />}>
       <AuthCard
         mode="sign-in"
         switchUrl="/sign-up"
         switchText="Pas encore de compte ?"
         switchLinkText="S'inscrire"
       />
-    </div>
+    </AuthLayout>
   );
 }
 
+/* ────────────────────────────────────────────────────────────────── */
+/* SignUpPage — modifiée pour utiliser AuthLayout                     */
+/* ────────────────────────────────────────────────────────────────── */
 function SignUpPage() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (user) return <Redirect to="/dashboard" />;
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-16"
-      style={{ backgroundImage: "radial-gradient(circle, hsl(24 25% 82% / 0.4) 1px, transparent 1px)", backgroundSize: "20px 20px" }}>
+    <AuthLayout illustration={<SignUpIllustration />}>
       <AuthCard
         mode="sign-up"
         switchUrl="/sign-in"
         switchText="Déjà un compte ?"
         switchLinkText="Se connecter"
       />
-    </div>
+    </AuthLayout>
   );
 }
 
