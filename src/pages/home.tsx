@@ -68,7 +68,7 @@ const gridItem = {
 /* --- COMPOSANTS D'ILLUSTRATIONS DU FICHIER DE BASE (Conservés) --- */
 
 const IllusTrust = () => (
-  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-primary">
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-primary" role="img" aria-label="Confiance et crédibilité">
     <motion.path d="M50 10 L90 30 L90 60 C90 80 50 95 50 95 C50 95 10 80 10 60 L10 30 Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.5 }}/>
     <motion.circle cx="50" cy="50" r="15" fill="none" stroke="currentColor" strokeWidth="4" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 0.5, type: "spring" }}/>
     <motion.path d="M10 30 L90 30" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" initial={{ opacity: 0 }} whileInView={{ opacity: 0.5 }} transition={{ delay: 1 }}/>
@@ -76,7 +76,7 @@ const IllusTrust = () => (
 );
 
 const IllusLocal = () => (
-  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-blue-500">
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-blue-500" role="img" aria-label="Image locale et internationale">
     <motion.circle cx="50" cy="50" r="40" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" strokeDasharray="10 5" animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }}/>
     <motion.path d="M50 10 L50 90 M10 50 L90 50" stroke="currentColor" strokeWidth="2" strokeOpacity="0.5"/>
     <motion.circle cx="50" cy="50" r="8" fill="currentColor" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 0.3 }}/>
@@ -84,7 +84,7 @@ const IllusLocal = () => (
 );
 
 const IllusTarget = () => (
-  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-emerald-500">
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-emerald-500" role="img" aria-label="Cibler des clients à l'international">
     <motion.path d="M50 15 A 35 35 0 1 1 49.9 15" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="10 15" animate={{ rotate: -360 }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }}/>
     <motion.path d="M50 85 L50 65 M50 35 L50 15 M15 50 L35 50 M65 50 L85 50" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
     <motion.circle cx="50" cy="50" r="10" fill="currentColor" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.5 }}/>
@@ -92,7 +92,7 @@ const IllusTarget = () => (
 );
 
 const IllusBlock = () => (
-  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-red-400">
+  <svg viewBox="0 0 100 100" className="w-12 h-12 mb-4 text-red-400" role="img" aria-label="Accès bloqué à certaines plateformes">
     <motion.rect x="25" y="45" width="50" height="40" rx="8" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="4" initial={{ y: 10, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ duration: 0.5 }}/>
     <motion.path d="M35 45 V 35 A 15 15 0 0 1 65 35 V 45" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ delay: 0.5, duration: 0.8 }}/>
     <motion.line x1="20" y1="20" x2="80" y2="80" stroke="currentColor" strokeWidth="4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ delay: 1, duration: 0.5 }}/>
@@ -116,7 +116,7 @@ const MiniIllus = ({ type }: { type: 'building' | 'phone' | 'cart' | 'lock' | 'a
   }
 };
 
-/* --- COMPOSANTS SVG PREMIUM (Pour la section Pourquoi) --- */
+/* --- NOUVEAUX COMPOSANTS SVG PREMIUM (Pour la section Pourquoi) --- */
 
 const AbstractTrust = () => (
   <svg viewBox="0 0 40 40" className="w-10 h-10 mb-6 text-primary">
@@ -149,191 +149,371 @@ const AbstractGlobal = () => (
   </svg>
 );
 
-/* --- NOUVEAUX COMPOSANTS SVG PREMIUM (Ajoutés pour les sections Pourquoi & Pour qui) --- */
+/* --- NOUVEAU : SVG illustrant "J'ai obtenu le numéro qu'il me fallait" (Pourquoi Texerra SMS) --- */
+const PersonObtainedNumber = () => (
+  <svg viewBox="0 0 460 200" className="w-full max-w-xl h-auto mx-auto" fill="none" role="img" aria-label="Une personne satisfaite vient d'obtenir le numéro virtuel correspondant à son besoin">
+    {/* Fond doux */}
+    <defs>
+      <linearGradient id="pgn-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#fff7ed" />
+        <stop offset="1" stopColor="#ffedd5" stopOpacity="0.4" />
+      </linearGradient>
+      <linearGradient id="pgn-shirt" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#f97316" />
+        <stop offset="1" stopColor="#ea580c" />
+      </linearGradient>
+    </defs>
 
-const SatisfiedUserSvg = () => (
-  <div className="w-full max-w-sm mx-auto relative drop-shadow-2xl">
-    <svg viewBox="0 0 400 400" className="w-full h-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="200" cy="200" r="140" fill="#fff" stroke="#f1f5f9" strokeWidth="2" />
-      <motion.circle cx="200" cy="200" r="170" stroke="#f97316" strokeWidth="1.5" strokeDasharray="12 12" strokeOpacity="0.3" animate={{ rotate: 360 }} transition={{ duration: 45, repeat: Infinity, ease: "linear" }} />
-      
-      {/* Abstract Person */}
-      <path d="M120 340 C120 250, 280 250, 280 340" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="4" />
-      <circle cx="200" cy="160" r="50" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="4" />
-      
-      {/* Phone Silhouette */}
-      <motion.rect x="230" y="180" width="45" height="85" rx="8" fill="#1e293b" initial={{ y: 20, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} transition={{ delay: 0.3, duration: 0.6 }} />
-      
-      {/* Checkmark Success */}
-      <motion.g initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 0.8, type: "spring" }}>
-        <circle cx="285" cy="170" r="28" fill="#10b981" />
-        <path d="M272 170 L280 178 L298 160" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    <ellipse cx="230" cy="185" rx="180" ry="14" fill="#0f172a" opacity="0.06" />
+
+    {/* Particules / signal autour */}
+    <motion.circle cx="90" cy="70" r="3" fill="#f97316" animate={{ y: [-4, 4, -4], opacity: [0.4, 1, 0.4] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} />
+    <motion.circle cx="370" cy="90" r="3.5" fill="#3b82f6" animate={{ y: [4, -4, 4], opacity: [0.4, 1, 0.4] }} transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }} />
+    <motion.circle cx="330" cy="40" r="2.5" fill="#10b981" animate={{ y: [-3, 3, -3] }} transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }} />
+
+    {/* Personnage central */}
+    <g transform="translate(230 105)">
+      {/* Corps / veste */}
+      <motion.path
+        d="M -55 85 C -55 40, -22 18, 0 18 C 22 18, 55 40, 55 85 Z"
+        fill="url(#pgn-shirt)"
+        initial={{ y: 10, opacity: 0 }}
+        whileInView={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.7, ease }}
+      />
+      {/* Col */}
+      <path d="M -12 20 L 0 32 L 12 20" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.85" />
+
+      {/* Tête */}
+      <motion.circle
+        cx="0" cy="-22" r="30"
+        fill="#fde2c9"
+        initial={{ scale: 0.8, opacity: 0 }}
+        whileInView={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.6, ease }}
+      />
+      {/* Cheveux */}
+      <path d="M -30 -22 C -30 -46, -12 -58, 0 -58 C 12 -58, 30 -46, 30 -22 L 24 -18 C 22 -32, 12 -40, 0 -40 C -12 -40, -22 -32, -24 -18 Z" fill="#1f2937" />
+      {/* Yeux / sourire satisfait */}
+      <circle cx="-9" cy="-22" r="2.2" fill="#1f2937" />
+      <circle cx="9" cy="-22" r="2.2" fill="#1f2937" />
+      <motion.path
+        d="M -8 -12 Q 0 -6 8 -12"
+        stroke="#b45309" strokeWidth="2" strokeLinecap="round" fill="none"
+        initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ delay: 0.4, duration: 0.5 }}
+      />
+
+      {/* Bras droit tenant le téléphone */}
+      <path d="M 32 42 C 58 40, 78 46, 88 58" stroke="#fde2c9" strokeWidth="12" strokeLinecap="round" fill="none" />
+      {/* Bras gauche */}
+      <path d="M -32 42 C -58 42, -78 50, -86 62" stroke="#fde2c9" strokeWidth="12" strokeLinecap="round" fill="none" />
+
+      {/* Téléphone dans la main */}
+      <motion.g
+        transform="translate(88 56)"
+        initial={{ y: 6, opacity: 0 }}
+        whileInView={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.3, duration: 0.6, ease }}
+      >
+        <motion.g animate={{ y: [0, -3, 0] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}>
+          <rect x="-14" y="-26" width="28" height="52" rx="7" fill="#111827" />
+          <rect x="-11.5" y="-23.5" width="23" height="47" rx="5" fill="#f9fafb" />
+          <rect x="-6" y="-20" width="12" height="3" rx="1.5" fill="#111827" opacity="0.6" />
+          {/* Code OTP sur écran */}
+          <rect x="-8" y="2" width="16" height="8" rx="2" fill="#fff7ed" stroke="#fdba74" strokeWidth="0.8" />
+          <text x="0" y="8" textAnchor="middle" fontSize="4" fontWeight="700" fill="#ea580c" fontFamily="monospace">847 291</text>
+          {/* Vibration dots */}
+          <motion.circle cx="0" cy="16" r="1.6" fill="#10b981" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.5, repeat: Infinity }} />
+        </motion.g>
       </motion.g>
+    </g>
 
-      {/* Connection lines */}
-      <motion.path d="M250 180 Q 200 80 140 120" stroke="#3b82f6" strokeWidth="3" strokeDasharray="6 6" strokeOpacity="0.5" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.5, delay: 0.5 }} />
-      <motion.circle cx="140" cy="120" r="16" fill="#3b82f6" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ delay: 1 }} />
-      <motion.path d="M132 120 h16 M140 112 v16" stroke="#fff" strokeWidth="2" strokeLinecap="round" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 1.2 }} />
-    </svg>
-  </div>
+    {/* Badge de confirmation "numéro obtenu" */}
+    <motion.g
+      transform="translate(340 60)"
+      initial={{ scale: 0, opacity: 0 }}
+      whileInView={{ scale: 1, opacity: 1 }}
+      transition={{ delay: 0.7, type: "spring", stiffness: 220, damping: 18 }}
+    >
+      <circle r="22" fill="#10b981" />
+      <path d="M -9 0 L -2 7 L 10 -7" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </motion.g>
+
+    {/* Drapeaux / pays flottants */}
+    <motion.g animate={{ y: [-4, 4, -4] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
+      <circle cx="80" cy="120" r="15" fill="#fff" stroke="#e5e7eb" strokeWidth="1.5" />
+      <text x="80" y="125" textAnchor="middle" fontSize="16">🇺🇸</text>
+    </motion.g>
+    <motion.g animate={{ y: [4, -4, 4] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}>
+      <circle cx="380" cy="130" r="15" fill="#fff" stroke="#e5e7eb" strokeWidth="1.5" />
+      <text x="380" y="135" textAnchor="middle" fontSize="16">🇫🇷</text>
+    </motion.g>
+    <motion.g animate={{ y: [-3, 3, -3] }} transition={{ duration: 3.7, repeat: Infinity, ease: "easeInOut", delay: 1 }}>
+      <circle cx="360" cy="160" r="13" fill="#fff" stroke="#e5e7eb" strokeWidth="1.5" />
+      <text x="360" y="165" textAnchor="middle" fontSize="14">🇬🇧</text>
+    </motion.g>
+
+    {/* Logos services flottants */}
+    <motion.g animate={{ y: [-3, 3, -3] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}>
+      <circle cx="115" cy="45" r="13" fill="#fff" stroke="#e5e7eb" strokeWidth="1.2" />
+      <image href="https://cdn.simpleicons.org/whatsapp/25D366" x="106" y="36" width="18" height="18" />
+    </motion.g>
+    <motion.g animate={{ y: [3, -3, 3] }} transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}>
+      <circle cx="345" cy="35" r="13" fill="#fff" stroke="#e5e7eb" strokeWidth="1.2" />
+      <image href="https://cdn.simpleicons.org/google/4285F4" x="336" y="26" width="18" height="18" />
+    </motion.g>
+  </svg>
 );
 
-const DiverseUsesSvg = () => (
-  <div className="w-full max-w-md mx-auto relative drop-shadow-xl">
-    <svg viewBox="0 0 500 500" className="w-full h-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Hub Central Texerra */}
-      <motion.circle cx="250" cy="250" r="70" fill="#ffffff" stroke="#f97316" strokeWidth="4" initial={{ scale: 0.8, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }} />
-      <path d="M230 250 h40 M230 235 h40 M230 265 h25" stroke="#f97316" strokeWidth="6" strokeLinecap="round" />
-      
-      {/* Lignes de connexion */}
-      <motion.path d="M250 180 L250 100" stroke="#e2e8f0" strokeWidth="3" strokeDasharray="8 8" />
-      <motion.path d="M320 250 L400 250" stroke="#e2e8f0" strokeWidth="3" strokeDasharray="8 8" />
-      <motion.path d="M250 320 L250 400" stroke="#e2e8f0" strokeWidth="3" strokeDasharray="8 8" />
-      <motion.path d="M180 250 L100 250" stroke="#e2e8f0" strokeWidth="3" strokeDasharray="8 8" />
+/* --- NOUVEAU : SVG illustrant "Texerra SMS s'adresse à tout le monde" (Pour qui) --- */
+const MultiUsageIllust = () => (
+  <svg viewBox="0 0 640 260" className="w-full max-w-3xl h-auto mx-auto" fill="none" role="img" aria-label="Texerra SMS s'adresse à différents profils et usages : personnel, professionnel, vérification, international, confidentialité">
+    <defs>
+      <linearGradient id="mu-hub" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#fb923c" />
+        <stop offset="1" stopColor="#f97316" />
+      </linearGradient>
+    </defs>
 
-      {/* Nœud 1: Personnel / WhatsApp */}
-      <motion.g initial={{ x: -20, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
-        <circle cx="250" cy="100" r="45" fill="#fff" stroke="#10b981" strokeWidth="3" />
-        <path d="M240 110 C240 100, 260 100, 260 110 Z" fill="#10b981" />
-        <circle cx="250" cy="90" r="12" fill="#10b981" />
-      </motion.g>
+    {/* Hub central */}
+    <g transform="translate(320 130)">
+      <motion.circle r="58" fill="#fff" stroke="#e5e7eb" strokeWidth="3" />
+      <motion.circle r="70" stroke="#f97316" strokeOpacity="0.35" strokeWidth="1.5" strokeDasharray="6 8" fill="none"
+        animate={{ rotate: 360 }} transition={{ duration: 40, repeat: Infinity, ease: "linear" }} />
+      <circle r="42" fill="url(#mu-hub)" />
+      <text x="0" y="6" textAnchor="middle" fontSize="14" fontWeight="800" fill="#fff" fontFamily="system-ui">Texerra</text>
+      <text x="0" y="22" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff" opacity="0.9" fontFamily="system-ui">SMS</text>
+    </g>
 
-      {/* Nœud 2: Business */}
-      <motion.g initial={{ x: -20, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ delay: 0.4 }}>
-        <circle cx="400" cy="250" r="45" fill="#fff" stroke="#3b82f6" strokeWidth="3" />
-        <rect x="385" y="240" width="30" height="20" rx="3" stroke="#3b82f6" strokeWidth="3" />
-        <path d="M390 240 V235 C390 230, 410 230, 410 235 V240" stroke="#3b82f6" strokeWidth="3" />
-      </motion.g>
+    {/* Lignes de connexion */}
+    {[
+      { x: 100, y: 55 },
+      { x: 540, y: 55 },
+      { x: 90,  y: 205 },
+      { x: 550, y: 205 },
+      { x: 320, y: 32 },
+      { x: 320, y: 228 },
+    ].map((p, i) => (
+      <motion.path
+        key={i}
+        d={`M ${p.x} ${p.y} Q ${(p.x + 320) / 2} ${(p.y + 130) / 2}, 320 130`}
+        stroke="#f1f5f9" strokeWidth="2" strokeDasharray="4 6" fill="none"
+        initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 1.2, delay: i * 0.1 }}
+      />
+    ))}
 
-      {/* Nœud 3: Global / International */}
-      <motion.g initial={{ x: -20, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
-        <circle cx="250" cy="400" r="45" fill="#fff" stroke="#f59e0b" strokeWidth="3" />
-        <ellipse cx="250" cy="400" rx="20" ry="45" stroke="#f59e0b" strokeWidth="2" fill="none" />
-        <path d="M205 400 h90" stroke="#f59e0b" strokeWidth="2" />
-      </motion.g>
+    {/* Nœuds périphériques (profils / usages) */}
+    {/* Usage personnel */}
+    <motion.g animate={{ y: [-4, 4, -4] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
+      <circle cx="100" cy="55" r="34" fill="#fff" stroke="#e5e7eb" strokeWidth="2" />
+      <circle cx="100" cy="48" r="8" fill="#3b82f6" />
+      <path d="M 86 72 C 86 62, 114 62, 114 72 Z" fill="#93c5fd" />
+      <text x="100" y="100" textAnchor="middle" fontSize="10" fontWeight="600" fill="#334155">Personnel</text>
+    </motion.g>
 
-      {/* Nœud 4: Sécurité / Confidentialité */}
-      <motion.g initial={{ x: -20, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ delay: 0.8 }}>
-        <circle cx="100" cy="250" r="45" fill="#fff" stroke="#64748b" strokeWidth="3" />
-        <rect x="85" y="245" width="30" height="20" rx="4" fill="#64748b" />
-        <path d="M92 245 V235 C92 225, 108 225, 108 235 V245" stroke="#64748b" strokeWidth="3" fill="none" />
-      </motion.g>
-      
-      {/* Particules animées */}
-      <motion.circle cx="250" cy="250" r="6" fill="#f97316" animate={{ y: [0, -150, 0] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} />
-      <motion.circle cx="250" cy="250" r="6" fill="#10b981" animate={{ x: [0, 150, 0] }} transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} />
-      <motion.circle cx="250" cy="250" r="6" fill="#3b82f6" animate={{ y: [0, 150, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }} />
-      <motion.circle cx="250" cy="250" r="6" fill="#64748b" animate={{ x: [0, -150, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut", delay: 1.5 }} />
-    </svg>
-  </div>
+    {/* WhatsApp */}
+    <motion.g animate={{ y: [4, -4, 4] }} transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}>
+      <circle cx="540" cy="55" r="34" fill="#fff" stroke="#e5e7eb" strokeWidth="2" />
+      <image href="https://cdn.simpleicons.org/whatsapp/25D366" x="525" y="40" width="30" height="30" />
+      <text x="540" y="100" textAnchor="middle" fontSize="10" fontWeight="600" fill="#334155">WhatsApp</text>
+    </motion.g>
+
+    {/* Vérification OTP */}
+    <motion.g animate={{ y: [-3, 3, -3] }} transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}>
+      <circle cx="90" cy="205" r="34" fill="#fff" stroke="#e5e7eb" strokeWidth="2" />
+      <rect x="78" y="192" width="24" height="18" rx="3" fill="#10b981" opacity="0.15" stroke="#10b981" strokeWidth="1.5" />
+      <text x="90" y="205" textAnchor="middle" fontSize="8" fontWeight="700" fill="#059669" fontFamily="monospace">847</text>
+      <text x="90" y="250" textAnchor="middle" fontSize="10" fontWeight="600" fill="#334155">Vérification</text>
+    </motion.g>
+
+    {/* Professionnel */}
+    <motion.g animate={{ y: [3, -3, 3] }} transition={{ duration: 4.4, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}>
+      <circle cx="550" cy="205" r="34" fill="#fff" stroke="#e5e7eb" strokeWidth="2" />
+      <rect x="538" y="190" width="24" height="28" rx="2" fill="#f97316" opacity="0.15" stroke="#f97316" strokeWidth="1.5" />
+      <path d="M 543 198 H 557 M 543 203 H 557 M 543 208 H 553" stroke="#ea580c" strokeWidth="1.4" strokeLinecap="round" />
+      <text x="550" y="250" textAnchor="middle" fontSize="10" fontWeight="600" fill="#334155">Business</text>
+    </motion.g>
+
+    {/* International */}
+    <motion.g animate={{ y: [-3, 3, -3] }} transition={{ duration: 4.1, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}>
+      <circle cx="320" cy="32" r="26" fill="#fff" stroke="#e5e7eb" strokeWidth="2" />
+      <circle cx="320" cy="32" r="15" fill="none" stroke="#f97316" strokeWidth="1.5" />
+      <path d="M 305 32 H 335 M 320 17 A 12 12 0 0 1 320 47 A 12 12 0 0 1 320 17" stroke="#f97316" strokeWidth="1.5" fill="none" />
+      <text x="320" y="14" textAnchor="middle" fontSize="10" fontWeight="600" fill="#334155">International</text>
+    </motion.g>
+
+    {/* Confidentialité */}
+    <motion.g animate={{ y: [3, -3, 3] }} transition={{ duration: 3.9, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}>
+      <circle cx="320" cy="228" r="26" fill="#fff" stroke="#e5e7eb" strokeWidth="2" />
+      <rect x="311" y="222" width="18" height="14" rx="2" fill="none" stroke="#8b5cf6" strokeWidth="1.5" />
+      <path d="M 315 222 V 218 A 5 5 0 0 1 325 218 V 222" stroke="#8b5cf6" strokeWidth="1.5" fill="none" />
+      <text x="320" y="262" textAnchor="middle" fontSize="10" fontWeight="600" fill="#334155">Confidentialité</text>
+    </motion.g>
+
+    {/* Petites particules de données */}
+    {[...Array(6)].map((_, i) => (
+      <motion.circle
+        key={i}
+        r="2.5"
+        fill="#f97316"
+        cx={320}
+        cy={130}
+        animate={{
+          x: [0, [100 - 320, 540 - 320, 90 - 320, 550 - 320, 0, 0][i]],
+          y: [0, [55 - 130, 55 - 130, 205 - 130, 205 - 130, 32 - 130, 228 - 130][i]],
+          opacity: [0, 1, 0],
+        }}
+        transition={{ duration: 3, repeat: Infinity, delay: i * 0.4, ease: "easeInOut" }}
+      />
+    ))}
+  </svg>
 );
 
-/* --- NOUVEAU COMPOSANT : PHONE AD (SVG Publicité Téléphone Amélioré 3D) --- */
-const PremiumPhoneAd = () => {
+/* --- HERO PHONE PREMIUM (iPhone avec SMS / codes OTP animés) --- */
+const HeroPhonePremium = () => {
+  const messages = [
+    { name: "WhatsApp", slug: "whatsapp", color: "25D366", code: "847 291" },
+    { name: "Google", slug: "google", color: "4285F4", code: "G-883921" },
+    { name: "Telegram", slug: "telegram", color: "26A5E4", code: "T-471 028" },
+    { name: "Instagram", slug: "instagram", color: "E1306C", code: "392 847" },
+  ];
+  const [visibleCount, setVisibleCount] = useState(1);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisibleCount(c => (c >= messages.length ? 1 : c + 1));
+    }, 2100);
+    return () => clearInterval(id);
+  }, []);
+
   return (
-    <section className="py-24 bg-[#FCFCFD] overflow-hidden relative border-t border-border">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-      <div className="max-w-7xl mx-auto px-6 relative flex flex-col md:flex-row items-center justify-between gap-12">
-        
-        <div className="flex-1 md:pr-12 z-10">
-          <motion.div {...fadeUp(0)}>
-            <div className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Expérience sans couture</div>
-            <h2 className="text-3xl md:text-5xl font-extrabold text-foreground mb-6 leading-tight">
-              Une technologie invisible,<br />un impact immédiat.
-            </h2>
-            <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-              Nous avons conçu une interface qui s'efface pour laisser place à l'essentiel : votre réputation. Recevez vos vérifications instantanément, sur une plateforme pensée pour l'excellence.
-            </p>
-          </motion.div>
-        </div>
+    <div className="relative w-full max-w-[340px] mx-auto">
+      {/* Halo lumineux */}
+      <div className="absolute inset-0 -m-10 bg-gradient-to-tr from-primary/25 via-transparent to-orange-300/20 blur-3xl rounded-full pointer-events-none" />
 
-        <div className="flex-1 flex justify-center z-10 w-full" style={{ perspective: "1500px" }}>
-          <motion.div
-            animate={{ rotateY: [-25, 25, -25], rotateX: [5, 12, 5], y: [0, -15, 0] }}
-            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-            style={{ transformStyle: "preserve-3d" }}
-            className="relative"
-          >
-            {/* L'ombre sous le téléphone */}
-            <motion.div 
-               animate={{ scale: [1, 0.9, 1], opacity: [0.3, 0.1, 0.3] }}
-               transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-               className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-56 h-10 bg-black/30 blur-2xl rounded-full"
-            />
+      {/* Étiquette flottante haut */}
+      <motion.div
+        animate={{ y: [0, 6, 0] }}
+        transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+        className="absolute -top-2 left-0 sm:-left-6 z-20 bg-white border border-border rounded-2xl px-3.5 py-2 shadow-lg text-xs font-semibold whitespace-nowrap"
+      >
+        <span className="text-emerald-600 mr-1.5">✓</span>Numéro virtuel actif
+      </motion.div>
 
-            {/* Fausse épaisseur 3D (Côté du téléphone) */}
-            <div 
-              className="absolute inset-0 bg-gray-400 rounded-[45px] shadow-2xl" 
-              style={{ transform: "translateZ(-12px)" }}
-            ></div>
+      {/* Étiquette flottante bas */}
+      <motion.div
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
+        className="absolute -bottom-2 right-0 sm:-right-4 z-20 bg-white border border-border rounded-2xl px-3.5 py-2 shadow-lg text-xs font-semibold whitespace-nowrap"
+      >
+        🌍 205+ pays
+      </motion.div>
 
-            {/* Le châssis du téléphone */}
-            <div 
-              className="w-[280px] h-[580px] bg-[#111] rounded-[45px] p-2.5 relative border-[2px] border-gray-700 bg-gradient-to-br from-gray-800 to-black"
-              style={{ transform: "translateZ(0px)" }}
-            >
-              {/* L'écran */}
-              <div className="w-full h-full bg-[#f4f4f5] rounded-[35px] overflow-hidden relative flex flex-col">
-                
-                {/* Dynamic Island / Notch */}
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20"></div>
+      <motion.div
+        animate={{ y: [0, -12, 0] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+        className="relative z-10"
+        style={{ perspective: "1400px" }}
+      >
+        {/* Châssis téléphone */}
+        <div className="relative w-[270px] sm:w-[290px] h-[560px] sm:h-[600px] mx-auto rounded-[46px] bg-gradient-to-b from-[#2a2a2a] via-[#0a0a0a] to-[#2a2a2a] p-[3px] shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45)]">
+          {/* Reflet cadre */}
+          <div className="absolute inset-0 rounded-[46px] bg-gradient-to-tr from-white/20 via-transparent to-white/5 pointer-events-none" />
 
-                {/* Contenu de l'écran (Simulation App) */}
-                <div className="flex-1 p-4 pt-16 flex flex-col gap-3 relative overflow-hidden">
-                  
-                  {/* Header App */}
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="w-20 h-4 bg-gray-200 rounded-full"></div>
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Shield className="w-4 h-4 text-primary" />
-                    </div>
-                  </div>
+          {/* Écran */}
+          <div className="w-full h-full rounded-[43px] bg-[#FAFAFA] overflow-hidden relative flex flex-col">
+            {/* Dynamic Island */}
+            <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[100px] h-[28px] bg-black rounded-full z-30" />
 
-                  {/* Messages OTP dynamiques */}
-                  {[
-                    { s: "WhatsApp", c: "25D366", m: "Votre code: 492 103", delay: 0.5 },
-                    { s: "Google", c: "4285F4", m: "G-883921 est votre code", delay: 2.5 },
-                    { s: "Telegram", c: "26A5E4", m: "Code de connexion: 7104", delay: 4.5 },
-                    { s: "Instagram", c: "E1306C", m: "Code IG: 092 114", delay: 6.5 },
-                    { s: "TikTok", c: "000000", m: "Code de vérif: 5542", delay: 8.5 }
-                  ].map((notif, idx) => (
-                    <motion.div 
-                      key={idx}
-                      initial={{ opacity: 0, x: -30, scale: 0.9 }}
-                      whileInView={{ opacity: 1, x: 0, scale: 1 }}
-                      transition={{ delay: notif.delay, duration: 0.5, type: "spring" }}
-                      className="bg-white p-3.5 rounded-2xl shadow-sm border border-gray-100 max-w-[90%] relative z-10"
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <img src={`https://cdn.simpleicons.org/${notif.s.toLowerCase()}/${notif.c}`} alt={notif.s} className="w-3.5 h-3.5" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                        <span className="text-[10px] font-bold text-gray-400">{notif.s}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-gray-800">{notif.m}</p>
-                    </motion.div>
-                  ))}
-                  
-                  {/* Lueur de fond dans l'écran */}
-                  <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+            {/* Barre de statut */}
+            <div className="flex items-center justify-between px-6 pt-3.5 pb-2 text-[11px] font-semibold text-black relative z-20">
+              <span>9:41</span>
+              <div className="flex items-center gap-1.5">
+                <svg className="w-4 h-3" viewBox="0 0 24 16" fill="currentColor">
+                  <rect x="0" y="10" width="3" height="6" rx="0.5"/>
+                  <rect x="6" y="7" width="3" height="9" rx="0.5"/>
+                  <rect x="12" y="4" width="3" height="12" rx="0.5"/>
+                  <rect x="18" y="0" width="3" height="16" rx="0.5"/>
+                </svg>
+                <div className="w-6 h-3 border border-black rounded-[3px] relative">
+                  <div className="absolute inset-[1.5px] right-[5px] bg-black rounded-[1px]" />
+                  <div className="absolute -right-[2px] top-1/2 -translate-y-1/2 w-[2px] h-[4px] bg-black rounded-r" />
                 </div>
               </div>
             </div>
-          </motion.div>
+
+            {/* En-tête app */}
+            <div className="px-5 pt-3 pb-2">
+              <div className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Boîte de réception</div>
+              <div className="text-base font-bold text-black mt-0.5">Messages récents</div>
+            </div>
+
+            {/* Liste des messages */}
+            <div className="flex-1 px-4 pt-2 space-y-2.5 overflow-hidden">
+              <AnimatePresence>
+                {messages.slice(0, visibleCount).map((msg) => (
+                  <motion.div
+                    key={msg.name}
+                    layout
+                    initial={{ opacity: 0, y: -20, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                    transition={{ duration: 0.4, ease }}
+                    className="bg-white rounded-2xl p-3.5 border border-gray-100 shadow-sm"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center">
+                        <img
+                          src={`https://cdn.simpleicons.org/${msg.slug}/${msg.color}`}
+                          alt={`Logo ${msg.name}`}
+                          className="w-4 h-4"
+                        />
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-bold text-black leading-tight">{msg.name}</div>
+                        <div className="text-[9px] text-emerald-600 font-medium flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                          À l'instant
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 mb-1">Code de vérification</div>
+                    <div className="font-mono font-black text-lg tracking-[0.15em] text-black">{msg.code}</div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            {/* Barre inférieure */}
+            <div className="px-4 py-3 border-t border-gray-100 bg-white/85 backdrop-blur">
+              <div className="flex items-center justify-between text-[10px] text-gray-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Livraison instantanée
+                </span>
+                <span className="font-semibold text-black">205+ pays</span>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </motion.div>
+    </div>
   );
 };
-
 
 /* --- ILLUSTRATION EXPÉRIENCE SANS COUTURE --- */
 
 const SeamlessExperienceIllust = () => (
   <div className="w-full max-w-4xl mx-auto my-8 relative">
-    <svg viewBox="0 0 800 300" className="w-full h-auto drop-shadow-xl" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 800 300" className="w-full h-auto drop-shadow-xl" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Connexion globale entre entreprises et clients via Texerra SMS">
+      {/* Connexions de fond */}
       <path d="M 150 150 C 300 50, 500 250, 650 150" stroke="#e2e8f0" strokeWidth="4" strokeDasharray="8 8" />
+      
+      {/* Particules flottantes */}
       <motion.circle cx="300" cy="100" r="6" fill="#fb923c" animate={{ y: [-10, 10, -10] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} />
       <motion.circle cx="500" cy="200" r="8" fill="#60a5fa" animate={{ y: [10, -10, 10] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} />
       
+      {/* Utilisateur 1 : Entreprise */}
       <g transform="translate(150, 150)">
         <motion.circle cx="0" cy="0" r="55" fill="#ffffff" stroke="#f1f5f9" strokeWidth="6" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ type: "spring", delay: 0.1 }} />
         <circle cx="0" cy="-12" r="16" fill="#f97316" />
@@ -344,6 +524,7 @@ const SeamlessExperienceIllust = () => (
         </motion.g>
       </g>
 
+      {/* Utilisateur 2 : Client */}
       <g transform="translate(650, 150)">
         <motion.circle cx="0" cy="0" r="55" fill="#ffffff" stroke="#f1f5f9" strokeWidth="6" initial={{ scale: 0 }} whileInView={{ scale: 1 }} transition={{ type: "spring", delay: 0.2 }} />
         <circle cx="0" cy="-12" r="16" fill="#3b82f6" />
@@ -354,12 +535,16 @@ const SeamlessExperienceIllust = () => (
         </motion.g>
       </g>
 
+      {/* Hub Central (Plateforme) */}
       <g transform="translate(400, 150)">
-        <motion.circle cx="0" cy="0" r="65" fill="#ffffff" stroke="#e2e8f0" strokeWidth="6" initial={{ scale: 0.8, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} transition={{ type: "spring", delay: 0.3 }} />
+        <motion.circle cx="0" cy="0" r="65" fill="#ffffff" stroke="#e2e8f0" strokeWidth="6" 
+          initial={{ scale: 0.8, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} transition={{ type: "spring", delay: 0.3 }} />
         <path d="M -20 -15 h 40 M -20 0 h 40 M -20 15 h 25" stroke="#cbd5e1" strokeWidth="5" strokeLinecap="round" />
-        <motion.circle cx="0" cy="0" r="80" stroke="#f97316" strokeWidth="3" strokeDasharray="15 15" fill="none" strokeOpacity="0.5" animate={{ rotate: 360 }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }} />
+        <motion.circle cx="0" cy="0" r="80" stroke="#f97316" strokeWidth="3" strokeDasharray="15 15" fill="none" strokeOpacity="0.5"
+          animate={{ rotate: 360 }} transition={{ duration: 25, repeat: Infinity, ease: "linear" }} />
       </g>
 
+      {/* Paquets de données animés */}
       <motion.g animate={{ x: [150, 400], y: [150, 150], opacity: [0, 1, 0] }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}>
         <circle cx="0" cy="0" r="8" fill="#f97316" />
       </motion.g>
@@ -386,7 +571,7 @@ function LiveTraffic() {
     const generateNotification = () => {
       const randomCountry = countries[Math.floor(Math.random() * countries.length)];
       const randomService = services[Math.floor(Math.random() * services.length)];
-      const randomTime = Math.floor(Math.random() * 20) + 5; 
+      const randomTime = Math.floor(Math.random() * 20) + 5;
 
       setNotification({
         country: `${randomCountry.flag} ${randomCountry.name}`,
@@ -440,104 +625,179 @@ function LiveTraffic() {
   );
 }
 
-/* --- NOUVEAU COMPOSANT : HERO PREMIUM PHONE SVG ANIMÉ --- */
-function HeroPremiumPhone() {
+function SmsDemo() {
   return (
-    <div className="relative flex items-center justify-center py-8 w-full max-w-md mx-auto">
-      {/* Glow de fond */}
-      <div className="absolute w-72 h-72 rounded-full bg-primary/15 blur-[80px]" />
-      
-      {/* Téléphone flottant */}
+    <div className="relative flex items-center justify-center py-8">
+      <div className="absolute w-72 h-72 rounded-full bg-orange-400/12 blur-[70px]" />
+
       <motion.div
-        animate={{ y: [0, -12, 0] }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-        className="relative z-10 w-[260px] md:w-[280px] h-[540px] md:h-[580px] bg-[#111] rounded-[45px] p-2.5 shadow-[0_24px_60px_rgba(0,0,0,0.4)] border-[3px] border-[#222]"
+        animate={{ y: [0, -8, 0] }}
+        transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+        className="relative z-10 bg-white border border-border rounded-3xl p-6 w-[288px] shadow-[0_24px_60px_hsl(24_90%_52%/0.12),_0_8px_20px_hsl(32_14%_78%/0.4)]"
       >
-        {/* Écran du téléphone */}
-        <div className="w-full h-full bg-[#f8f9fa] rounded-[35px] overflow-hidden relative flex flex-col items-center pt-14">
-          
-          {/* Dynamic Island */}
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-6 bg-black rounded-full z-20"></div>
-
-          {/* Contenu de l'écran */}
-          <div className="w-full px-4 space-y-4">
-            
-            {/* Notification WhatsApp */}
-            <motion.div 
-              initial={{ x: 50, opacity: 0 }} 
-              animate={{ x: 0, opacity: 1 }} 
-              transition={{ delay: 0.5, type: "spring" }} 
-              className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-3 relative overflow-hidden"
-            >
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#25D366]"></div>
-              <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WA" className="w-6 h-6 shrink-0" />
-              <div>
-                <div className="text-[10px] font-bold text-gray-400">WhatsApp</div>
-                <div className="text-xs font-semibold text-gray-800">Code: <span className="font-bold text-black tracking-wider">492-103</span></div>
-              </div>
-            </motion.div>
-            
-            {/* Notification Telegram */}
-            <motion.div 
-              initial={{ x: -50, opacity: 0 }} 
-              animate={{ x: 0, opacity: 1 }} 
-              transition={{ delay: 1.5, type: "spring" }} 
-              className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-3 relative overflow-hidden"
-            >
-               <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#26A5E4]"></div>
-               <img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="TG" className="w-6 h-6 shrink-0" />
-               <div>
-                 <div className="text-[10px] font-bold text-gray-400">Telegram</div>
-                 <div className="text-xs font-semibold text-gray-800">Connexion: <span className="font-bold text-black tracking-wider">88392</span></div>
-               </div>
-            </motion.div>
-
-            {/* Notification Google */}
-            <motion.div 
-              initial={{ y: 50, opacity: 0 }} 
-              animate={{ y: 0, opacity: 1 }} 
-              transition={{ delay: 2.5, type: "spring" }} 
-              className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-3 relative overflow-hidden"
-            >
-               <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#4285F4]"></div>
-               <img src="https://cdn.simpleicons.org/google/4285F4" alt="GO" className="w-6 h-6 shrink-0" />
-               <div>
-                 <div className="text-[10px] font-bold text-gray-400">Google</div>
-                 <div className="text-xs font-semibold text-gray-800">G- <span className="font-bold text-black tracking-wider">99102</span></div>
-               </div>
-            </motion.div>
-
-            {/* État de succès */}
-            <motion.div 
-              initial={{ scale: 0, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
-              transition={{ delay: 3.5, type: "spring" }} 
-              className="mt-8 mx-auto w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center shadow-inner"
-            >
-               <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-            </motion.div>
+        <div className="flex items-center gap-3 pb-4 border-b border-border mb-4">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-green-50">
+            <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" className="w-5 h-5" />
           </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-foreground">WhatsApp Business</div>
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+              <span className="text-emerald-600 font-medium">Code reçu</span>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground shrink-0">14:23</div>
+        </div>
+
+        <div className="rounded-2xl p-5 text-center mb-4 bg-secondary border border-border">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mb-2.5 font-semibold">
+            Code de vérification
+          </div>
+          <div className="text-[40px] font-black tracking-[0.22em] font-mono text-foreground leading-none">
+            847 291
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+            Livré en 23 secondes
+          </div>
+          <div className="text-xs text-muted-foreground">🇺🇸 +1</div>
         </div>
       </motion.div>
 
-      {/* Éléments extérieurs flottants */}
       <motion.div
-        animate={{ y: [0, 8, 0] }}
-        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-        className="absolute top-24 -left-6 md:-left-16 z-20 bg-white border border-border rounded-2xl px-4 py-3 shadow-xl text-xs font-bold"
+        animate={{ y: [0, 6, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
+        className="absolute top-2 -left-8 z-20 bg-white border border-border rounded-2xl px-3.5 py-2.5 shadow-lg text-xs font-semibold whitespace-nowrap"
       >
-        🇺🇸 +1 (844) 302...
+        <span className="text-primary mr-1.5">✓</span>Image internationale
       </motion.div>
+
       <motion.div
-        animate={{ y: [0, -8, 0] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 2.5 }}
-        className="absolute bottom-40 -right-6 md:-right-12 z-20 bg-white border border-border rounded-2xl px-4 py-3 shadow-xl text-xs font-bold flex items-center gap-2"
+        animate={{ y: [0, -7, 0] }}
+        transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut", delay: 2.5 }}
+        className="absolute bottom-4 -right-4 z-20 bg-white border border-border rounded-2xl px-3.5 py-2.5 shadow-lg text-xs font-semibold whitespace-nowrap"
       >
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Numéro Actif
+        🌍 205+ pays disponibles
       </motion.div>
     </div>
   );
 }
+
+/* --- SECTION PUBLICITÉ TÉLÉPHONE PREMIUM (Améliorée — rotation 3D naturelle) --- */
+const PremiumPhoneAd = () => {
+  const notifications = [
+    { name: "WhatsApp", slug: "whatsapp", color: "25D366", code: "492 103" },
+    { name: "Google", slug: "google", color: "4285F4", code: "883 921" },
+    { name: "Telegram", slug: "telegram", color: "26A5E4", code: "471 028" },
+    { name: "Instagram", slug: "instagram", color: "E1306C", code: "392 847" },
+    { name: "TikTok", slug: "tiktok", color: "000000", code: "508 172" },
+  ];
+  const [visibleCount, setVisibleCount] = useState(1);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisibleCount(c => (c >= notifications.length ? 1 : c + 1));
+    }, 1800);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <section className="py-24 bg-[#FCFCFD] overflow-hidden relative border-t border-border">
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+      <div className="max-w-7xl mx-auto px-6 relative flex flex-col md:flex-row items-center justify-between gap-12">
+        
+        <div className="flex-1 md:pr-12 z-10">
+          <motion.div {...fadeUp(0)}>
+            <div className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Expérience sans couture</div>
+            <h2 className="text-3xl md:text-5xl font-extrabold text-foreground mb-6 leading-tight">
+              Une technologie invisible,<br />un impact immédiat.
+            </h2>
+            <p className="text-muted-foreground text-lg leading-relaxed mb-6">
+              Nous avons conçu une interface qui s'efface pour laisser place à l'essentiel : votre réputation. Recevez vos vérifications instantanément, sur une plateforme pensée pour l'excellence.
+            </p>
+          </motion.div>
+        </div>
+
+        <div className="flex-1 flex justify-center z-10 w-full">
+          <div className="relative">
+            {/* Ombre sous le téléphone */}
+            <motion.div 
+               animate={{ scale: [1, 0.9, 1], opacity: [0.35, 0.15, 0.35] }}
+               transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+               className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-52 h-8 bg-black/25 blur-2xl rounded-full"
+            />
+
+            {/* Téléphone avec rotation 3D naturelle en continue */}
+            <motion.div
+              animate={{ 
+                rotateY: [-28, 28, -28],
+                rotateX: [8, 12, 8],
+                y: [0, -10, 0],
+              }}
+              transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+              style={{ perspective: "1400px", transformStyle: "preserve-3d" }}
+              className="relative"
+            >
+              {/* Épaisseur / tranche visible à droite */}
+              <div className="absolute top-2 -right-1.5 bottom-2 w-2 rounded-r-[45px] bg-gradient-to-r from-[#333] to-[#111] opacity-80" />
+
+              {/* Châssis */}
+              <div className="relative w-[280px] h-[580px] bg-gradient-to-b from-[#222] via-[#0a0a0a] to-[#1a1a1a] rounded-[45px] p-2.5 shadow-[0_35px_90px_-25px_rgba(0,0,0,0.55)] border-[1px] border-[#2a2a2a]">
+                {/* Reflet premium sur le cadre */}
+                <div className="absolute inset-0 rounded-[45px] bg-gradient-to-tr from-white/15 via-transparent to-white/5 pointer-events-none" />
+
+                {/* Écran */}
+                <div className="w-full h-full bg-white rounded-[35px] overflow-hidden relative flex flex-col">
+                  {/* Dynamic Island */}
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20"></div>
+
+                  {/* Contenu de l'écran */}
+                  <div className="flex-1 bg-[#F5F5F7] p-5 pt-16 flex flex-col gap-3">
+                    
+                    {/* Header App */}
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="w-20 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                        <Shield className="w-4 h-4 text-primary" />
+                      </div>
+                    </div>
+
+                    {/* Notifications cycliques */}
+                    <AnimatePresence>
+                      {notifications.slice(0, visibleCount).map((n) => (
+                        <motion.div
+                          key={n.name}
+                          layout
+                          initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                          transition={{ duration: 0.45, ease }}
+                          className="bg-white p-3.5 rounded-2xl rounded-tl-sm shadow-sm border border-gray-100"
+                        >
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <img src={`https://cdn.simpleicons.org/${n.slug}/${n.color}`} alt={n.name} className="w-4 h-4" />
+                            <span className="text-[10px] font-bold text-gray-400">{n.name}</span>
+                          </div>
+                          <p className="text-xs font-medium text-gray-800">
+                            Code : <span className="font-bold text-black tracking-widest">{n.code}</span>
+                          </p>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 
 export default function Home() {
   useMeta({
@@ -563,15 +823,15 @@ export default function Home() {
     <div className="flex flex-col">
       <LiveTraffic />
 
-      {/* ── Hero ── */}
+      {/* ── Hero (Refondu : positionnement clair numéro virtuel / SMS / vérification) ── */}
       <section className="relative min-h-[94vh] flex items-center overflow-hidden">
         <div className="absolute inset-0 dot-grid opacity-60" />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background pointer-events-none" />
         <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-orange-400/8 blur-[120px] pointer-events-none" />
         <div className="absolute top-0 right-0 w-[480px] h-[480px] rounded-full bg-yellow-400/6 blur-[100px] pointer-events-none" />
 
-        <div className="relative w-full max-w-7xl mx-auto px-6 py-28">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="relative w-full max-w-7xl mx-auto px-6 py-24 md:py-28">
+          <div className="grid lg:grid-cols-2 gap-14 lg:gap-16 items-center">
 
             <div>
               <motion.div
@@ -579,24 +839,29 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.85, ease }}
               >
-                <h1 className="text-5xl md:text-6xl xl:text-[66px] font-extrabold leading-[1.06] tracking-tight mb-5 text-foreground">
+                <h1 className="text-4xl sm:text-5xl md:text-6xl xl:text-[68px] font-extrabold leading-[1.05] tracking-tight mb-6 text-foreground">
                   Le bon numéro,<br />
-                  pour <span className="gradient-text">chaque usage.</span>
+                  <span className="gradient-text">pour chaque usage.</span>
                 </h1>
 
-                {/* Éléments secondaires SEO / Usages */}
-                <div className="flex flex-wrap items-center gap-2.5 text-sm md:text-base font-bold text-muted-foreground mb-6">
-                   <span>WhatsApp</span> <span className="text-primary/40">•</span>
-                   <span>Telegram</span> <span className="text-primary/40">•</span>
-                   <span>Google</span> <span className="text-primary/40">•</span>
-                   <span>Instagram</span> <span className="text-primary/40">•</span>
-                   <span>TikTok</span> <span className="text-primary/40">•</span>
-                   <span>et bien plus</span>
-                </div>
-
-                <p className="text-base text-foreground/80 mb-10 max-w-lg leading-relaxed font-medium">
+                <p className="text-lg md:text-xl text-foreground/80 mb-6 max-w-xl leading-relaxed font-medium">
                   Numéros virtuels pour WhatsApp, vérification SMS et services en ligne. Choisissez votre pays et obtenez votre numéro rapidement.
                 </p>
+
+                {/* Éléments secondaires : plateformes */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm mb-10 max-w-xl">
+                  <span className="font-semibold text-foreground/75">WhatsApp</span>
+                  <span className="text-primary/50">•</span>
+                  <span className="font-semibold text-foreground/75">Telegram</span>
+                  <span className="text-primary/50">•</span>
+                  <span className="font-semibold text-foreground/75">Google</span>
+                  <span className="text-primary/50">•</span>
+                  <span className="font-semibold text-foreground/75">Instagram</span>
+                  <span className="text-primary/50">•</span>
+                  <span className="font-semibold text-foreground/75">TikTok</span>
+                  <span className="text-primary/50">•</span>
+                  <span className="text-muted-foreground font-medium">et bien plus</span>
+                </div>
 
                 <div className="flex flex-wrap items-center gap-4 mb-14">
                   <Link
@@ -609,7 +874,7 @@ export default function Home() {
                     href="#pourquoi"
                     className="inline-flex items-center gap-2.5 px-8 py-4 bg-white hover:bg-secondary border border-border text-foreground font-semibold rounded-2xl transition-all duration-200 text-base shadow-sm"
                   >
-                    Pourquoi TEXERRA ?
+                    Pourquoi Texerra SMS ?
                   </a>
                 </div>
               </motion.div>
@@ -618,14 +883,14 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.85, delay: 0.3, ease }}
-                className="flex gap-10"
+                className="flex flex-wrap gap-8 sm:gap-10"
               >
                 {[
-                  { value: "712", label: "Numéros activés" },
+                  { value: stats ? `${stats.totalOrders.toLocaleString()}+` : "712+", label: "Numéros activés" },
                   { value: stats ? `${stats.totalCountries}+` : "205+", label: "Pays disponibles" },
                   { value: `${stats?.averageDeliverySeconds ?? 45}s`, label: "Temps d'activation" },
-                ].map((stat, i) => (
-                  <div key={i}>
+                ].map(stat => (
+                  <div key={stat.label}>
                     <div className="text-2xl font-extrabold gradient-text leading-none mb-1">{stat.value}</div>
                     <div className="text-xs text-muted-foreground">{stat.label}</div>
                   </div>
@@ -633,20 +898,20 @@ export default function Home() {
               </motion.div>
             </div>
 
+            {/* Visuel Hero : iPhone premium animé (visible sur mobile et desktop) */}
             <motion.div
               initial={{ opacity: 0, scale: 0.94, x: 24 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               transition={{ duration: 1, delay: 0.2, ease }}
-              className="flex items-center justify-center lg:justify-end"
+              className="flex items-center justify-center pt-6 lg:pt-0"
             >
-              {/* Le nouveau HeroPremiumPhone responsive */}
-              <HeroPremiumPhone />
+              <HeroPhonePremium />
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* ── Le problème (Totalement restauré et gardé intact !) ── */}
+      {/* ── Problème (Totalement restauré et gardé intact !) ── */}
       <section className="py-20 bg-secondary/40 border-y border-border">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div {...fadeUp(0)} className="text-center max-w-3xl mx-auto">
@@ -727,7 +992,7 @@ export default function Home() {
                     {iconUrl ? (
                       <img
                         src={iconUrl}
-                        alt={service.name}
+                        alt={`Numéro virtuel pour ${service.name}`}
                         className="w-8 h-8 object-contain group-hover:scale-110 transition-transform duration-200"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
@@ -755,26 +1020,26 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── NOUVELLE SECTION PUBLICITÉ TÉLÉPHONE ── */}
+      {/* ── Section publicité téléphone premium ── */}
       <PremiumPhoneAd />
 
-      {/* ── Pourquoi TEXERRA (Design Professionnel importé) ── */}
+      {/* ── Pourquoi Texerra SMS (Design conservé + ajout SVG "personne satisfaite") ── */}
       <section id="pourquoi" className="py-24 bg-white border-t border-border">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col lg:flex-row items-center gap-16 mb-20">
-            <motion.div {...fadeUp(0)} className="lg:w-1/2 text-left">
-              <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pourquoi TEXERRA ?</p>
-              <h2 className="text-4xl md:text-5xl font-extrabold text-foreground mb-5">
-                Ce que vous gagnez vraiment
-              </h2>
-              <p className="text-muted-foreground text-lg">
-                TEXERRA ne vend pas un simple numéro. TEXERRA vous donne les moyens d'être perçu différemment — dès le premier contact.
-              </p>
-            </motion.div>
-            <motion.div {...fadeUp(0.2)} className="lg:w-1/2 flex justify-center lg:justify-end">
-              <SatisfiedUserSvg />
-            </motion.div>
-          </div>
+          <motion.div {...fadeUp(0)} className="text-center mb-14">
+            <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pourquoi Texerra SMS ?</p>
+            <h2 className="text-4xl md:text-5xl font-extrabold text-foreground mb-5">
+              Ce que vous gagnez vraiment
+            </h2>
+            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+              Texerra SMS ne vend pas un simple numéro. Texerra SMS vous donne les moyens d'être perçu différemment — dès le premier contact.
+            </p>
+          </motion.div>
+
+          {/* Nouveau visuel : personne satisfaite ayant obtenu le numéro qu'il fallait */}
+          <motion.div {...fadeUp(0.1)} className="mb-16">
+            <PersonObtainedNumber />
+          </motion.div>
 
           <motion.div
             variants={gridVariants}
@@ -815,22 +1080,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── À qui s'adresse TEXERRA ── */}
+      {/* ── À qui s'adresse Texerra SMS (Design conservé + ajout SVG multi-usages) ── */}
       <section className="py-24 bg-white border-t border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div {...fadeUp(0)} className="mb-16 lg:flex lg:items-center lg:justify-between gap-16">
+        <div className="max-w-6xl mx-auto px-6">
+          <motion.div {...fadeUp(0)} className="mb-16 md:flex md:items-end md:justify-between gap-10">
             <div className="max-w-2xl">
               <p className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Pour qui ?</p>
               <h2 className="text-3xl md:text-5xl font-extrabold text-foreground mb-4 leading-tight">
-                TEXERRA s'adresse à tout le monde
+                Texerra SMS s'adresse à tout le monde
               </h2>
-              <p className="text-muted-foreground text-lg max-w-md pb-2">
-                Que vous ayez besoin d'un numéro pour votre image, pour vérifier un compte ou simplement pour un usage personnel — TEXERRA a ce qu'il vous faut.
-              </p>
             </div>
-            <div className="hidden lg:block lg:w-1/2">
-              <DiverseUsesSvg />
-            </div>
+            <p className="text-muted-foreground text-lg max-w-md pb-2">
+              Que vous ayez besoin d'un numéro pour votre image, pour vérifier un compte ou simplement pour un usage personnel — Texerra SMS a ce qu'il vous faut.
+            </p>
+          </motion.div>
+
+          {/* Nouveau visuel : profils et usages multiples autour du hub Texerra SMS */}
+          <motion.div {...fadeUp(0.1)} className="mb-16">
+            <MultiUsageIllust />
           </motion.div>
 
           <motion.div
@@ -838,7 +1105,7 @@ export default function Home() {
             initial="hidden"
             whileInView="show"
             viewport={{ once: true }}
-            className="grid md:grid-cols-2 gap-x-12 gap-y-8 max-w-6xl mx-auto"
+            className="grid md:grid-cols-2 gap-x-12 gap-y-8"
           >
             {[
               { title: "Entrepreneurs & dirigeants", desc: "Obtenez un numéro du pays où se trouvent vos clients ou partenaires pour inspirer plus de confiance." },
@@ -1023,7 +1290,7 @@ export default function Home() {
         <div className="max-w-3xl mx-auto px-6 text-center">
           <motion.div {...fadeUp(0)}>
             <div className="flex justify-center mb-8">
-              <svg className="w-16 h-16 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg className="w-16 h-16 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" role="img" aria-label="Couverture internationale de Texerra SMS">
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
               </svg>
@@ -1032,56 +1299,75 @@ export default function Home() {
               "Nous pensons que chaque entreprise mérite d'être perçue avec le même niveau de professionnalisme que les grandes entreprises internationales."
             </blockquote>
             <p className="text-muted-foreground text-base">
-              C'est pourquoi TEXERRA existe — pour effacer les frontières perçues et donner à chaque entrepreneur la posture qu'il mérite, où qu'il soit.
+              C'est pourquoi Texerra SMS existe — pour effacer les frontières perçues et donner à chaque entrepreneur la posture qu'il mérite, où qu'il soit.
             </p>
             <div className="mt-8 pt-8 border-t border-border">
-              <p className="text-xs uppercase tracking-widest text-primary font-bold">L'équipe TEXERRA SMS</p>
+              <p className="text-xs uppercase tracking-widest text-primary font-bold">L'équipe Texerra SMS</p>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* ── FAQ (Totalement réécrite pour le SEO et l'usage) ── */}
+      {/* ── FAQ (Contenu enrichi SEO + bouton vers la page FAQ complète) ── */}
       <section id="faq" className="py-24 bg-secondary/30 border-t border-border">
         <div className="max-w-3xl mx-auto px-6">
           <motion.div {...fadeUp(0)} className="text-center mb-14">
             <div className="text-xs uppercase tracking-widest text-primary font-bold mb-3">Aide</div>
-            <h2 className="text-4xl md:text-5xl font-extrabold text-foreground">Questions fréquentes</h2>
+            <h2 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4">Questions fréquentes</h2>
+            <p className="text-muted-foreground text-base max-w-lg mx-auto">
+              Tout ce qu'il faut savoir sur les numéros virtuels, la réception de SMS et la vérification de comptes en ligne.
+            </p>
           </motion.div>
           <motion.div {...fadeUp(0.1)}>
             <Accordion type="single" collapsible className="space-y-3">
               {[
                 {
-                  q: "Qu’est-ce qu’un numéro virtuel ?",
-                  a: "Un numéro virtuel est un numéro de téléphone qui n'est pas lié à une carte SIM physique. Il fonctionne entièrement via internet, vous permettant de recevoir des SMS de n'importe où dans le monde, directement sur notre plateforme Texerra SMS.",
+                  q: "Qu'est-ce qu'un numéro virtuel ?",
+                  a: "Un numéro virtuel est un numéro de téléphone qui n'est pas lié à une carte SIM physique. Il fonctionne via Internet et permet de recevoir des SMS et des appels, exactement comme un numéro classique. Chez Texerra SMS, vous achetez un numéro virtuel du pays de votre choix pour recevoir des codes de vérification ou communiquer via des services comme WhatsApp.",
                 },
                 {
                   q: "À quoi sert un numéro virtuel ?",
-                  a: "Il sert principalement à protéger votre vie privée, à vérifier des comptes en ligne sans utiliser votre numéro personnel, et à donner une image internationale ou locale à votre entreprise selon le pays choisi.",
+                  a: "Un numéro virtuel sert principalement à recevoir des SMS de vérification, à activer un compte WhatsApp Business, Instagram, Telegram, Google, TikTok ou d'autres plateformes, et à renforcer votre image professionnelle auprès de vos clients lorsqu'ils se trouvent dans un autre pays que le vôtre.",
                 },
                 {
                   q: "Pourquoi utiliser un numéro virtuel ?",
-                  a: "Utiliser un numéro virtuel avec Texerra SMS vous permet d'éviter les spams, de contourner les restrictions géographiques de certains services, et de gérer plusieurs comptes (comme WhatsApp Business) de manière simple et sécurisée.",
+                  a: "Utiliser un numéro virtuel permet d'obtenir un numéro local dans un pays où vous n'êtes pas physiquement présent, d'accéder à des services qui exigent un numéro précis, de protéger votre numéro personnel et d'améliorer votre crédibilité auprès de vos prospects et partenaires.",
                 },
                 {
                   q: "Puis-je utiliser un numéro virtuel pour WhatsApp ?",
-                  a: "Oui, absolument. Nos numéros virtuels sont parfaitement compatibles pour créer et vérifier des comptes WhatsApp ou WhatsApp Business. Vous recevrez le code de vérification SMS instantanément sur votre tableau de bord.",
+                  a: "Oui. C'est même l'un des usages les plus courants. Vous achetez un numéro virtuel Texerra SMS, vous recevez le code SMS de WhatsApp, et vous activez votre compte WhatsApp Business avec ce numéro. La procédure prend moins de 60 secondes.",
                 },
                 {
                   q: "Puis-je recevoir des SMS de vérification ?",
-                  a: "Oui, la réception de SMS de vérification (OTP) est la fonction principale de Texerra SMS. Nous supportons la majorité des services : réseaux sociaux, plateformes en ligne, applications de messagerie, etc.",
+                  a: "Absolument. Recevoir des SMS de vérification (codes OTP) est la fonction principale de Texerra SMS. Que ce soit pour WhatsApp, Google, Instagram, TikTok, Telegram ou n'importe quelle autre plateforme, vous recevez le code directement sur votre tableau de bord en quelques secondes.",
                 },
                 {
                   q: "Quels pays sont disponibles sur Texerra SMS ?",
-                  a: "Nous proposons des numéros de plus de 205 pays. Que vous ayez besoin d'un numéro en Europe (France, UK), en Amérique (USA, Canada), ou en Afrique (RDC, Nigeria, Côte d'Ivoire), vous trouverez le pays adapté.",
+                  a: "Texerra SMS couvre plus de 205 pays : toute l'Afrique (RDC, Nigeria, Côte d'Ivoire, Sénégal, Ghana, Kenya…), l'Europe (France, Royaume-Uni, Allemagne…), les États-Unis, le Canada, l'Asie et bien d'autres. Vous choisissez simplement le pays du numéro dont vous avez besoin.",
                 },
                 {
                   q: "Comment acheter un numéro virtuel ?",
-                  a: "C'est très simple : créez un compte gratuit, rechargez votre solde via le moyen de paiement de votre choix (Mobile Money, carte bancaire, etc.), sélectionnez le service désiré, et obtenez votre numéro.",
+                  a: "C'est simple : créez votre compte gratuitement, rechargez votre solde (Orange Money, MTN, Moov, Airtel Money ou carte bancaire), choisissez le service et le pays, puis validez. Votre numéro est actif immédiatement et le code de vérification apparaît sur votre tableau de bord.",
                 },
                 {
                   q: "Combien de temps faut-il pour obtenir un numéro ?",
-                  a: "L'obtention du numéro est instantanée. Dès que vous confirmez votre choix, le numéro s'affiche sur votre écran. La réception du SMS de vérification prend ensuite généralement moins de 45 secondes.",
+                  a: "Moins de 60 secondes. Dès que votre commande est validée, votre numéro est attribué et prêt à recevoir des SMS. En moyenne, nos clients reçoivent leur code de vérification en 45 secondes.",
+                },
+                {
+                  q: "Est-ce vraiment un vrai numéro actif ?",
+                  a: "Oui. Texerra SMS vous fournit de vrais numéros actifs dans les pays de votre choix — pas des numéros fictifs. Ils reçoivent des SMS réels et sont acceptés par toutes les grandes plateformes mondiales.",
+                },
+                {
+                  q: "Quels moyens de paiement acceptez-vous ?",
+                  a: "Orange Money, MTN Mobile Money, Moov, Airtel Money, carte Visa/Mastercard. Paiement instantané, sans frais cachés.",
+                },
+                {
+                  q: "Que faire si je ne reçois pas de SMS ?",
+                  a: "Annulez depuis votre tableau de bord. Le montant est remboursé automatiquement sur votre solde en quelques secondes. Aucune perte.",
+                },
+                {
+                  q: "Est-ce légal d'utiliser des numéros virtuels ?",
+                  a: "Oui. L'utilisation de numéros virtuels pour la vérification de comptes est légale dans la plupart des pays. Nous respectons les conditions des plateformes concernées.",
                 },
               ].map((item, i) => (
                 <AccordionItem key={i} value={`q${i}`} className="bg-white border border-border rounded-2xl px-1 data-[state=open]:border-primary/30 transition-colors">
@@ -1094,16 +1380,16 @@ export default function Home() {
                 </AccordionItem>
               ))}
             </Accordion>
-          </motion.div>
 
-          {/* Bouton pour rediriger vers la page FAQ complète */}
-          <motion.div {...fadeUp(0.2)} className="mt-12 text-center">
-            <Link
-              href="/faq"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-border hover:border-primary/40 hover:bg-primary/[0.03] text-sm font-semibold rounded-2xl transition-all duration-200 shadow-sm"
-            >
-              Voir toutes les questions <ArrowRight className="w-4 h-4" />
-            </Link>
+            {/* Bouton vers la FAQ complète */}
+            <div className="text-center mt-10">
+              <Link
+                href="/faq"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-border hover:border-primary/40 hover:bg-primary/[0.03] text-sm font-semibold rounded-2xl transition-all duration-200 shadow-sm"
+              >
+                Voir toutes les questions <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </motion.div>
         </div>
       </section>
@@ -1123,7 +1409,7 @@ export default function Home() {
                 L'image professionnelle<br />que vous méritez.
               </h2>
               <p className="text-muted-foreground text-lg mb-10 max-w-md mx-auto">
-                Créez votre compte gratuitement. Votre premier numéro actif en moins de 60 secondes avec Texerra SMS.
+                Créez votre compte gratuitement. Votre premier numéro actif en moins de 60 secondes.
               </p>
               <div className="flex flex-wrap gap-4 justify-center">
                 <Link
