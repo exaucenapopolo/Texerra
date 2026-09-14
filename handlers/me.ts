@@ -2,6 +2,7 @@ import { Router } from "express";
 import { firestoreDb } from "../lib/firebase-admin.js";
 import { requireAuth } from "../lib/requireAuth.js";
 import { sendWelcomeEmail } from "../lib/mailer.js";
+import { createResendContact } from "../lib/resend-contact.js";
 
 const router = Router();
 
@@ -14,7 +15,7 @@ const SUPPORTED_CURRENCIES = [
 /**
  * Formate les données utilisateur pour l'API
  */
-function formatUser(user: any) {
+function formatUser(user) {
   return {
     id: user.id,
     email: user.email || "",
@@ -28,18 +29,13 @@ function formatUser(user: any) {
 
 // GET /api/me — Récupérer ou initialiser le profil de l'utilisateur authentifié
 router.get("/", requireAuth, async (req, res) => {
-  const userId = (req as any).userId as string;
-  const firebaseUser = (req as any).firebaseUser as {
-    uid: string;
-    email?: string;
-    name?: string;
-    picture?: string;
-  };
+  const userId = req.userId;
+  const firebaseUser = req.firebaseUser;
 
   const userRef = firestoreDb.collection("users").doc(userId);
   const userDoc = await userRef.get();
 
-  let userData: any;
+  let userData;
 
   if (!userDoc.exists) {
     const email = firebaseUser?.email ?? "";
@@ -59,17 +55,24 @@ router.get("/", requireAuth, async (req, res) => {
     };
 
     try {
-      // Création du profil dans Firestore
       await userRef.set(userData);
 
-      // Nouvel utilisateur — envoyer l'e-mail de bienvenue (non-bloquant)
       if (email) {
-        sendWelcomeEmail(email, name).catch(() => {});
+        sendWelcomeEmail(email, name).catch((err) => {
+          console.error("Welcome email error:", err);
+        });
+
+        createResendContact(email, name, userId).catch((err) => {
+          console.error("Resend contact error:", err);
+        });
       }
     } catch (err) {
-      const logger = (req as any).log || console;
+      const logger = req.log || console;
       logger.error({ err }, "Failed to provision user from Firebase");
-      res.status(500).json({ error: "Failed to load user profile" });
+
+      res.status(500).json({
+        error: "Failed to load user profile",
+      });
       return;
     }
   } else {
@@ -81,22 +84,21 @@ router.get("/", requireAuth, async (req, res) => {
 
 // PATCH /api/me — Mettre à jour le profil utilisateur
 router.patch("/", requireAuth, async (req, res) => {
-  const userId = (req as any).userId as string;
-  const { name, phone, currency } = (req.body ?? {}) as {
-    name?: string;
-    phone?: string;
-    currency?: string;
-  };
+  const userId = req.userId;
+  const { name, phone, currency } = req.body ?? {};
 
-  const updates: Record<string, any> = {
+  const updates = {
     updatedAt: new Date().toISOString(),
   };
 
   if (name !== undefined) {
     if (!name.trim()) {
-      res.status(400).json({ error: "Le nom ne peut pas être vide" });
+      res.status(400).json({
+        error: "Le nom ne peut pas être vide",
+      });
       return;
     }
+
     updates.name = name.trim();
   }
 
@@ -106,15 +108,19 @@ router.patch("/", requireAuth, async (req, res) => {
 
   if (currency !== undefined) {
     if (!SUPPORTED_CURRENCIES.includes(currency)) {
-      res.status(400).json({ error: "Devise non supportée" });
+      res.status(400).json({
+        error: "Devise non supportée",
+      });
       return;
     }
+
     updates.currency = currency;
   }
 
-  // S'il n'y a que 'updatedAt', c'est qu'aucune modification valide n'a été passée
   if (Object.keys(updates).length <= 1) {
-    res.status(400).json({ error: "Aucune modification fournie" });
+    res.status(400).json({
+      error: "Aucune modification fournie",
+    });
     return;
   }
 
@@ -123,21 +129,29 @@ router.patch("/", requireAuth, async (req, res) => {
     const userDoc = await userRef.get();
 
     if (!userDoc.exists) {
-      res.status(404).json({ error: "Utilisateur non trouvé" });
+      res.status(404).json({
+        error: "Utilisateur non trouvé",
+      });
       return;
     }
 
-    // Mise à jour dans Firestore
     await userRef.update(updates);
 
     const updatedDoc = await userRef.get();
+
     res.json(formatUser(updatedDoc.data()));
   } catch (err) {
-    const logger = (req as any).log || console;
-    logger.error({ err }, "Failed to update user profile");
-    res.status(500).json({ error: "Erreur lors de la mise à jour du profil" });
+    const logger = req.log || console;
+
+    logger.error(
+      { err },
+      "Failed to update user profile"
+    );
+
+    res.status(500).json({
+      error: "Erreur lors de la mise à jour du profil",
+    });
   }
 });
 
 export default router;
-           
