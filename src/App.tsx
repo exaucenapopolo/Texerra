@@ -12,8 +12,18 @@ import Dashboard from "./pages/dashboard";
 import Wallet from "./pages/wallet";
 import FaqPage from "./pages/faq";
 import NotFound from "./pages/not-found";
+// ➕ NOUVEAU : page admin
+import AdminPage from "./pages/admin";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+/**
+ * ➕ NOUVEAU : adresse e-mail administrateur.
+ * Sert uniquement à la redirection côté frontend.
+ * ⚠️ La vraie protection est côté serveur (middleware `requireAdmin`).
+ * ⚠️ Cette valeur ne doit JAMAIS être exposée dans l'interface publique.
+ */
+const ADMIN_EMAIL = "exaucenapopolo2@gmail.com";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -65,7 +75,7 @@ function firebaseErrorMsg(code: string): string {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* NOUVEAU : Illustration Sign-In (téléphone premium avec OTP vérifié) */
+/* Illustration Sign-In (téléphone premium avec OTP vérifié)         */
 /* ────────────────────────────────────────────────────────────────── */
 function SignInIllustration() {
   return (
@@ -240,7 +250,7 @@ function SignInIllustration() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* NOUVEAU : Illustration Sign-Up (écosystème de services + drapeaux) */
+/* Illustration Sign-Up (écosystème de services + drapeaux)          */
 /* ────────────────────────────────────────────────────────────────── */
 function SignUpIllustration() {
   const satellites = [
@@ -440,7 +450,7 @@ function SignUpIllustration() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* NOUVEAU : Bouton Retour vers l'accueil                             */
+/* Bouton Retour vers l'accueil                                       */
 /* ────────────────────────────────────────────────────────────────── */
 function BackButton() {
   return (
@@ -467,7 +477,7 @@ function BackButton() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* NOUVEAU : Layout d'authentification à deux colonnes                */
+/* Layout d'authentification à deux colonnes                          */
 /* ────────────────────────────────────────────────────────────────── */
 function AuthLayout({
   illustration,
@@ -507,7 +517,7 @@ function AuthLayout({
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* AuthCard — INCHANGÉ (100% conservé)                                */
+/* AuthCard — INCHANGÉ                                                */
 /* ────────────────────────────────────────────────────────────────── */
 function AuthCard({
   mode,
@@ -679,7 +689,7 @@ function AuthCard({
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* SignInPage — modifiée pour utiliser AuthLayout                     */
+/* SignInPage                                                         */
 /* ────────────────────────────────────────────────────────────────── */
 function SignInPage() {
   const { user, loading } = useAuth();
@@ -698,7 +708,7 @@ function SignInPage() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* SignUpPage — modifiée pour utiliser AuthLayout                     */
+/* SignUpPage                                                         */
 /* ────────────────────────────────────────────────────────────────── */
 function SignUpPage() {
   const { user, loading } = useAuth();
@@ -738,6 +748,19 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   );
 }
 
+/* ────────────────────────────────────────────────────────────────── */
+/* ➕ NOUVEAU : AdminRoute                                            */
+/* Protection défensive côté frontend (redirection).                  */
+/* ⚠️ La sécurité réelle est appliquée côté serveur par requireAdmin. */
+/* ────────────────────────────────────────────────────────────────── */
+function AdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Redirect to="/sign-in" />;
+  if (user.email !== ADMIN_EMAIL) return <Redirect to="/dashboard" />;
+  return <Component />;
+}
+
 function AppRoutes() {
   const [, setLocation] = useLocation();
   void setLocation;
@@ -762,6 +785,10 @@ function AppRoutes() {
           </Route>
           <Route path="/faq">
             <Layout><FaqPage /></Layout>
+          </Route>
+          {/* ➕ NOUVEAU : route admin (hors Layout, pour ne pas afficher la nav publique) */}
+          <Route path="/admin">
+            <AdminRoute component={AdminPage} />
           </Route>
           <Route>
             <Layout><NotFound /></Layout>
