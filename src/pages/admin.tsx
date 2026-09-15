@@ -7,6 +7,8 @@ import {
 
 type Period = "today" | "yesterday" | "7d" | "30d" | "week" | "month" | "year" | "all" | "custom";
 
+const MARGIN_RATE = 0.65;
+
 function getDateRange(period: Period, customStart?: string, customEnd?: string) {
   const now = new Date();
   const start = new Date(now);
@@ -72,12 +74,14 @@ async function downloadBlob(path: string, filename: string, token: string) {
   URL.revokeObjectURL(url);
 }
 
-function openPdfPrint(title: string, summary: string[], columns: string[], rows: (string | number | null | undefined)[][]) {
+function openPdfPrint(
+  title: string,
+  summary: string[],
+  columns: string[],
+  rows: (string | number | null | undefined)[][]
+) {
   const w = window.open("", "_blank");
-  if (!w) {
-    alert("Autorisez les pop-ups pour exporter en PDF.");
-    return;
-  }
+  if (!w) { alert("Autorisez les pop-ups pour exporter en PDF."); return; }
   const esc = (s: unknown) =>
     String(s ?? "").replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)
@@ -187,11 +191,7 @@ export default function AdminPage() {
   async function handleOrdersCsv() {
     try {
       setExporting("orders-csv");
-      await downloadBlob(
-        `/orders/export?format=csv&start=${start}&end=${end}&status=${orderStatus}`,
-        `commandes-${start}_${end}.csv`,
-        firebaseToken!
-      );
+      await downloadBlob(`/orders/export?format=csv&start=${start}&end=${end}&status=${orderStatus}`, `commandes-${start}_${end}.csv`, firebaseToken!);
     } catch (e) { alert((e as Error).message); }
     finally { setExporting(null); }
   }
@@ -201,14 +201,16 @@ export default function AdminPage() {
       setExporting("orders-pdf");
       const data = await apiFetch(`/orders/export?format=json&start=${start}&end=${end}&status=${orderStatus}`, firebaseToken!);
       const orders = data.orders as any[];
-      const totalPrice = orders.reduce((s, o) => s + (o.price || 0), 0);
-      const totalMargin = orders.reduce((s, o) => s + (o.margin || 0), 0);
+      const completed = orders.filter((o) => o.status === "completed");
+      const totalRevenue = completed.reduce((s, o) => s + (o.price || 0), 0);
+      const totalMargin = totalRevenue * MARGIN_RATE;
       openPdfPrint(
         `Commandes — ${start} → ${end}`,
         [
           `Total : <b>${orders.length}</b> commandes`,
-          `CA cumulé : <b>${totalPrice.toFixed(2)} €</b>`,
-          `Marge cumulée : <b>${totalMargin.toFixed(2)} €</b>`,
+          `Réussies : <b>${completed.length}</b>`,
+          `Revenus : <b>${totalRevenue.toFixed(2)} €</b>`,
+          `Marge (${(MARGIN_RATE * 100).toFixed(0)} %) : <b>${totalMargin.toFixed(2)} €</b>`,
         ],
         ["Date", "Pays", "Service", "Numéro", "Statut", "Prix (€)", "Marge (€)"],
         orders.map((o) => [
@@ -225,11 +227,7 @@ export default function AdminPage() {
   async function handleTopupsCsv() {
     try {
       setExporting("topups-csv");
-      await downloadBlob(
-        `/topups/export?format=csv&start=${start}&end=${end}&status=${topupStatus}`,
-        `depots-${start}_${end}.csv`,
-        firebaseToken!
-      );
+      await downloadBlob(`/topups/export?format=csv&start=${start}&end=${end}&status=${topupStatus}`, `depots-${start}_${end}.csv`, firebaseToken!);
     } catch (e) { alert((e as Error).message); }
     finally { setExporting(null); }
   }
@@ -239,12 +237,14 @@ export default function AdminPage() {
       setExporting("topups-pdf");
       const data = await apiFetch(`/topups/export?format=json&start=${start}&end=${end}&status=${topupStatus}`, firebaseToken!);
       const topups = data.topups as any[];
-      const totalAmount = topups.reduce((s, t) => s + (t.amountEur || 0), 0);
+      const completed = topups.filter((t) => t.status === "completed");
+      const totalAmount = completed.reduce((s, t) => s + (t.amountEur || 0), 0);
       openPdfPrint(
         `Dépôts — ${start} → ${end}`,
         [
-          `Total : <b>${topups.length}</b> dépôts`,
-          `Montant cumulé : <b>${totalAmount.toFixed(2)} €</b>`,
+          `Total affiché : <b>${topups.length}</b>`,
+          `Réussis : <b>${completed.length}</b>`,
+          `Montant encaissé : <b>${totalAmount.toFixed(2)} €</b>`,
         ],
         ["Date", "Montant (€)", "Statut", "Référence"],
         topups.map((t) => [
@@ -261,11 +261,7 @@ export default function AdminPage() {
   async function handleUsersCsv() {
     try {
       setExporting("users-csv");
-      await downloadBlob(
-        `/users/export?format=csv&start=${start}&end=${end}`,
-        `utilisateurs-${start}_${end}.csv`,
-        firebaseToken!
-      );
+      await downloadBlob(`/users/export?format=csv`, `utilisateurs-texerra.csv`, firebaseToken!);
     } catch (e) { alert((e as Error).message); }
     finally { setExporting(null); }
   }
@@ -273,11 +269,7 @@ export default function AdminPage() {
   async function handleUsersVcf() {
     try {
       setExporting("users-vcf");
-      await downloadBlob(
-        `/users/export?format=vcf&start=${start}&end=${end}`,
-        `contacts-texerra-${start}_${end}.vcf`,
-        firebaseToken!
-      );
+      await downloadBlob(`/users/export?format=vcf`, `contacts-texerra.vcf`, firebaseToken!);
     } catch (e) { alert((e as Error).message); }
     finally { setExporting(null); }
   }
@@ -285,10 +277,10 @@ export default function AdminPage() {
   async function handleUsersPdf() {
     try {
       setExporting("users-pdf");
-      const data = await apiFetch(`/users/export?format=json&start=${start}&end=${end}`, firebaseToken!);
+      const data = await apiFetch(`/users/export?format=json`, firebaseToken!);
       const users = data.users as any[];
       openPdfPrint(
-        `Utilisateurs — ${start} → ${end}`,
+        `Utilisateurs — annuaire complet`,
         [`Total : <b>${users.length}</b> utilisateurs`],
         ["Inscription", "Nom", "Email", "Téléphone", "Solde (€)"],
         users.map((u) => [
@@ -302,7 +294,7 @@ export default function AdminPage() {
   }
 
   async function handleMigrate() {
-    if (!confirm("Migrer les anciennes données ? Cette opération est idempotente et sûre.\n\nElle ajoute des champs numériques sur les anciens documents pour permettre les agrégations. Aucune donnée existante n'est modifiée ou supprimée.")) return;
+    if (!confirm("Migrer les anciennes données ?\n\nCette opération est idempotente et sûre. Elle ajoute des champs numériques sur les anciens documents pour permettre les agrégations. Aucune donnée existante n'est modifiée ou supprimée.")) return;
     try {
       setMigrating(true);
       setMigrationResult(null);
@@ -312,9 +304,7 @@ export default function AdminPage() {
       });
       if (!res.ok) throw new Error(`Migration échouée (${res.status})`);
       const data = await res.json();
-      setMigrationResult(
-        `✓ Migration terminée : ${data.ordersMigrated} commandes et ${data.topupsMigrated} dépôts mis à jour.`
-      );
+      setMigrationResult(data.message || `✓ ${data.ordersMigrated} commandes et ${data.topupsMigrated} dépôts mis à jour.`);
       qc.invalidateQueries();
     } catch (e) {
       setMigrationResult(`✗ ${(e as Error).message}`);
@@ -370,15 +360,31 @@ export default function AdminPage() {
         {stats && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard label="Utilisateurs" value={stats.totalUsers.toLocaleString("fr-FR")} sub={`+${stats.newUsers} nouveaux`} icon="👥" />
-            <StatCard label="Dépôts" value={`${stats.totalTopupAmount.toFixed(2)} €`} sub={`${stats.totalTopups} dépôt${stats.totalTopups > 1 ? "s" : ""}`} icon="💰" />
-            <StatCard label="Commandes" value={stats.totalOrders.toLocaleString("fr-FR")} sub={`${stats.completedOrders} réussies · ${stats.pendingOrders} en attente`} icon="📦" />
-            <StatCard label="Chiffre d'affaires" value={`${stats.revenue.toFixed(2)} €`} sub={`Marge : ${stats.margin.toFixed(2)} € (${stats.marginPercent.toFixed(1)} %)`} icon="📈" />
+            <StatCard
+              label="Dépôts réussis"
+              value={`${stats.totalTopupAmount.toFixed(2)} €`}
+              sub={`${stats.totalTopups} dépôt${stats.totalTopups > 1 ? "s" : ""} validé${stats.totalTopups > 1 ? "s" : ""}`}
+              icon="💰"
+            />
+            <StatCard
+              label="Commandes"
+              value={stats.totalOrders.toLocaleString("fr-FR")}
+              sub={`${stats.completedOrders} réussies · ${stats.activeOrders} en cours`}
+              icon="📦"
+            />
+            <StatCard
+              label="Revenus"
+              value={`${stats.revenue.toFixed(2)} €`}
+              sub={`Marge : ${stats.margin.toFixed(2)} € (${stats.marginPercent.toFixed(0)} %)`}
+              icon="📈"
+            />
           </div>
         )}
 
         {stats && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <MiniStat label="Réussies" value={stats.completedOrders} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <MiniStat label="Réussies" value={stats.completedOrders} highlight />
+            <MiniStat label="En cours" value={stats.activeOrders} />
             <MiniStat label="En attente" value={stats.pendingOrders} />
             <MiniStat label="Annulées" value={stats.cancelledOrders} />
             <MiniStat label="Expirées" value={stats.expiredOrders} />
@@ -399,9 +405,9 @@ export default function AdminPage() {
                 <YAxis fontSize={12} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={2} name="CA (€)" dot={false} />
+                <Line type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={2} name="Revenus (€)" dot={false} />
                 <Line type="monotone" dataKey="topups" stroke="#10b981" strokeWidth={2} name="Dépôts (€)" dot={false} />
-                <Line type="monotone" dataKey="orders" stroke="#ea580c" strokeWidth={2} name="Commandes" dot={false} />
+                <Line type="monotone" dataKey="orders" stroke="#ea580c" strokeWidth={2} name="Commandes réussies" dot={false} />
                 <Line type="monotone" dataKey="margin" stroke="#2563eb" strokeWidth={2} name="Marge (€)" dot={false} />
                 <Line type="monotone" dataKey="users" stroke="#dc2626" strokeWidth={2} name="Inscriptions" dot={false} />
               </LineChart>
@@ -412,7 +418,7 @@ export default function AdminPage() {
         <Section
           title="Commandes"
           filters={[
-            ["all", "Toutes"], ["active", "Actives"], ["completed", "Terminées"],
+            ["all", "Toutes"], ["completed", "Réussies"], ["active", "En cours"],
             ["pending_payment", "En attente"], ["cancelled", "Annulées"], ["expired", "Expirées"],
           ]}
           activeFilter={orderStatus}
@@ -446,17 +452,23 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {ordersQuery.data?.orders?.map((o: any) => (
-                      <tr key={o.id} className="border-t hover:bg-secondary/30">
-                        <td className="p-2 whitespace-nowrap">{new Date(o.createdAt).toLocaleDateString("fr-FR")}</td>
-                        <td className="p-2">{o.countryCode}</td>
-                        <td className="p-2">{o.serviceCode}</td>
-                        <td className="p-2 font-mono text-xs">{o.phoneNumber}</td>
-                        <td className="p-2 text-right">{o.price.toFixed(2)} €</td>
-                        <td className="p-2"><StatusBadge status={o.status} /></td>
-                        <td className="p-2 text-right text-muted-foreground">{o.margin != null ? `${o.margin.toFixed(2)} €` : "—"}</td>
-                      </tr>
-                    ))}
+                    {ordersQuery.data?.orders?.map((o: any) => {
+                      const isCompleted = o.status === "completed";
+                      const displayMargin = isCompleted ? o.price * MARGIN_RATE : null;
+                      return (
+                        <tr key={o.id} className="border-t hover:bg-secondary/30">
+                          <td className="p-2 whitespace-nowrap">{new Date(o.createdAt).toLocaleDateString("fr-FR")}</td>
+                          <td className="p-2">{o.countryCode}</td>
+                          <td className="p-2">{o.serviceCode}</td>
+                          <td className="p-2 font-mono text-xs">{o.phoneNumber}</td>
+                          <td className="p-2 text-right">{o.price.toFixed(2)} €</td>
+                          <td className="p-2"><StatusBadge status={o.status} /></td>
+                          <td className="p-2 text-right text-muted-foreground">
+                            {displayMargin != null ? `${displayMargin.toFixed(2)} €` : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {ordersQuery.data?.orders?.length === 0 && (
                       <tr><td colSpan={7} className="p-4 text-center text-muted-foreground">Aucune commande sur cette période</td></tr>
                     )}
@@ -470,7 +482,7 @@ export default function AdminPage() {
 
         <Section
           title="Dépôts / Recharges"
-          filters={[["all", "Tous"], ["completed", "Terminés"], ["pending", "En attente"], ["failed", "Échoués"]]}
+          filters={[["all", "Tous"], ["completed", "Réussis"], ["pending", "En attente"], ["failed", "Échoués"]]}
           activeFilter={topupStatus}
           onFilterChange={(v) => { setTopupStatus(v); setTopupPage(1); }}
           actions={
@@ -552,7 +564,7 @@ export default function AdminPage() {
                       </tr>
                     ))}
                     {usersQuery.data?.users?.length === 0 && (
-                      <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Aucun utilisateur sur cette période</td></tr>
+                      <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Aucun utilisateur</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -659,7 +671,7 @@ function StatusBadge({ status }: { status: string }) {
     expired: "bg-gray-50 text-gray-700 border-gray-200",
   };
   const labels: Record<string, string> = {
-    active: "Active", completed: "Terminée", pending: "En attente",
+    active: "En cours", completed: "Réussie", pending: "En attente",
     pending_payment: "En attente", cancelled: "Annulée", failed: "Échoué", expired: "Expirée",
   };
   return (
