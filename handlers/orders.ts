@@ -25,15 +25,13 @@ const CreateOrderBody = z.object({
 /**
  * ➕ NOUVEAU : Constantes du calcul de marge.
  * Doivent rester synchronisées avec lib/priceCache.ts.
- * Si elles y sont déjà exportées, on peut les importer au lieu de les redéclarer ici.
  */
 const USD_TO_EUR = 0.92;
 const MARGIN = 3.0;
 
 /**
- * ➕ NOUVEAU : Tente d'extraire le coût fournisseur (USD) depuis le cache de prix.
- * Retourne null si l'information n'est pas disponible — ne lève jamais d'exception.
- * Tolère plusieurs formes : { cost }, { costUsd }, { priceUsd }, ou valeurs string.
+ * ➕ NOUVEAU : Extrait le coût fournisseur (USD) depuis le cache de prix.
+ * Retourne null si absent — ne lève jamais d'exception.
  */
 function extractCostUsd(
   prices: unknown,
@@ -43,7 +41,6 @@ function extractCostUsd(
   try {
     const entry = (prices as any)?.[countryId]?.[serviceCode];
     if (!entry) return null;
-
     const candidates = [entry.cost, entry.costUsd, entry.priceUsd];
     for (const c of candidates) {
       if (typeof c === "number" && Number.isFinite(c) && c > 0) return c;
@@ -58,9 +55,6 @@ function extractCostUsd(
   }
 }
 
-/**
- * Remboursement atomique du solde utilisateur dans Firestore en cas d'annulation ou d'expiration.
- */
 async function atomicRefundOrder(
   orderId: string,
   userId: string,
@@ -76,7 +70,7 @@ async function atomicRefundOrder(
 
     const orderData = orderDoc.data();
     if (!orderData || (orderData.status !== "active" && orderData.status !== "pending_payment")) {
-      return false; // Déjà traité
+      return false;
     }
 
     const userDoc = await transaction.get(userRef);
@@ -100,7 +94,7 @@ async function atomicRefundOrder(
   });
 }
 
-// GET /api/orders — Récupérer les commandes de l'utilisateur authentifié
+// GET /api/orders
 router.get("/", requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId as string;
@@ -131,7 +125,7 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/orders — Créer une commande et acheter un numéro
+// POST /api/orders
 router.post("/", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
 
@@ -150,7 +144,6 @@ router.post("/", requireAuth, async (req, res) => {
   }
 
   let priceEur: number;
-  // ➕ NOUVEAU : coût fournisseur extrait du cache (peut rester null)
   let costUsd: number | null = null;
   try {
     const prices = await getCachedPrices();
@@ -160,7 +153,6 @@ router.post("/", requireAuth, async (req, res) => {
       return;
     }
     priceEur = p;
-    // ➕ NOUVEAU : extraction best-effort, ne casse jamais la commande
     costUsd = extractCostUsd(prices, countryId, serviceCode);
   } catch (err: any) {
     const logger = (req as any).log || console;
@@ -204,7 +196,6 @@ router.post("/", requireAuth, async (req, res) => {
   try {
     grizzlyOrder = await buyNumber(countryId, serviceCode);
   } catch (err: any) {
-    // 🛡️ Remboursement automatique en cas d'échec du fournisseur
     await firestoreDb.runTransaction(async (transaction) => {
       const userDoc = await transaction.get(userRef);
       if (userDoc.exists) {
@@ -216,7 +207,6 @@ router.post("/", requireAuth, async (req, res) => {
       }
     });
 
-    // 🔍 Journalisation détaillée pour capturer la vraie cause dans les logs de l'hébergeur
     console.error("❌ ERREUR FOURNISSEUR GRIZZLY :", err.message || err);
 
     if (err.message === "no_numbers") {
@@ -224,17 +214,12 @@ router.post("/", requireAuth, async (req, res) => {
     } else if (err.message === "no_balance") {
       res.status(503).json({ error: "no_balance" });
     } else {
-      // On renvoie le message d'erreur exact pour t'aider à diagnostiquer
       res.status(502).json({ error: "provider_error", details: err.message || "Erreur inconnue du fournisseur" });
     }
     return;
   }
 
   const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
-
-  // ➕ NOUVEAU : calcul de marge à partir du coût fournisseur (si connu).
-  // La marge = prix de vente EUR - (coût USD × USD_TO_EUR).
-  // ⚠️ On ne stocke ces champs QUE si le coût est connu, pour ne jamais polluer l'historique.
   const marginEur: number | null =
     costUsd !== null ? priceEur - costUsd * USD_TO_EUR : null;
 
@@ -247,16 +232,20 @@ router.post("/", requireAuth, async (req, res) => {
     externalOrderId: String(grizzlyOrder.id),
     status: "active",
     price: priceEur.toFixed(4),
+    // ➕ NOUVEAU : version numérique pour les agrégations Firestore (sum)
+    priceNum: priceEur,
     currency: "EUR",
     expiresAt: expiresAt.toISOString(),
     createdAt: new Date().toISOString(),
   };
 
-  // ➕ NOUVEAU : ajout conditionnel des champs de marge (nouvelles commandes uniquement)
+  // ➕ NOUVEAU : champs numériques pour les agrégations (nouvelles commandes uniquement)
   if (costUsd !== null && marginEur !== null) {
     orderData.costUsd = costUsd.toFixed(6);
+    orderData.costUsdNum = costUsd;
     orderData.margin = marginEur.toFixed(4);
-    orderData.marginRatio = MARGIN; // traçabilité de la constante utilisée
+    orderData.marginNum = marginEur;
+    orderData.marginRatio = MARGIN;
   }
 
   await firestoreDb.collection("orders").doc(orderId).set(orderData);
@@ -283,7 +272,7 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/orders/:id — Récupérer une commande spécifique et vérifier le SMS
+// GET /api/orders/:id
 router.get("/:id", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const orderId = String(req.params.id);
@@ -355,7 +344,7 @@ router.get("/:id", requireAuth, async (req, res) => {
   res.json({ ...order, price: order.price ? parseFloat(order.price) : null });
 });
 
-// POST /api/orders/:id/cancel — Annuler une commande et rembourser
+// POST /api/orders/:id/cancel
 router.post("/:id/cancel", requireAuth, async (req, res) => {
   const userId = (req as any).userId as string;
   const orderId = String(req.params.id);
