@@ -6,15 +6,20 @@ import { Timestamp, AggregateField } from "firebase-admin/firestore";
 const router = Router();
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Helpers                                                            */
+/* Constantes métier                                                  */
 /* ────────────────────────────────────────────────────────────────── */
 
 /**
- * Retourne { startIso, endIso } au format ISO 8601.
- * ⚠️ IMPORTANT : dans ce projet, le champ `createdAt` est stocké
- * sous forme de CHAÎNE ISO (`new Date().toISOString()`), PAS de Timestamp.
- * Tous les filtres Firestore doivent donc comparer des chaînes ISO.
+ * Taux de marge forfaitaire appliqué sur le revenu des commandes réussies.
+ * Calcul basé sur les données fournisseur : ~68 % constaté, minoré à 65 %
+ * pour absorber les petits frais (change, frais bancaires, etc.).
  */
+const MARGIN_RATE = 0.65;
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Helpers                                                            */
+/* ────────────────────────────────────────────────────────────────── */
+
 function parseRange(req: Request): { startIso: string; endIso: string } {
   const now = new Date();
   const startParam = req.query.start as string | undefined;
@@ -35,7 +40,6 @@ function parseRange(req: Request): { startIso: string; endIso: string } {
   return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
-/** Normalise un champ `createdAt` (string ISO ou Timestamp) vers une chaîne ISO. */
 function getCreatedAtIso(value: unknown): string {
   if (typeof value === "string") return value;
   if (value instanceof Date) return value.toISOString();
@@ -49,7 +53,6 @@ function getCreatedAtIso(value: unknown): string {
   return new Date(0).toISOString();
 }
 
-/** Convertit une valeur en nombre fini, sinon retourne le fallback. */
 function num(v: unknown, fallback: number | null = null): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -87,70 +90,75 @@ router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
     const [
       totalUsersSnap,
       newUsersSnap,
-      totalTopupsSnap,
-      totalTopupAmountSnap,
+
       totalOrdersSnap,
       completedOrdersSnap,
+      activeOrdersSnap,
       pendingOrdersSnap,
       cancelledOrdersSnap,
       expiredOrdersSnap,
+
+      completedTopupsSnap,
+      totalTopupAmountSnap,
+
       revenueSnap,
-      supplierCostSnap,
-      marginSnap,
     ] = await Promise.all([
       usersCol.count().get(),
       usersCol.where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
-      topupsCol.where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+
+      // Total commandes (toutes, sur la période)
+      ordersCol.where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      // Réussies = SMS reçu
+      ordersCol.where("status", "==", "completed").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      // En cours = numéro actif, SMS pas encore reçu
+      ordersCol.where("status", "==", "active").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      // En attente de paiement
+      ordersCol.where("status", "==", "pending_payment").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      // Annulées
+      ordersCol.where("status", "==", "cancelled").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      // Expirées
+      ordersCol.where("status", "==", "expired").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+
+      // Dépôts réussis uniquement
+      topupsCol.where("status", "==", "completed").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
       topupsCol
         .where("status", "==", "completed")
         .where("createdAt", ">=", startIso)
         .where("createdAt", "<=", endIso)
         .aggregate({ total: AggregateField.sum("amountEurNum") })
         .get(),
-      ordersCol.where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
-      ordersCol.where("status", "==", "active").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
-      ordersCol.where("status", "==", "pending_payment").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
-      ordersCol.where("status", "==", "cancelled").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
-      ordersCol.where("status", "==", "expired").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+
+      // Revenus = somme des prix des commandes RÉUSSIES
       ordersCol
-        .where("status", "==", "active")
+        .where("status", "==", "completed")
         .where("createdAt", ">=", startIso)
         .where("createdAt", "<=", endIso)
         .aggregate({ total: AggregateField.sum("priceNum") })
         .get(),
-      ordersCol
-        .where("status", "==", "active")
-        .where("createdAt", ">=", startIso)
-        .where("createdAt", "<=", endIso)
-        .aggregate({ total: AggregateField.sum("costUsdNum") })
-        .get(),
-      ordersCol
-        .where("status", "==", "active")
-        .where("createdAt", ">=", startIso)
-        .where("createdAt", "<=", endIso)
-        .aggregate({ total: AggregateField.sum("marginNum") })
-        .get(),
     ]);
 
     const revenue = (revenueSnap.data().total as number) || 0;
-    const supplierCost = (supplierCostSnap.data().total as number) || 0;
-    const margin = (marginSnap.data().total as number) || 0;
-    const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0;
+    const margin = revenue * MARGIN_RATE;
+    const supplierCost = revenue * (1 - MARGIN_RATE);
 
     res.json({
       totalUsers: totalUsersSnap.data().count,
       newUsers: newUsersSnap.data().count,
-      totalTopups: totalTopupsSnap.data().count,
-      totalTopupAmount: (totalTopupAmountSnap.data().total as number) || 0,
+
       totalOrders: totalOrdersSnap.data().count,
       completedOrders: completedOrdersSnap.data().count,
+      activeOrders: activeOrdersSnap.data().count,
       pendingOrders: pendingOrdersSnap.data().count,
       cancelledOrders: cancelledOrdersSnap.data().count,
       expiredOrders: expiredOrdersSnap.data().count,
+
+      totalTopups: completedTopupsSnap.data().count,
+      totalTopupAmount: (totalTopupAmountSnap.data().total as number) || 0,
+
       revenue,
-      supplierCost,
       margin,
-      marginPercent,
+      marginPercent: MARGIN_RATE * 100,
+      supplierCost,
     });
   } catch (err) {
     console.error("Admin stats error:", err);
@@ -172,9 +180,27 @@ router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
     const groupByMonth = daysDiff > 90;
 
     const [ordersSnap, topupsSnap, usersSnap] = await Promise.all([
-      firestoreDb.collection("orders").where("status", "==", "active").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "asc").limit(2000).get(),
-      firestoreDb.collection("topups").where("status", "==", "completed").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "asc").limit(2000).get(),
-      firestoreDb.collection("users").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "asc").limit(2000).get(),
+      // Commandes réussies uniquement
+      firestoreDb.collection("orders")
+        .where("status", "==", "completed")
+        .where("createdAt", ">=", startIso)
+        .where("createdAt", "<=", endIso)
+        .orderBy("createdAt", "asc")
+        .limit(2000)
+        .get(),
+      firestoreDb.collection("topups")
+        .where("status", "==", "completed")
+        .where("createdAt", ">=", startIso)
+        .where("createdAt", "<=", endIso)
+        .orderBy("createdAt", "asc")
+        .limit(2000)
+        .get(),
+      firestoreDb.collection("users")
+        .where("createdAt", ">=", startIso)
+        .where("createdAt", "<=", endIso)
+        .orderBy("createdAt", "asc")
+        .limit(2000)
+        .get(),
     ]);
 
     const bucket = new Map<string, { revenue: number; topups: number; orders: number; margin: number; users: number }>();
@@ -192,8 +218,9 @@ router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
       const d = doc.data();
       const date = new Date(getCreatedAtIso(d.createdAt));
       const b = ensureBucket(getKey(date));
-      b.revenue += num(d.priceNum) ?? num(d.price, 0) ?? 0;
-      b.margin += num(d.marginNum) ?? num(d.margin, 0) ?? 0;
+      const price = num(d.priceNum) ?? num(d.price, 0) ?? 0;
+      b.revenue += price;
+      b.margin += price * MARGIN_RATE; // marge forfaitaire 65 %
       b.orders += 1;
     });
     topupsSnap.forEach((doc) => {
@@ -209,7 +236,10 @@ router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
       b.users += 1;
     });
 
-    const series = Array.from(bucket.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, ...v }));
+    const series = Array.from(bucket.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({ date, ...v }));
+
     res.json(series);
   } catch (err) {
     console.error("Admin chart error:", err);
@@ -309,9 +339,7 @@ router.get("/topups", requireAdmin, async (req: Request, res: Response) => {
 
 /* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/users                                               */
-/* ⚠️ CORRECTIF MAJEUR : plus de filtre par date.                     */
-/* La liste utilisateurs = ANNUAIRE COMPLET (tous les utilisateurs).  */
-/* Le compteur du haut reste filtré par période (nouveaux users).     */
+/* Liste complète (annuaire) — pas de filtre de date                  */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.get("/users", requireAdmin, async (req: Request, res: Response) => {
@@ -360,7 +388,6 @@ router.get("/orders/export", requireAdmin, async (req: Request, res: Response) =
     const MAX_ROWS = 20000;
     const all: any[] = [];
 
-    // Fetch en une seule passe jusqu'à MAX_ROWS
     const snap = await firestoreDb
       .collection("orders")
       .where("createdAt", ">=", startIso)
@@ -372,6 +399,7 @@ router.get("/orders/export", requireAdmin, async (req: Request, res: Response) =
     for (const doc of snap.docs) {
       const d = doc.data();
       if (status && status !== "all" && d.status !== status) continue;
+      const price = num(d.priceNum) ?? num(d.price, 0) ?? 0;
       all.push({
         id: doc.id,
         createdAt: getCreatedAtIso(d.createdAt),
@@ -380,9 +408,8 @@ router.get("/orders/export", requireAdmin, async (req: Request, res: Response) =
         serviceCode: d.serviceCode,
         phoneNumber: d.phoneNumber,
         status: d.status,
-        price: num(d.priceNum) ?? num(d.price, 0) ?? 0,
-        costUsd: num(d.costUsdNum) ?? num(d.costUsd),
-        margin: num(d.marginNum) ?? num(d.margin),
+        price,
+        margin: d.status === "completed" ? price * MARGIN_RATE : null,
       });
     }
 
@@ -396,13 +423,12 @@ router.get("/orders/export", requireAdmin, async (req: Request, res: Response) =
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="commandes-${startDay}_${endDay}.csv"`);
     res.write("\uFEFF");
-    res.write(csvRow(["Date", "Utilisateur (ID)", "Pays", "Service", "Numéro", "Statut", "Prix (€)", "Coût fournisseur (USD)", "Marge (€)"]) + "\n");
+    res.write(csvRow(["Date", "Utilisateur (ID)", "Pays", "Service", "Numéro", "Statut", "Prix (€)", "Marge (€)"]) + "\n");
     for (const o of all) {
       res.write(csvRow([
         new Date(o.createdAt).toLocaleString("fr-FR"),
         o.userId, o.countryCode, o.serviceCode, o.phoneNumber, o.status,
         o.price?.toFixed(2) ?? "",
-        o.costUsd != null ? o.costUsd.toFixed(4) : "",
         o.margin != null ? o.margin.toFixed(2) : "",
       ]) + "\n");
     }
@@ -478,7 +504,7 @@ router.get("/topups/export", requireAdmin, async (req: Request, res: Response) =
 
 /* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/users/export                                        */
-/* ⚠️ CORRECTIF : export = TOUS les utilisateurs (annuaire complet)   */
+/* Export annuaire complet                                            */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.get("/users/export", requireAdmin, async (req: Request, res: Response) => {
@@ -553,9 +579,8 @@ router.get("/users/export", requireAdmin, async (req: Request, res: Response) =>
 
 /* ────────────────────────────────────────────────────────────────── */
 /* POST /api/admin/migrate                                            */
-/*  Backfill des champs numériques (priceNum, amountEurNum, etc.)     */
-/*  Idempotent. Ne fait AUCUN orderBy("__name__") (bug Firestore).    */
-/*  Retourne des compteurs détaillés pour diagnostiquer.              */
+/* Backfill des champs numériques (priceNum, amountEurNum)            */
+/* Idempotent. Peut être relancé plusieurs fois sans risque.          */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.post("/migrate", requireAdmin, async (_req: Request, res: Response) => {
@@ -571,7 +596,6 @@ router.post("/migrate", requireAdmin, async (_req: Request, res: Response) => {
     // ── Migration des commandes
     const ordersSnap = await firestoreDb.collection("orders").limit(FETCH_LIMIT).get();
     ordersScanned = ordersSnap.docs.length;
-    console.log(`[migrate] orders scanned: ${ordersScanned}`);
 
     for (let i = 0; i < ordersSnap.docs.length; i += BATCH_SIZE) {
       const chunk = ordersSnap.docs.slice(i, i + BATCH_SIZE);
@@ -604,7 +628,6 @@ router.post("/migrate", requireAdmin, async (_req: Request, res: Response) => {
     // ── Migration des dépôts
     const topupsSnap = await firestoreDb.collection("topups").limit(FETCH_LIMIT).get();
     topupsScanned = topupsSnap.docs.length;
-    console.log(`[migrate] topups scanned: ${topupsScanned}`);
 
     for (let i = 0; i < topupsSnap.docs.length; i += BATCH_SIZE) {
       const chunk = topupsSnap.docs.slice(i, i + BATCH_SIZE);
