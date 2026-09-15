@@ -13,6 +13,8 @@ import paymentsRouter from "../handlers/payments.js";
 import topupsRouter from "../handlers/topups.js";
 import statsRouter from "../handlers/stats.js";
 import contactRouter from "../handlers/contact.js";
+// ➕ NOUVEAU : routeur administrateur
+import adminRouter from "../handlers/admin.js";
 
 const app = express();
 
@@ -38,6 +40,8 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/topups", topupsRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/contact", contactRouter);
+// ➕ NOUVEAU : montage du routeur administrateur (protégé par requireAdmin dans le handler)
+app.use("/api/admin", adminRouter);
 
 // 404 fallback
 app.use((req: Request, res: Response) => {
