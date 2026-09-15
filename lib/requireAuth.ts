@@ -21,7 +21,6 @@ export async function requireAuth(
   try {
     const decoded = await getAdminAuth().verifyIdToken(token);
 
-    // Attache l'ID et les infos utilisateur à l'objet de la requête
     (req as any).userId = decoded.uid;
     (req as any).firebaseUser = decoded;
 
@@ -33,14 +32,13 @@ export async function requireAuth(
 
 /**
  * Adresse e-mail de l'administrateur.
- * ⚠️ Cette adresse ne doit JAMAIS être exposée dans l'interface utilisateur publique.
+ * ⚠️ Ne doit JAMAIS être exposée dans l'interface utilisateur publique.
  */
 const ADMIN_EMAIL = "exaucenapopolo2@gmail.com";
 
 /**
  * Middleware d'authentification administrateur.
  * Vérifie le token Firebase ET l'e-mail administrateur.
- * Toute requête sans ces deux conditions est rejetée.
  */
 export async function requireAdmin(
   req: Request,
@@ -71,4 +69,4 @@ export async function requireAdmin(
   } catch (error) {
     res.status(401).json({ error: "Unauthorized" });
   }
-    }
+}
