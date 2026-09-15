@@ -23,6 +23,42 @@ const CreateOrderBody = z.object({
 });
 
 /**
+ * ➕ NOUVEAU : Constantes du calcul de marge.
+ * Doivent rester synchronisées avec lib/priceCache.ts.
+ * Si elles y sont déjà exportées, on peut les importer au lieu de les redéclarer ici.
+ */
+const USD_TO_EUR = 0.92;
+const MARGIN = 3.0;
+
+/**
+ * ➕ NOUVEAU : Tente d'extraire le coût fournisseur (USD) depuis le cache de prix.
+ * Retourne null si l'information n'est pas disponible — ne lève jamais d'exception.
+ * Tolère plusieurs formes : { cost }, { costUsd }, { priceUsd }, ou valeurs string.
+ */
+function extractCostUsd(
+  prices: unknown,
+  countryId: number,
+  serviceCode: string
+): number | null {
+  try {
+    const entry = (prices as any)?.[countryId]?.[serviceCode];
+    if (!entry) return null;
+
+    const candidates = [entry.cost, entry.costUsd, entry.priceUsd];
+    for (const c of candidates) {
+      if (typeof c === "number" && Number.isFinite(c) && c > 0) return c;
+      if (typeof c === "string" && c.trim() !== "" && !Number.isNaN(Number(c))) {
+        const n = Number(c);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Remboursement atomique du solde utilisateur dans Firestore en cas d'annulation ou d'expiration.
  */
 async function atomicRefundOrder(
@@ -114,6 +150,8 @@ router.post("/", requireAuth, async (req, res) => {
   }
 
   let priceEur: number;
+  // ➕ NOUVEAU : coût fournisseur extrait du cache (peut rester null)
+  let costUsd: number | null = null;
   try {
     const prices = await getCachedPrices();
     const p = sellingPrice(prices, countryId, serviceCode);
@@ -122,6 +160,8 @@ router.post("/", requireAuth, async (req, res) => {
       return;
     }
     priceEur = p;
+    // ➕ NOUVEAU : extraction best-effort, ne casse jamais la commande
+    costUsd = extractCostUsd(prices, countryId, serviceCode);
   } catch (err: any) {
     const logger = (req as any).log || console;
     logger.error({ err }, "Échec de la récupération des prix");
@@ -191,7 +231,14 @@ router.post("/", requireAuth, async (req, res) => {
   }
 
   const expiresAt = new Date(Date.now() + 20 * 60 * 1000);
-  const orderData = {
+
+  // ➕ NOUVEAU : calcul de marge à partir du coût fournisseur (si connu).
+  // La marge = prix de vente EUR - (coût USD × USD_TO_EUR).
+  // ⚠️ On ne stocke ces champs QUE si le coût est connu, pour ne jamais polluer l'historique.
+  const marginEur: number | null =
+    costUsd !== null ? priceEur - costUsd * USD_TO_EUR : null;
+
+  const orderData: Record<string, unknown> = {
     id: orderId,
     userId,
     countryCode,
@@ -204,6 +251,13 @@ router.post("/", requireAuth, async (req, res) => {
     expiresAt: expiresAt.toISOString(),
     createdAt: new Date().toISOString(),
   };
+
+  // ➕ NOUVEAU : ajout conditionnel des champs de marge (nouvelles commandes uniquement)
+  if (costUsd !== null && marginEur !== null) {
+    orderData.costUsd = costUsd.toFixed(6);
+    orderData.margin = marginEur.toFixed(4);
+    orderData.marginRatio = MARGIN; // traçabilité de la constante utilisée
+  }
 
   await firestoreDb.collection("orders").doc(orderId).set(orderData);
 
@@ -219,9 +273,9 @@ router.post("/", requireAuth, async (req, res) => {
     sendOrderEmail({
       to: userData.email,
       name: userData.name,
-      phoneNumber: orderData.phoneNumber,
-      serviceCode: orderData.serviceCode,
-      countryCode: orderData.countryCode,
+      phoneNumber: orderData.phoneNumber as string,
+      serviceCode: orderData.serviceCode as string,
+      countryCode: orderData.countryCode as string,
       priceEur,
       expiresAt,
       orderId,
@@ -380,4 +434,3 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
 });
 
 export default router;
-        
