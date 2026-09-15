@@ -243,7 +243,50 @@ function isWhatsAppService(serviceCode: string): boolean {
   const s = (serviceCode || "").toLowerCase();
   return s === "wa" || s === "wb";
 }
+/** Message WhatsApp personnalisé pour un utilisateur (sans info de commande). */
+function openUserWhatsApp(name: string | undefined, phone: string) {
+  const clean = cleanForWa(phone);
+  const displayName = name && name.trim() ? name.trim() : "cher client";
+  const message = encodeURIComponent(
+    `Bonjour ${displayName} 👋\n\n` +
+    `Nous espérons que vous allez bien et que tout se passe parfaitement avec votre numéro sur TEXERRA SMS.\n\n` +
+    `Si vous avez la moindre question ou si vous souhaitez acheter un nouveau numéro, n'hésitez surtout pas à nous répondre ici — nous serons ravis de vous aider.\n\n` +
+    `Toute l'équipe TEXERRA SMS reste à votre entière disposition. À très bientôt ! 🙏`
+  );
+  window.open(`https://wa.me/${clean}?text=${message}`, "_blank", "noopener,noreferrer");
+}
 
+/** Ouvre le client email avec un message pré-rempli personnalisé. */
+function openUserEmail(name: string | undefined, email: string) {
+  const displayName = name && name.trim() ? name.trim() : "cher client";
+  const subject = encodeURIComponent("TEXERRA SMS — Comment se passe votre expérience ?");
+  const body = encodeURIComponent(
+    `Bonjour ${displayName},\n\n` +
+    `Nous espérons que vous allez bien et que tout se passe parfaitement avec votre numéro sur TEXERRA SMS.\n\n` +
+    `Si vous avez la moindre question ou si vous souhaitez acheter un nouveau numéro, n'hésitez pas à nous répondre directement à cet email — nous serons ravis de vous aider.\n\n` +
+    `Toute l'équipe TEXERRA SMS reste à votre entière disposition.\n\n` +
+    `À très bientôt,\n` +
+    `L'équipe TEXERRA SMS`
+  );
+  window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+}
+
+/** Message WhatsApp personnalisé pour une commande (avec date + pays). */
+function openOrderWhatsApp(phone: string, countryName: string, date: string) {
+  const clean = cleanForWa(phone);
+  const formattedDate = new Date(date).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+  const message = encodeURIComponent(
+    `Bonjour 👋\n\n` +
+    `Merci beaucoup d'avoir choisi TEXERRA SMS et d'avoir acheté votre numéro ${countryName} avec nous le ${formattedDate} !\n\n` +
+    `Nous espérons que tout se passe parfaitement avec ce numéro. Si vous avez la moindre question ou si vous souhaitez acheter un nouveau numéro, n'hésitez surtout pas à nous répondre ici.\n\n` +
+    `Toute l'équipe TEXERRA SMS reste à votre entière disposition. À très bientôt ! 🙏`
+  );
+  window.open(`https://wa.me/${clean}?text=${message}`, "_blank", "noopener,noreferrer");
+}
 const STORAGE_KEY = "texerra:admin:period";
 
 /* ────────────────────────────────────────────────────────────────── */
