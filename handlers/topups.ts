@@ -180,6 +180,10 @@ router.post("/", requireAuth, async (req, res) => {
       id: topupId,
       userId,
       amountEur: amountEur.toFixed(4),
+      // ➕ NOUVEAU : version numérique pour permettre les agrégations Firestore (sum)
+      // Les agrégations Firestore ignorent les strings, il faut un champ number.
+      // N'affecte pas les anciennes données : uniquement les nouvelles recharges.
+      amountEurNum: amountEur,
       status: "pending",
       paymentUrl: checkoutUrl,
       externalId: transactionId,
@@ -399,4 +403,3 @@ router.get("/:id/status", requireAuth, async (req, res) => {
 });
 
 export default router;
-       
