@@ -9,27 +9,54 @@ const router = Router();
 /* Helpers                                                            */
 /* ────────────────────────────────────────────────────────────────── */
 
-function parseRange(req: Request): { start: Date; end: Date } {
+/**
+ * Retourne { startIso, endIso } au format ISO 8601.
+ * ⚠️ IMPORTANT : dans ce projet, le champ `createdAt` est stocké
+ * sous forme de CHAÎNE ISO (`new Date().toISOString()`), PAS de Timestamp.
+ * Tous les filtres Firestore doivent donc comparer des chaînes ISO.
+ */
+function parseRange(req: Request): { startIso: string; endIso: string } {
   const now = new Date();
   const startParam = req.query.start as string | undefined;
   const endParam = req.query.end as string | undefined;
 
   if (startParam && endParam) {
     const start = new Date(startParam);
+    start.setHours(0, 0, 0, 0);
     const end = new Date(endParam);
     end.setHours(23, 59, 59, 999);
-    return { start, end };
+    return { startIso: start.toISOString(), endIso: end.toISOString() };
   }
 
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   const end = new Date(now);
   end.setHours(23, 59, 59, 999);
-  return { start, end };
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
-function toTimestamp(date: Date): Timestamp {
-  return Timestamp.fromDate(date);
+/** Normalise un champ `createdAt` (string ISO ou Timestamp) vers une chaîne ISO. */
+function getCreatedAtIso(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (value && typeof value === "object" && "toDate" in (value as object)) {
+    try {
+      return (value as Timestamp).toDate().toISOString();
+    } catch {
+      return new Date(0).toISOString();
+    }
+  }
+  return new Date(0).toISOString();
+}
+
+/** Convertit une valeur en nombre fini, sinon retourne le fallback. */
+function num(v: unknown, fallback: number | null = null): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+  return fallback;
 }
 
 function escapeCsv(val: unknown): string {
@@ -45,24 +72,13 @@ function csvRow(values: unknown[]): string {
   return values.map(escapeCsv).join(",");
 }
 
-function num(v: unknown, fallback: number | null = null): number | null {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string" && v.trim() !== "") {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
-  }
-  return fallback;
-}
-
 /* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/stats                                               */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
+    const { startIso, endIso } = parseRange(req);
 
     const usersCol = firestoreDb.collection("users");
     const ordersCol = firestoreDb.collection("orders");
@@ -83,35 +99,35 @@ router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
       marginSnap,
     ] = await Promise.all([
       usersCol.count().get(),
-      usersCol.where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).count().get(),
-      topupsCol.where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).count().get(),
+      usersCol.where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      topupsCol.where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
       topupsCol
         .where("status", "==", "completed")
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
+        .where("createdAt", ">=", startIso)
+        .where("createdAt", "<=", endIso)
         .aggregate({ total: AggregateField.sum("amountEurNum") })
         .get(),
-      ordersCol.where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).count().get(),
-      ordersCol.where("status", "==", "active").where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).count().get(),
-      ordersCol.where("status", "==", "pending_payment").where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).count().get(),
-      ordersCol.where("status", "==", "cancelled").where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).count().get(),
-      ordersCol.where("status", "==", "expired").where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).count().get(),
+      ordersCol.where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      ordersCol.where("status", "==", "active").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      ordersCol.where("status", "==", "pending_payment").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      ordersCol.where("status", "==", "cancelled").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
+      ordersCol.where("status", "==", "expired").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).count().get(),
       ordersCol
         .where("status", "==", "active")
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
+        .where("createdAt", ">=", startIso)
+        .where("createdAt", "<=", endIso)
         .aggregate({ total: AggregateField.sum("priceNum") })
         .get(),
       ordersCol
         .where("status", "==", "active")
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
+        .where("createdAt", ">=", startIso)
+        .where("createdAt", "<=", endIso)
         .aggregate({ total: AggregateField.sum("costUsdNum") })
         .get(),
       ordersCol
         .where("status", "==", "active")
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
+        .where("createdAt", ">=", startIso)
+        .where("createdAt", "<=", endIso)
         .aggregate({ total: AggregateField.sum("marginNum") })
         .get(),
     ]);
@@ -148,17 +164,17 @@ router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
 
 router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
+    const { startIso, endIso } = parseRange(req);
+    const start = new Date(startIso);
+    const end = new Date(endIso);
 
     const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
     const groupByMonth = daysDiff > 90;
 
     const [ordersSnap, topupsSnap, usersSnap] = await Promise.all([
-      firestoreDb.collection("orders").where("status", "==", "active").where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).orderBy("createdAt", "asc").limit(2000).get(),
-      firestoreDb.collection("topups").where("status", "==", "completed").where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).orderBy("createdAt", "asc").limit(2000).get(),
-      firestoreDb.collection("users").where("createdAt", ">=", startTs).where("createdAt", "<=", endTs).orderBy("createdAt", "asc").limit(2000).get(),
+      firestoreDb.collection("orders").where("status", "==", "active").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "asc").limit(2000).get(),
+      firestoreDb.collection("topups").where("status", "==", "completed").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "asc").limit(2000).get(),
+      firestoreDb.collection("users").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "asc").limit(2000).get(),
     ]);
 
     const bucket = new Map<string, { revenue: number; topups: number; orders: number; margin: number; users: number }>();
@@ -174,22 +190,22 @@ router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
 
     ordersSnap.forEach((doc) => {
       const d = doc.data();
-      const key = getKey((d.createdAt as Timestamp).toDate());
-      const b = ensureBucket(key);
+      const date = new Date(getCreatedAtIso(d.createdAt));
+      const b = ensureBucket(getKey(date));
       b.revenue += num(d.priceNum) ?? num(d.price, 0) ?? 0;
       b.margin += num(d.marginNum) ?? num(d.margin, 0) ?? 0;
       b.orders += 1;
     });
     topupsSnap.forEach((doc) => {
       const d = doc.data();
-      const key = getKey((d.createdAt as Timestamp).toDate());
-      const b = ensureBucket(key);
+      const date = new Date(getCreatedAtIso(d.createdAt));
+      const b = ensureBucket(getKey(date));
       b.topups += num(d.amountEurNum) ?? num(d.amountEur, 0) ?? 0;
     });
     usersSnap.forEach((doc) => {
       const d = doc.data();
-      const key = getKey((d.createdAt as Timestamp).toDate());
-      const b = ensureBucket(key);
+      const date = new Date(getCreatedAtIso(d.createdAt));
+      const b = ensureBucket(getKey(date));
       b.users += 1;
     });
 
@@ -207,17 +223,15 @@ router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
 
 router.get("/orders", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
+    const { startIso, endIso } = parseRange(req);
     const status = req.query.status as string | undefined;
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = 20;
 
     let query: FirebaseFirestore.Query = firestoreDb
       .collection("orders")
-      .where("createdAt", ">=", startTs)
-      .where("createdAt", "<=", endTs)
+      .where("createdAt", ">=", startIso)
+      .where("createdAt", "<=", endIso)
       .orderBy("createdAt", "desc");
 
     if (status && status !== "all") query = query.where("status", "==", status);
@@ -239,7 +253,7 @@ router.get("/orders", requireAdmin, async (req: Request, res: Response) => {
         price: num(d.priceNum) ?? num(d.price, 0) ?? 0,
         costUsd: num(d.costUsdNum) ?? num(d.costUsd),
         margin: num(d.marginNum) ?? num(d.margin),
-        createdAt: (d.createdAt as Timestamp).toDate().toISOString(),
+        createdAt: getCreatedAtIso(d.createdAt),
       };
     });
 
@@ -256,17 +270,15 @@ router.get("/orders", requireAdmin, async (req: Request, res: Response) => {
 
 router.get("/topups", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
+    const { startIso, endIso } = parseRange(req);
     const status = req.query.status as string | undefined;
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = 20;
 
     let query: FirebaseFirestore.Query = firestoreDb
       .collection("topups")
-      .where("createdAt", ">=", startTs)
-      .where("createdAt", "<=", endTs)
+      .where("createdAt", ">=", startIso)
+      .where("createdAt", "<=", endIso)
       .orderBy("createdAt", "desc");
 
     if (status && status !== "all") query = query.where("status", "==", status);
@@ -284,7 +296,7 @@ router.get("/topups", requireAdmin, async (req: Request, res: Response) => {
         amountEur: num(d.amountEurNum) ?? num(d.amountEur, 0) ?? 0,
         status: d.status,
         externalId: d.externalId,
-        createdAt: (d.createdAt as Timestamp).toDate().toISOString(),
+        createdAt: getCreatedAtIso(d.createdAt),
       };
     });
 
@@ -297,20 +309,18 @@ router.get("/topups", requireAdmin, async (req: Request, res: Response) => {
 
 /* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/users                                               */
+/* ⚠️ CORRECTIF MAJEUR : plus de filtre par date.                     */
+/* La liste utilisateurs = ANNUAIRE COMPLET (tous les utilisateurs).  */
+/* Le compteur du haut reste filtré par période (nouveaux users).     */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.get("/users", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = 20;
 
     const query = firestoreDb
       .collection("users")
-      .where("createdAt", ">=", startTs)
-      .where("createdAt", "<=", endTs)
       .orderBy("createdAt", "desc");
 
     const countSnap = await query.count().get();
@@ -326,7 +336,7 @@ router.get("/users", requireAdmin, async (req: Request, res: Response) => {
         name: d.name,
         phone: d.phone,
         balance: num(d.balance, 0) ?? 0,
-        createdAt: (d.createdAt as Timestamp).toDate().toISOString(),
+        createdAt: getCreatedAtIso(d.createdAt),
       };
     });
 
@@ -339,53 +349,41 @@ router.get("/users", requireAdmin, async (req: Request, res: Response) => {
 
 /* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/orders/export                                       */
-/*  ?format=csv|json &start &end &status                              */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.get("/orders/export", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
+    const { startIso, endIso } = parseRange(req);
     const status = req.query.status as string | undefined;
     const format = ((req.query.format as string) || "csv").toLowerCase();
 
-    const BATCH_SIZE = 500;
     const MAX_ROWS = 20000;
     const all: any[] = [];
-    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
 
-    while (all.length < MAX_ROWS) {
-      let q: FirebaseFirestore.Query = firestoreDb
-        .collection("orders")
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
-        .orderBy("createdAt", "desc")
-        .limit(BATCH_SIZE);
+    // Fetch en une seule passe jusqu'à MAX_ROWS
+    const snap = await firestoreDb
+      .collection("orders")
+      .where("createdAt", ">=", startIso)
+      .where("createdAt", "<=", endIso)
+      .orderBy("createdAt", "desc")
+      .limit(MAX_ROWS)
+      .get();
 
-      if (status && status !== "all") q = q.where("status", "==", status);
-      if (lastDoc) q = q.startAfter(lastDoc);
-
-      const snap = await q.get();
-      if (snap.empty) break;
-
-      for (const doc of snap.docs) {
-        const d = doc.data();
-        all.push({
-          id: doc.id,
-          createdAt: (d.createdAt as Timestamp).toDate().toISOString(),
-          userId: d.userId,
-          countryCode: d.countryCode,
-          serviceCode: d.serviceCode,
-          phoneNumber: d.phoneNumber,
-          status: d.status,
-          price: num(d.priceNum) ?? num(d.price, 0) ?? 0,
-          costUsd: num(d.costUsdNum) ?? num(d.costUsd),
-          margin: num(d.marginNum) ?? num(d.margin),
-        });
-      }
-      lastDoc = snap.docs[snap.docs.length - 1];
-      if (snap.docs.length < BATCH_SIZE) break;
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (status && status !== "all" && d.status !== status) continue;
+      all.push({
+        id: doc.id,
+        createdAt: getCreatedAtIso(d.createdAt),
+        userId: d.userId,
+        countryCode: d.countryCode,
+        serviceCode: d.serviceCode,
+        phoneNumber: d.phoneNumber,
+        status: d.status,
+        price: num(d.priceNum) ?? num(d.price, 0) ?? 0,
+        costUsd: num(d.costUsdNum) ?? num(d.costUsd),
+        margin: num(d.marginNum) ?? num(d.margin),
+      });
     }
 
     if (format === "json") {
@@ -393,24 +391,20 @@ router.get("/orders/export", requireAdmin, async (req: Request, res: Response) =
       return;
     }
 
+    const startDay = startIso.slice(0, 10);
+    const endDay = endIso.slice(0, 10);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="commandes-${start}_${end}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="commandes-${startDay}_${endDay}.csv"`);
     res.write("\uFEFF");
     res.write(csvRow(["Date", "Utilisateur (ID)", "Pays", "Service", "Numéro", "Statut", "Prix (€)", "Coût fournisseur (USD)", "Marge (€)"]) + "\n");
     for (const o of all) {
-      res.write(
-        csvRow([
-          new Date(o.createdAt).toLocaleString("fr-FR"),
-          o.userId,
-          o.countryCode,
-          o.serviceCode,
-          o.phoneNumber,
-          o.status,
-          o.price?.toFixed(2) ?? "",
-          o.costUsd != null ? o.costUsd.toFixed(4) : "",
-          o.margin != null ? o.margin.toFixed(2) : "",
-        ]) + "\n"
-      );
+      res.write(csvRow([
+        new Date(o.createdAt).toLocaleString("fr-FR"),
+        o.userId, o.countryCode, o.serviceCode, o.phoneNumber, o.status,
+        o.price?.toFixed(2) ?? "",
+        o.costUsd != null ? o.costUsd.toFixed(4) : "",
+        o.margin != null ? o.margin.toFixed(2) : "",
+      ]) + "\n");
     }
     res.end();
   } catch (err) {
@@ -426,44 +420,32 @@ router.get("/orders/export", requireAdmin, async (req: Request, res: Response) =
 
 router.get("/topups/export", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
+    const { startIso, endIso } = parseRange(req);
     const status = req.query.status as string | undefined;
     const format = ((req.query.format as string) || "csv").toLowerCase();
 
-    const BATCH_SIZE = 500;
     const MAX_ROWS = 20000;
     const all: any[] = [];
-    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
 
-    while (all.length < MAX_ROWS) {
-      let q: FirebaseFirestore.Query = firestoreDb
-        .collection("topups")
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
-        .orderBy("createdAt", "desc")
-        .limit(BATCH_SIZE);
+    const snap = await firestoreDb
+      .collection("topups")
+      .where("createdAt", ">=", startIso)
+      .where("createdAt", "<=", endIso)
+      .orderBy("createdAt", "desc")
+      .limit(MAX_ROWS)
+      .get();
 
-      if (status && status !== "all") q = q.where("status", "==", status);
-      if (lastDoc) q = q.startAfter(lastDoc);
-
-      const snap = await q.get();
-      if (snap.empty) break;
-
-      for (const doc of snap.docs) {
-        const d = doc.data();
-        all.push({
-          id: doc.id,
-          createdAt: (d.createdAt as Timestamp).toDate().toISOString(),
-          userId: d.userId,
-          amountEur: num(d.amountEurNum) ?? num(d.amountEur, 0) ?? 0,
-          status: d.status,
-          externalId: d.externalId,
-        });
-      }
-      lastDoc = snap.docs[snap.docs.length - 1];
-      if (snap.docs.length < BATCH_SIZE) break;
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (status && status !== "all" && d.status !== status) continue;
+      all.push({
+        id: doc.id,
+        createdAt: getCreatedAtIso(d.createdAt),
+        userId: d.userId,
+        amountEur: num(d.amountEurNum) ?? num(d.amountEur, 0) ?? 0,
+        status: d.status,
+        externalId: d.externalId,
+      });
     }
 
     if (format === "json") {
@@ -471,20 +453,20 @@ router.get("/topups/export", requireAdmin, async (req: Request, res: Response) =
       return;
     }
 
+    const startDay = startIso.slice(0, 10);
+    const endDay = endIso.slice(0, 10);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="depots-${start}_${end}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="depots-${startDay}_${endDay}.csv"`);
     res.write("\uFEFF");
     res.write(csvRow(["Date", "Utilisateur (ID)", "Montant (€)", "Statut", "Référence"]) + "\n");
     for (const t of all) {
-      res.write(
-        csvRow([
-          new Date(t.createdAt).toLocaleString("fr-FR"),
-          t.userId,
-          t.amountEur?.toFixed(2) ?? "",
-          t.status,
-          t.externalId ?? "",
-        ]) + "\n"
-      );
+      res.write(csvRow([
+        new Date(t.createdAt).toLocaleString("fr-FR"),
+        t.userId,
+        t.amountEur?.toFixed(2) ?? "",
+        t.status,
+        t.externalId ?? "",
+      ]) + "\n");
     }
     res.end();
   } catch (err) {
@@ -496,47 +478,31 @@ router.get("/topups/export", requireAdmin, async (req: Request, res: Response) =
 
 /* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/users/export                                        */
-/*  ?format=csv|vcf|json &start &end                                  */
+/* ⚠️ CORRECTIF : export = TOUS les utilisateurs (annuaire complet)   */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.get("/users/export", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { start, end } = parseRange(req);
-    const startTs = toTimestamp(start);
-    const endTs = toTimestamp(end);
     const format = ((req.query.format as string) || "csv").toLowerCase();
-
-    const BATCH_SIZE = 500;
     const MAX_ROWS = 50000;
     const all: any[] = [];
-    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
 
-    while (all.length < MAX_ROWS) {
-      let q: FirebaseFirestore.Query = firestoreDb
-        .collection("users")
-        .where("createdAt", ">=", startTs)
-        .where("createdAt", "<=", endTs)
-        .orderBy("createdAt", "desc")
-        .limit(BATCH_SIZE);
+    const snap = await firestoreDb
+      .collection("users")
+      .orderBy("createdAt", "desc")
+      .limit(MAX_ROWS)
+      .get();
 
-      if (lastDoc) q = q.startAfter(lastDoc);
-
-      const snap = await q.get();
-      if (snap.empty) break;
-
-      for (const doc of snap.docs) {
-        const d = doc.data();
-        all.push({
-          id: doc.id,
-          createdAt: (d.createdAt as Timestamp).toDate().toISOString(),
-          name: d.name ?? "",
-          email: d.email ?? "",
-          phone: d.phone ?? "",
-          balance: num(d.balance, 0) ?? 0,
-        });
-      }
-      lastDoc = snap.docs[snap.docs.length - 1];
-      if (snap.docs.length < BATCH_SIZE) break;
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      all.push({
+        id: doc.id,
+        createdAt: getCreatedAtIso(d.createdAt),
+        name: d.name ?? "",
+        email: d.email ?? "",
+        phone: d.phone ?? "",
+        balance: num(d.balance, 0) ?? 0,
+      });
     }
 
     if (format === "json") {
@@ -546,7 +512,7 @@ router.get("/users/export", requireAdmin, async (req: Request, res: Response) =>
 
     if (format === "vcf") {
       res.setHeader("Content-Type", "text/vcard; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="contacts-texerra-${start}_${end}.vcf"`);
+      res.setHeader("Content-Disposition", `attachment; filename="contacts-texerra.vcf"`);
       for (const u of all) {
         const baseName = u.name && String(u.name).trim() ? u.name : u.email;
         const fullName = `TEXERRA SMS - ${baseName}`;
@@ -566,20 +532,16 @@ router.get("/users/export", requireAdmin, async (req: Request, res: Response) =>
     }
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="utilisateurs-${start}_${end}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="utilisateurs-texerra.csv"`);
     res.write("\uFEFF");
     res.write(csvRow(["Inscription", "Nom", "Email", "Téléphone", "Solde (€)", "ID"]) + "\n");
     for (const u of all) {
-      res.write(
-        csvRow([
-          new Date(u.createdAt).toLocaleString("fr-FR"),
-          u.name,
-          u.email,
-          u.phone,
-          u.balance?.toFixed(2) ?? "0.00",
-          u.id,
-        ]) + "\n"
-      );
+      res.write(csvRow([
+        new Date(u.createdAt).toLocaleString("fr-FR"),
+        u.name, u.email, u.phone,
+        u.balance?.toFixed(2) ?? "0.00",
+        u.id,
+      ]) + "\n");
     }
     res.end();
   } catch (err) {
@@ -591,28 +553,31 @@ router.get("/users/export", requireAdmin, async (req: Request, res: Response) =>
 
 /* ────────────────────────────────────────────────────────────────── */
 /* POST /api/admin/migrate                                            */
-/*  Backfill des champs numériques sur les anciens documents.         */
-/*  Idempotent — peut être relancé plusieurs fois sans risque.        */
+/*  Backfill des champs numériques (priceNum, amountEurNum, etc.)     */
+/*  Idempotent. Ne fait AUCUN orderBy("__name__") (bug Firestore).    */
+/*  Retourne des compteurs détaillés pour diagnostiquer.              */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.post("/migrate", requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const BATCH_SIZE = 500;
-    const MAX_DOCS = 50000;
+    const FETCH_LIMIT = 20000;
+    const BATCH_SIZE = 400;
+
+    let ordersScanned = 0;
     let ordersMigrated = 0;
+    let topupsScanned = 0;
     let topupsMigrated = 0;
 
     // ── Migration des commandes
-    let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-    while (ordersMigrated < MAX_DOCS) {
-      let q: FirebaseFirestore.Query = firestoreDb.collection("orders").orderBy("__name__").limit(BATCH_SIZE);
-      if (lastDoc) q = q.startAfter(lastDoc);
-      const snap = await q.get();
-      if (snap.empty) break;
+    const ordersSnap = await firestoreDb.collection("orders").limit(FETCH_LIMIT).get();
+    ordersScanned = ordersSnap.docs.length;
+    console.log(`[migrate] orders scanned: ${ordersScanned}`);
 
+    for (let i = 0; i < ordersSnap.docs.length; i += BATCH_SIZE) {
+      const chunk = ordersSnap.docs.slice(i, i + BATCH_SIZE);
       const batch = firestoreDb.batch();
       let n = 0;
-      for (const doc of snap.docs) {
+      for (const doc of chunk) {
         const d = doc.data();
         const upd: Record<string, unknown> = {};
         if (d.priceNum == null) {
@@ -634,21 +599,18 @@ router.post("/migrate", requireAdmin, async (_req: Request, res: Response) => {
       }
       if (n > 0) await batch.commit();
       ordersMigrated += n;
-      lastDoc = snap.docs[snap.docs.length - 1];
-      if (snap.docs.length < BATCH_SIZE) break;
     }
 
     // ── Migration des dépôts
-    lastDoc = null;
-    while (topupsMigrated < MAX_DOCS) {
-      let q: FirebaseFirestore.Query = firestoreDb.collection("topups").orderBy("__name__").limit(BATCH_SIZE);
-      if (lastDoc) q = q.startAfter(lastDoc);
-      const snap = await q.get();
-      if (snap.empty) break;
+    const topupsSnap = await firestoreDb.collection("topups").limit(FETCH_LIMIT).get();
+    topupsScanned = topupsSnap.docs.length;
+    console.log(`[migrate] topups scanned: ${topupsScanned}`);
 
+    for (let i = 0; i < topupsSnap.docs.length; i += BATCH_SIZE) {
+      const chunk = topupsSnap.docs.slice(i, i + BATCH_SIZE);
       const batch = firestoreDb.batch();
       let n = 0;
-      for (const doc of snap.docs) {
+      for (const doc of chunk) {
         const d = doc.data();
         if (d.amountEurNum == null) {
           const a = num(d.amountEur);
@@ -660,15 +622,15 @@ router.post("/migrate", requireAdmin, async (_req: Request, res: Response) => {
       }
       if (n > 0) await batch.commit();
       topupsMigrated += n;
-      lastDoc = snap.docs[snap.docs.length - 1];
-      if (snap.docs.length < BATCH_SIZE) break;
     }
 
     res.json({
       ok: true,
+      ordersScanned,
       ordersMigrated,
+      topupsScanned,
       topupsMigrated,
-      message: "Migration terminée. Les anciennes données sans champ numérique ont été complétées.",
+      message: `Scan : ${ordersScanned} commandes, ${topupsScanned} dépôts. Migré : ${ordersMigrated} commandes, ${topupsMigrated} dépôts.`,
     });
   } catch (err) {
     console.error("Migration error:", err);
