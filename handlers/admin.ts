@@ -1,9 +1,14 @@
 import { Router, type Request, type Response } from "express";
 import { firestoreDb } from "../lib/firebase-admin.js";
 import { requireAdmin } from "../lib/requireAuth.js";
-import { Timestamp } from "firebase-admin/firestore";
+// ➕ NOUVEAU : import des helpers d'agrégation (correctif du bug 500)
+import { Timestamp, AggregateField } from "firebase-admin/firestore";
 
 const router = Router();
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Helpers                                                            */
+/* ────────────────────────────────────────────────────────────────── */
 
 function parseRange(req: Request): { start: Date; end: Date } {
   const now = new Date();
@@ -28,7 +33,9 @@ function toTimestamp(date: Date): Timestamp {
   return Timestamp.fromDate(date);
 }
 
-/* ─── GET /api/admin/stats ──────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/stats                                               */
+/* ────────────────────────────────────────────────────────────────── */
 
 router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -36,127 +43,137 @@ router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
     const startTs = toTimestamp(start);
     const endTs = toTimestamp(end);
 
+    // Constantes de requête réutilisées
+    const usersCol = firestoreDb.collection("users");
+    const ordersCol = firestoreDb.collection("orders");
+    const topupsCol = firestoreDb.collection("topups");
+
     const [
-      totalUsers,
-      newUsers,
-      totalTopups,
-      totalTopupAmount,
-      totalOrders,
-      completedOrders,
-      pendingOrders,
-      cancelledOrders,
-      expiredOrders,
-      revenueAgg,
-      supplierCostAgg,
-      marginAgg,
+      totalUsersSnap,
+      newUsersSnap,
+      totalTopupsSnap,
+      totalTopupAmountSnap,
+      totalOrdersSnap,
+      completedOrdersSnap,
+      pendingOrdersSnap,
+      cancelledOrdersSnap,
+      expiredOrdersSnap,
+      revenueSnap,
+      supplierCostSnap,
+      marginSnap,
     ] = await Promise.all([
-      firestoreDb.collection("users").count().get(),
+      // Total utilisateurs (toute la base)
+      usersCol.count().get(),
 
-      firestoreDb
-        .collection("users")
+      // Nouveaux utilisateurs sur la période
+      usersCol
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
         .count()
         .get(),
 
-      firestoreDb
-        .collection("topups")
+      // Dépôts sur la période
+      topupsCol
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
         .count()
         .get(),
 
-      // ⚠️ `amountEur` est stocké en string ; l'agrégation sum ignore les strings.
-      // → on ne peut pas sommer directement. On utilise un count + une lecture bornée.
-      // Simplification : on renvoie 0 si non numérique, sinon on lira le champ après migration.
-      firestoreDb
-        .collection("topups")
+      // Montant total des dépôts terminés (champ numérique `amountEurNum`)
+      topupsCol
         .where("status", "==", "completed")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
-        .aggregate({ total: { sum: "amountEurNum" } })
+        .aggregate({
+          total: AggregateField.sum("amountEurNum"),
+        })
         .get(),
 
-      firestoreDb
-        .collection("orders")
+      // Commandes totales sur la période
+      ordersCol
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
         .count()
         .get(),
 
-      firestoreDb
-        .collection("orders")
+      // Commandes réussies
+      ordersCol
         .where("status", "==", "active")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
         .count()
         .get(),
 
-      firestoreDb
-        .collection("orders")
+      // Commandes en attente
+      ordersCol
         .where("status", "==", "pending_payment")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
         .count()
         .get(),
 
-      firestoreDb
-        .collection("orders")
+      // Commandes annulées
+      ordersCol
         .where("status", "==", "cancelled")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
         .count()
         .get(),
 
-      firestoreDb
-        .collection("orders")
+      // Commandes expirées
+      ordersCol
         .where("status", "==", "expired")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
         .count()
         .get(),
 
-      // Agrégation sum sur `priceNum` (nouvelle champ numérique)
-      firestoreDb
-        .collection("orders")
+      // Chiffre d'affaires (champ numérique `priceNum`)
+      ordersCol
         .where("status", "==", "active")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
-        .aggregate({ total: { sum: "priceNum" } })
+        .aggregate({
+          total: AggregateField.sum("priceNum"),
+        })
         .get(),
 
-      firestoreDb
-        .collection("orders")
+      // Coût fournisseur (champ numérique `costUsdNum`)
+      ordersCol
         .where("status", "==", "active")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
-        .aggregate({ total: { sum: "costUsdNum" } })
+        .aggregate({
+          total: AggregateField.sum("costUsdNum"),
+        })
         .get(),
 
-      firestoreDb
-        .collection("orders")
+      // Marge (champ numérique `marginNum`)
+      ordersCol
         .where("status", "==", "active")
         .where("createdAt", ">=", startTs)
         .where("createdAt", "<=", endTs)
-        .aggregate({ total: { sum: "marginNum" } })
+        .aggregate({
+          total: AggregateField.sum("marginNum"),
+        })
         .get(),
     ]);
 
-    const revenue = (revenueAgg.data().total as number) || 0;
-    const supplierCost = (supplierCostAgg.data().total as number) || 0;
-    const margin = (marginAgg.data().total as number) || 0;
+    const revenue = (revenueSnap.data().total as number) || 0;
+    const supplierCost = (supplierCostSnap.data().total as number) || 0;
+    const margin = (marginSnap.data().total as number) || 0;
     const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0;
 
     res.json({
-      totalUsers: totalUsers.data().count,
-      newUsers: newUsers.data().count,
-      totalTopups: totalTopups.data().count,
-      totalTopupAmount: (totalTopupAmount.data().total as number) || 0,
-      totalOrders: totalOrders.data().count,
-      completedOrders: completedOrders.data().count,
-      pendingOrders: pendingOrders.data().count,
-      cancelledOrders: cancelledOrders.data().count,
-      expiredOrders: expiredOrders.data().count,
+      totalUsers: totalUsersSnap.data().count,
+      newUsers: newUsersSnap.data().count,
+      totalTopups: totalTopupsSnap.data().count,
+      totalTopupAmount: (totalTopupAmountSnap.data().total as number) || 0,
+      totalOrders: totalOrdersSnap.data().count,
+      completedOrders: completedOrdersSnap.data().count,
+      pendingOrders: pendingOrdersSnap.data().count,
+      cancelledOrders: cancelledOrdersSnap.data().count,
+      expiredOrders: expiredOrdersSnap.data().count,
       revenue,
       supplierCost,
       margin,
@@ -168,7 +185,9 @@ router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-/* ─── GET /api/admin/chart ──────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/chart                                               */
+/* ────────────────────────────────────────────────────────────────── */
 
 router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -263,7 +282,9 @@ router.get("/chart", requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-/* ─── GET /api/admin/orders ─────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/orders                                              */
+/* ────────────────────────────────────────────────────────────────── */
 
 router.get("/orders", requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -313,7 +334,9 @@ router.get("/orders", requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-/* ─── GET /api/admin/topups ─────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/topups                                              */
+/* ────────────────────────────────────────────────────────────────── */
 
 router.get("/topups", requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -359,7 +382,9 @@ router.get("/topups", requireAdmin, async (req: Request, res: Response) => {
   }
 });
 
-/* ─── GET /api/admin/users ──────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/users                                               */
+/* ────────────────────────────────────────────────────────────────── */
 
 router.get("/users", requireAdmin, async (req: Request, res: Response) => {
   try {
