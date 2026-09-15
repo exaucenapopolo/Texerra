@@ -18,10 +18,9 @@ import AdminPage from "./pages/admin";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 /**
- * ➕ NOUVEAU : adresse e-mail administrateur.
+ * ➕ NOUVEAU : adresse administrateur.
  * Sert uniquement à la redirection côté frontend.
- * ⚠️ La vraie protection est côté serveur (middleware `requireAdmin`).
- * ⚠️ Cette valeur ne doit JAMAIS être exposée dans l'interface publique.
+ * ⚠️ La vraie protection est côté serveur (`requireAdmin` dans handlers/admin.ts).
  */
 const ADMIN_EMAIL = "exaucenapopolo2@gmail.com";
 
@@ -75,7 +74,7 @@ function firebaseErrorMsg(code: string): string {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Illustration Sign-In (téléphone premium avec OTP vérifié)         */
+/* Illustration Sign-In                                               */
 /* ────────────────────────────────────────────────────────────────── */
 function SignInIllustration() {
   return (
@@ -108,10 +107,8 @@ function SignInIllustration() {
           </linearGradient>
         </defs>
 
-        {/* Halo de fond */}
         <ellipse cx="240" cy="270" rx="220" ry="250" fill="url(#si-glow)" />
 
-        {/* Anneaux rotatifs de fond */}
         <motion.circle
           cx="240" cy="270" r="205"
           stroke="#fed7aa" strokeWidth="1" strokeDasharray="4 8" fill="none" strokeOpacity="0.55"
@@ -127,44 +124,29 @@ function SignInIllustration() {
           style={{ transformOrigin: "240px 270px" }}
         />
 
-        {/* Téléphone */}
         <g transform="translate(240 270)">
           <motion.g
             animate={{ y: [0, -8, 0] }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
           >
-            {/* Cadre extérieur */}
             <rect x="-105" y="-215" width="210" height="430" rx="36" fill="url(#si-frame)" />
-            {/* Reflet sur le cadre */}
-            <path
-              d="M -95 -205 Q -95 -200 -95 0 L -60 -205 Z"
-              fill="white" fillOpacity="0.05"
-            />
-
-            {/* Écran */}
+            <path d="M -95 -205 Q -95 -200 -95 0 L -60 -205 Z" fill="white" fillOpacity="0.05" />
             <rect x="-98" y="-208" width="196" height="416" rx="30" fill="url(#si-screen)" />
-
-            {/* Notch / Dynamic Island */}
             <rect x="-40" y="-200" width="80" height="20" rx="10" fill="#111" />
 
-            {/* Barre de statut */}
             <text x="-78" y="-182" fontSize="9" fontWeight="600" fill="#000">9:41</text>
             <rect x="60" y="-186" width="18" height="9" rx="2" fill="#000" opacity="0.85" />
             <rect x="82" y="-186" width="10" height="9" rx="1.5" fill="#000" opacity="0.4" />
 
-            {/* En-tête app */}
             <text x="-78" y="-152" fontSize="7" fill="#94a3b8" fontWeight="700" letterSpacing="1.6">TEXERRA SMS</text>
             <text x="-78" y="-133" fontSize="14" fontWeight="800" fill="#000">Bienvenue</text>
 
-            {/* Carte OTP — WhatsApp vérifié */}
             <rect x="-82" y="-110" width="164" height="118" rx="16" fill="#ffffff" stroke="#f1f5f9" strokeWidth="1" />
 
-            {/* Logo WhatsApp */}
             <image href="https://cdn.simpleicons.org/whatsapp/25D366" x="-72" y="-100" width="22" height="22" />
             <text x="-44" y="-84" fontSize="10" fontWeight="700" fill="#000">WhatsApp</text>
             <text x="-44" y="-72" fontSize="7" fill="#10b981" fontWeight="600">✓ Vérifié</text>
 
-            {/* Code OTP */}
             <text x="-72" y="-46" fontSize="7" fill="#94a3b8" fontWeight="600">Code de vérification</text>
             <text
               x="0" y="-8"
@@ -178,7 +160,6 @@ function SignInIllustration() {
               847 291
             </text>
 
-            {/* Badge vert sur la carte */}
             <motion.g
               animate={{ scale: [1, 1.12, 1] }}
               transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
@@ -187,19 +168,16 @@ function SignInIllustration() {
               <path d="M 57 -92 L 60 -89 L 67 -96" stroke="#ffffff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </motion.g>
 
-            {/* Barre succès */}
             <rect x="-82" y="22" width="164" height="44" rx="12" fill="#ecfdf5" />
             <circle cx="-64" cy="44" r="9" fill="#10b981" />
             <path d="M -68 44 L -65 47 L -59 40" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             <text x="-46" y="42" fontSize="9" fontWeight="700" fill="#065f46">Connexion réussie</text>
             <text x="-46" y="55" fontSize="7" fill="#059669">Redirection vers votre espace…</text>
 
-            {/* Home indicator */}
             <rect x="-30" y="196" width="60" height="4" rx="2" fill="#000" opacity="0.18" />
           </motion.g>
         </g>
 
-        {/* Bulles flottantes de services */}
         <motion.g animate={{ y: [0, -8, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
           <circle cx="62" cy="118" r="26" fill="#ffffff" stroke="#fed7aa" strokeWidth="1.5" />
           <image href="https://cdn.simpleicons.org/google/4285F4" x="50" y="106" width="24" height="24" />
@@ -220,7 +198,6 @@ function SignInIllustration() {
           <text x="410" y="418" textAnchor="middle" fontSize="26">🇺🇸</text>
         </motion.g>
 
-        {/* Carte flottante "code reçu" */}
         <motion.g
           animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }}
           transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
@@ -232,7 +209,6 @@ function SignInIllustration() {
           <text x="54" y="286" fontSize="8" fill="#64748b" fontFamily="ui-monospace, monospace">847 291</text>
         </motion.g>
 
-        {/* Particules */}
         {[...Array(10)].map((_, i) => (
           <motion.circle
             key={i}
@@ -250,7 +226,7 @@ function SignInIllustration() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Illustration Sign-Up (écosystème de services + drapeaux)          */
+/* Illustration Sign-Up                                               */
 /* ────────────────────────────────────────────────────────────────── */
 function SignUpIllustration() {
   const satellites = [
@@ -292,10 +268,8 @@ function SignUpIllustration() {
           </linearGradient>
         </defs>
 
-        {/* Halo */}
         <ellipse cx="240" cy="260" rx="220" ry="240" fill="url(#su-glow)" />
 
-        {/* Anneaux rotatifs */}
         <motion.circle
           cx="240" cy="260" r="190"
           stroke="#fed7aa" strokeWidth="1" strokeDasharray="4 8" fill="none" strokeOpacity="0.55"
@@ -311,7 +285,6 @@ function SignUpIllustration() {
           style={{ transformOrigin: "240px 260px" }}
         />
 
-        {/* Lignes radiales vers les satellites */}
         {satellites.map((s, i) => {
           const rad = (s.angle * Math.PI) / 180;
           const x = 240 + Math.cos(rad) * s.r;
@@ -328,7 +301,6 @@ function SignUpIllustration() {
           );
         })}
 
-        {/* Noyau central */}
         <g transform="translate(240 260)">
           <motion.circle
             r="72" fill="#ffffff" stroke="#fed7aa" strokeWidth="2"
@@ -340,7 +312,6 @@ function SignUpIllustration() {
             animate={{ scale: [1, 1.03, 1] }}
             transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
           />
-          {/* Logo / bouclier blanc */}
           <motion.path
             d="M -17 -22 L 17 -22 L 17 3 C 17 15 0 26 0 26 C 0 26 -17 15 -17 3 Z"
             fill="#ffffff" fillOpacity="0.95"
@@ -355,8 +326,6 @@ function SignUpIllustration() {
             animate={{ pathLength: 1 }}
             transition={{ delay: 0.9, duration: 0.5 }}
           />
-
-          {/* Anneau pulsant */}
           <motion.circle
             r="88" stroke="#f97316" strokeWidth="2" strokeDasharray="6 10"
             strokeOpacity="0.5" fill="none"
@@ -365,7 +334,6 @@ function SignUpIllustration() {
           />
         </g>
 
-        {/* Satellites : logos services */}
         {satellites.map((s, i) => {
           const rad = (s.angle * Math.PI) / 180;
           const x = 240 + Math.cos(rad) * s.r;
@@ -391,7 +359,6 @@ function SignUpIllustration() {
           );
         })}
 
-        {/* Drapeaux flottants */}
         {flags.map((f, i) => (
           <motion.g
             key={`flag-${i}`}
@@ -403,7 +370,6 @@ function SignUpIllustration() {
           </motion.g>
         ))}
 
-        {/* Particules circulant du centre vers les satellites */}
         {satellites.map((s, i) => {
           const rad = (s.angle * Math.PI) / 180;
           const x = 240 + Math.cos(rad) * s.r;
@@ -419,7 +385,6 @@ function SignUpIllustration() {
           );
         })}
 
-        {/* Badge "712+ numéros activés" */}
         <motion.g
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -432,7 +397,6 @@ function SignUpIllustration() {
           <text x="58" y="268" fontSize="7" fill="#64748b">activés cette saison</text>
         </motion.g>
 
-        {/* Badge "205+ pays" */}
         <motion.g
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -450,7 +414,7 @@ function SignUpIllustration() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Bouton Retour vers l'accueil                                       */
+/* Bouton Retour                                                      */
 /* ────────────────────────────────────────────────────────────────── */
 function BackButton() {
   return (
@@ -477,7 +441,7 @@ function BackButton() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Layout d'authentification à deux colonnes                          */
+/* Layout d'authentification                                          */
 /* ────────────────────────────────────────────────────────────────── */
 function AuthLayout({
   illustration,
@@ -491,7 +455,6 @@ function AuthLayout({
       <BackButton />
 
       <div className="flex min-h-[100dvh]">
-        {/* Côté formulaire */}
         <div
           className="w-full lg:w-1/2 flex items-center justify-center px-4 py-20 lg:px-12"
           style={{
@@ -502,7 +465,6 @@ function AuthLayout({
           {children}
         </div>
 
-        {/* Côté illustration — visible uniquement sur desktop */}
         <div className="hidden lg:flex lg:w-1/2 items-center justify-center px-12 relative overflow-hidden bg-gradient-to-br from-orange-50/70 via-amber-50/50 to-yellow-50/40 border-l border-border/60">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:32px_32px]" />
           <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-orange-400/12 blur-[120px] pointer-events-none" />
@@ -517,7 +479,7 @@ function AuthLayout({
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* AuthCard — INCHANGÉ                                                */
+/* AuthCard                                                           */
 /* ────────────────────────────────────────────────────────────────── */
 function AuthCard({
   mode,
@@ -577,7 +539,6 @@ function AuthCard({
 
   return (
     <div className="bg-white rounded-2xl w-full max-w-[420px] border border-border shadow-[0_4px_32px_hsl(32_14%_78%/0.5)] p-8 flex flex-col gap-6">
-      {/* Logo */}
       <div className="flex flex-col items-center gap-3">
         <img
           src={`${window.location.origin}${basePath}/logo-full.png`}
@@ -596,7 +557,6 @@ function AuthCard({
         </div>
       </div>
 
-      {/* Google button */}
       <button
         onClick={handleGoogle}
         disabled={isLoading}
@@ -610,14 +570,12 @@ function AuthCard({
           : "S'inscrire avec Google"}
       </button>
 
-      {/* Divider */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-px bg-border" />
         <span className="text-muted-foreground text-xs font-medium">ou</span>
         <div className="flex-1 h-px bg-border" />
       </div>
 
-      {/* Email + password form */}
       <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3" noValidate>
         <div className="flex flex-col gap-1.5">
           <label className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
@@ -672,7 +630,6 @@ function AuthCard({
         </button>
       </form>
 
-      {/* Switch link */}
       <div className="border-t border-border pt-4 text-center">
         <span className="text-muted-foreground text-sm">
           {switchText}{" "}
@@ -689,7 +646,7 @@ function AuthCard({
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* SignInPage                                                         */
+/* Pages sign-in / sign-up                                            */
 /* ────────────────────────────────────────────────────────────────── */
 function SignInPage() {
   const { user, loading } = useAuth();
@@ -707,9 +664,6 @@ function SignInPage() {
   );
 }
 
-/* ────────────────────────────────────────────────────────────────── */
-/* SignUpPage                                                         */
-/* ────────────────────────────────────────────────────────────────── */
 function SignUpPage() {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -751,7 +705,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 /* ────────────────────────────────────────────────────────────────── */
 /* ➕ NOUVEAU : AdminRoute                                            */
 /* Protection défensive côté frontend (redirection).                  */
-/* ⚠️ La sécurité réelle est appliquée côté serveur par requireAdmin. */
+/* ⚠️ La vraie protection est côté serveur (requireAdmin).            */
 /* ────────────────────────────────────────────────────────────────── */
 function AdminRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, loading } = useAuth();
@@ -786,7 +740,7 @@ function AppRoutes() {
           <Route path="/faq">
             <Layout><FaqPage /></Layout>
           </Route>
-          {/* ➕ NOUVEAU : route admin (hors Layout, pour ne pas afficher la nav publique) */}
+          {/* ➕ NOUVEAU : route admin (hors Layout public) */}
           <Route path="/admin">
             <AdminRoute component={AdminPage} />
           </Route>
