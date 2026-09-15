@@ -14,13 +14,6 @@ const EUR_TO_XAF = 655.96;
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 
-const WA_MESSAGE = encodeURIComponent(
-  "Bonjour 👋\n\n" +
-  "Merci beaucoup d'avoir choisi TEXERRA SMS et d'avoir acheté votre numéro WhatsApp avec nous !\n\n" +
-  "Nous espérons que tout se passe parfaitement avec votre numéro. Si vous avez la moindre question ou si vous souhaitez acheter un nouveau numéro, n'hésitez surtout pas à nous répondre ici.\n\n" +
-  "Toute l'équipe TEXERRA SMS reste à votre entière disposition. À très bientôt ! 🙏"
-);
-
 /* ────────────────────────────────────────────────────────────────── */
 /* Résolution des pays                                                */
 /* ────────────────────────────────────────────────────────────────── */
@@ -243,7 +236,12 @@ function isWhatsAppService(serviceCode: string): boolean {
   const s = (serviceCode || "").toLowerCase();
   return s === "wa" || s === "wb";
 }
-/** Message WhatsApp personnalisé pour un utilisateur (sans info de commande). */
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Messages personnalisés (WhatsApp / Email)                          */
+/* ────────────────────────────────────────────────────────────────── */
+
+/** Ouvre WhatsApp avec un message personnalisé pour un utilisateur (sans info de commande). */
 function openUserWhatsApp(name: string | undefined, phone: string) {
   const clean = cleanForWa(phone);
   const displayName = name && name.trim() ? name.trim() : "cher client";
@@ -271,7 +269,7 @@ function openUserEmail(name: string | undefined, email: string) {
   window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
 }
 
-/** Message WhatsApp personnalisé pour une commande (avec date + pays). */
+/** Ouvre WhatsApp avec un message personnalisé pour une commande (avec date + pays d'achat). */
 function openOrderWhatsApp(phone: string, countryName: string, date: string) {
   const clean = cleanForWa(phone);
   const formattedDate = new Date(date).toLocaleDateString("fr-FR", {
@@ -287,6 +285,7 @@ function openOrderWhatsApp(phone: string, countryName: string, date: string) {
   );
   window.open(`https://wa.me/${clean}?text=${message}`, "_blank", "noopener,noreferrer");
 }
+
 const STORAGE_KEY = "texerra:admin:period";
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -375,6 +374,11 @@ export default function AdminPage() {
   const stats = statsQuery.data;
   const chartData = chartQuery.data ?? [];
 
+  // Solde des utilisateurs non encore dépensé = dépôts réussis − revenus
+  const unusedBalance = stats
+    ? Math.max(0, (stats.totalTopupAmount || 0) - (stats.revenue || 0))
+    : 0;
+
   async function copyToClipboard(text: string, label = "Copié !") {
     try {
       await navigator.clipboard.writeText(text);
@@ -382,11 +386,6 @@ export default function AdminPage() {
     } catch {
       setToast("Impossible de copier");
     }
-  }
-
-  function openWhatsApp(phone: string) {
-    const clean = cleanForWa(phone);
-    window.open(`https://wa.me/${clean}?text=${WA_MESSAGE}`, "_blank", "noopener,noreferrer");
   }
 
   async function handleOrdersCsv() {
@@ -551,7 +550,7 @@ export default function AdminPage() {
 
         {/* Cartes statistiques */}
         {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             <StatCard
               label="Utilisateurs"
               value={stats.totalUsers.toLocaleString("fr-FR")}
@@ -581,6 +580,14 @@ export default function AdminPage() {
               sub={`Marge estimée ${stats.marginPercent.toFixed(0)} %`}
               icon="📈"
               color="purple"
+            />
+            <StatCard
+              label="Solde non utilisé"
+              value={`${unusedBalance.toFixed(2)} €`}
+              secondary={toCfa(unusedBalance)}
+              sub="Dépôts non encore dépensés"
+              icon="🏦"
+              color="teal"
             />
           </div>
         )}
@@ -697,9 +704,9 @@ export default function AdminPage() {
                               </ActionBtn>
                               {hasWa && (
                                 <ActionBtn
-                                  title="Écrire sur WhatsApp"
+                                  title="Écrire sur WhatsApp (message personnalisé)"
                                   variant="whatsapp"
-                                  onClick={() => openWhatsApp(o.phoneNumber)}
+                                  onClick={() => openOrderWhatsApp(o.phoneNumber, country.name, o.createdAt)}
                                 >
                                   <WhatsAppIcon />
                                 </ActionBtn>
@@ -815,20 +822,38 @@ export default function AdminPage() {
                         <td className="p-2">
                           <div className="flex items-center justify-center gap-1">
                             {u.phone && (
-                              <ActionBtn
-                                title="Copier le téléphone"
-                                onClick={() => copyToClipboard(u.phone, "Téléphone copié !")}
-                              >
-                                <CopyIcon />
-                              </ActionBtn>
+                              <>
+                                <ActionBtn
+                                  title="Copier le téléphone"
+                                  onClick={() => copyToClipboard(u.phone, "Téléphone copié !")}
+                                >
+                                  <CopyIcon />
+                                </ActionBtn>
+                                <ActionBtn
+                                  title="Écrire sur WhatsApp (message personnalisé)"
+                                  variant="whatsapp"
+                                  onClick={() => openUserWhatsApp(u.name, u.phone)}
+                                >
+                                  <WhatsAppIcon />
+                                </ActionBtn>
+                              </>
                             )}
                             {u.email && (
-                              <ActionBtn
-                                title="Copier l'email"
-                                onClick={() => copyToClipboard(u.email, "Email copié !")}
-                              >
-                                <MailIcon />
-                              </ActionBtn>
+                              <>
+                                <ActionBtn
+                                  title="Copier l'email"
+                                  onClick={() => copyToClipboard(u.email, "Email copié !")}
+                                >
+                                  <MailIcon />
+                                </ActionBtn>
+                                <ActionBtn
+                                  title="Envoyer un email (message personnalisé)"
+                                  variant="mail"
+                                  onClick={() => openUserEmail(u.name, u.email)}
+                                >
+                                  <SendMailIcon />
+                                </ActionBtn>
+                              </>
                             )}
                           </div>
                         </td>
@@ -869,13 +894,14 @@ function StatCard({
   secondary?: string;
   sub?: string;
   icon?: string;
-  color?: "blue" | "emerald" | "orange" | "purple";
+  color?: "blue" | "emerald" | "orange" | "purple" | "teal";
 }) {
   const bg = {
     blue: "bg-blue-50 border-blue-100",
     emerald: "bg-emerald-50 border-emerald-100",
     orange: "bg-orange-50 border-orange-100",
     purple: "bg-purple-50 border-purple-100",
+    teal: "bg-teal-50 border-teal-100",
   }[color];
   return (
     <div className={`rounded-2xl border p-4 shadow-sm transition-all hover:shadow-md ${bg}`}>
@@ -990,13 +1016,16 @@ function ActionBtn({
 }: {
   onClick: () => void;
   title: string;
-  variant?: "whatsapp";
+  variant?: "whatsapp" | "mail";
   children: React.ReactNode;
 }) {
   const base = "inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-all";
-  const style = variant === "whatsapp"
-    ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-    : "bg-white border-border text-muted-foreground hover:bg-secondary hover:border-primary/40 hover:text-foreground";
+  const style =
+    variant === "whatsapp"
+      ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+      : variant === "mail"
+      ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+      : "bg-white border-border text-muted-foreground hover:bg-secondary hover:border-primary/40 hover:text-foreground";
   return (
     <button type="button" onClick={onClick} title={title} className={`${base} ${style}`}>
       {children}
@@ -1018,6 +1047,15 @@ function MailIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <path d="m22 7-10 5L2 7" />
+    </svg>
+  );
+}
+
+function SendMailIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22l-4-9-9-4 20-7z" />
     </svg>
   );
 }
