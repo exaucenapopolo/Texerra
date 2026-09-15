@@ -18,19 +18,13 @@ import adminRouter from "../handlers/admin.js";
 
 const app = express();
 
-// Middlewares de base
 app.use(cors());
 app.use(express.json());
 
-// Route de test
 app.get("/", (_req: Request, res: Response) => {
-  res.json({
-    ok: true,
-    message: "API is running",
-  });
+  res.json({ ok: true, message: "API is running" });
 });
 
-// Montage des routes (Express s'occupe de rediriger le trafic vers les bons fichiers)
 app.use("/health", healthRouter);
 app.use("/api/me", meRouter);
 app.use("/api/countries", countriesRouter);
@@ -40,7 +34,7 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/topups", topupsRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/contact", contactRouter);
-// ➕ NOUVEAU : montage du routeur administrateur (protégé par requireAdmin dans le handler)
+// ➕ NOUVEAU : routes admin (protégées par requireAdmin dans le handler)
 app.use("/api/admin", adminRouter);
 
 // 404 fallback
@@ -55,11 +49,7 @@ app.use((req: Request, res: Response) => {
 // Gestion globale des erreurs
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error("🔥 Erreur Express :", err);
-
-  res.status(500).json({
-    ok: false,
-    message: "Erreur serveur interne",
-  });
+  res.status(500).json({ ok: false, message: "Erreur serveur interne" });
 });
 
 export default app;
