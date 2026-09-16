@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Clock, XCircle, Loader2, Copy, RefreshCw, Plus, Wallet,
   ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard, TrendingUp,
-  Filter, MessageCircle, Search, Sparkles, Receipt, Calendar, BadgeCheck
+  Filter, MessageCircle, Search, Sparkles, Receipt, Calendar, BadgeCheck,
+  Activity, BarChart3
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -26,10 +27,6 @@ const BRAND = {
 /* Conversion devise locale                                           */
 /* ────────────────────────────────────────────────────────────────── */
 
-/**
- * Convertit un montant EUR dans la devise locale de l'utilisateur.
- * Retourne null si aucune devise spécifique n'est configurée (EUR = neutre).
- */
 function formatLocalPrice(amountEur: number, currencyCode: string | null | undefined): string | null {
   if (!currencyCode || currencyCode === "EUR") return null;
   const curr = getCurrency(currencyCode);
@@ -353,56 +350,40 @@ function SleepingCatSVG() {
           .moon { animation: moonGlow 4s ease-in-out infinite; }
         `}</style>
 
-        {/* Ciel nocturne */}
         <circle cx="60" cy="60" r="52" fill="url(#nightSky)" />
 
-        {/* Étoiles */}
         <circle className="starA" cx="24" cy="28" r="1.2" fill="#fef3c7" />
         <circle className="starB" cx="92" cy="22" r="1.5" fill="#fef3c7" />
         <circle className="starC" cx="98" cy="52" r="1" fill="#fef3c7" />
         <circle className="starA" cx="18" cy="52" r="0.9" fill="#fef3c7" />
         <circle className="starB" cx="80" cy="14" r="1" fill="#fef3c7" />
 
-        {/* Croissant de lune */}
         <g className="moon">
           <circle cx="94" cy="32" r="8" fill="#fef3c7" />
           <circle cx="97" cy="29" r="7" fill="#1a2547" />
         </g>
 
-        {/* Coussin / tapis */}
         <ellipse cx="60" cy="98" rx="42" ry="8" fill="#0f1833" opacity="0.7" />
 
-        {/* Chat endormi */}
         <g className="catBody">
-          {/* Corps */}
           <ellipse cx="58" cy="82" rx="32" ry="18" fill="url(#catFur)" />
-          {/* Rayures */}
           <path d="M38 76 Q44 82 40 88" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
           <path d="M48 74 Q54 82 48 90" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
-          {/* Queue */}
           <path d="M88 82 Q98 80 100 88 Q98 94 92 92" stroke="url(#catFur)" strokeWidth="6" fill="none" strokeLinecap="round" />
-          {/* Tête */}
           <ellipse cx="38" cy="78" rx="16" ry="14" fill="url(#catFur)" />
-          {/* Oreilles */}
           <path d="M28 68 L26 60 L34 66 Z" fill="url(#catEar)" />
           <path d="M46 68 L52 60 L48 70 Z" fill="url(#catEar)" />
-          {/* Yeux fermés (arcs vers le bas = paisible) */}
           <path d="M31 78 Q34 81 37 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
           <path d="M41 78 Q44 81 47 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-          {/* Nez */}
           <path d="M38 84 L37 86 L39 86 Z" fill="#d98848" />
-          {/* Bouche */}
           <path d="M38 86 Q36 88 34 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
           <path d="M38 86 Q40 88 42 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          {/* Moustaches */}
           <path d="M24 82 L16 80" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           <path d="M24 85 L16 86" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          {/* Joues roses */}
           <ellipse cx="30" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
           <ellipse cx="46" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
         </g>
 
-        {/* Zzz flottants */}
         <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
           <text className="z1" x="72" y="60" fontSize="11">Z</text>
           <text className="z2" x="78" y="58" fontSize="13">Z</text>
@@ -444,10 +425,8 @@ function MorningCatSVG() {
           .rays { animation: rayRotate 30s linear infinite; transform-origin: 60px 78px; }
         `}</style>
 
-        {/* Ciel du matin */}
         <circle cx="60" cy="60" r="52" fill="url(#mornSky)" />
 
-        {/* Rayons rotatifs */}
         <g className="rays" opacity="0.35">
           <line x1="60" y1="78" x2="60" y2="30" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
           <line x1="60" y1="78" x2="82" y2="40" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
@@ -456,41 +435,28 @@ function MorningCatSVG() {
           <line x1="60" y1="78" x2="30" y2="70" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
         </g>
 
-        {/* Soleil levant */}
         <g className="sun">
           <circle cx="60" cy="78" r="24" fill="url(#sunGrad)" />
         </g>
 
-        {/* Oiseaux au loin */}
         <path d="M22 26 Q25 23 28 26" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
         <path d="M32 20 Q35 17 38 20" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
 
-        {/* Sol */}
         <ellipse cx="60" cy="100" rx="46" ry="6" fill="#7c2d12" opacity="0.25" />
 
-        {/* Chat qui s'étire (arc de dos haut, pattes tendues) */}
         <g className="catStretch">
-          {/* Queue */}
           <path className="tail" d="M88 84 Q100 80 102 88" stroke="url(#mornFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          {/* Corps étiré */}
           <path d="M30 88 Q40 70 60 74 Q78 78 88 86 L88 94 Q60 96 30 94 Z" fill="url(#mornFur)" />
-          {/* Pattes avant tendues */}
           <rect x="26" y="86" width="14" height="4" rx="2" fill="url(#mornFur)" />
           <rect x="26" y="90" width="14" height="4" rx="2" fill="#e89456" />
-          {/* Tête penchée vers le bas */}
           <ellipse cx="42" cy="72" rx="14" ry="12" fill="url(#mornFur)" />
-          {/* Oreilles */}
           <path d="M32 62 L30 54 L38 60 Z" fill="url(#mornFur)" />
           <path d="M50 62 L56 54 L52 64 Z" fill="url(#mornFur)" />
-          {/* Yeux qui clignent (encore endormi) */}
           <ellipse className="eye" cx="36" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
           <ellipse className="eye" cx="48" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
-          {/* Nez */}
           <path d="M42 78 L41 80 L43 80 Z" fill="#d98848" />
-          {/* Joues */}
           <ellipse cx="34" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
           <ellipse cx="50" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
-          {/* Moustaches */}
           <path d="M28 76 L20 74" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           <path d="M28 80 L20 81" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
         </g>
@@ -526,69 +492,51 @@ function AfternoonCatSVG() {
           .sunWarm { animation: sunWarm 4s ease-in-out infinite; transform-origin: 90px 28px; }
         `}</style>
 
-        {/* Ciel bleu */}
         <circle cx="60" cy="60" r="52" fill="url(#aftSky)" />
 
-        {/* Nuages */}
         <g className="cloud" opacity="0.85">
           <ellipse cx="30" cy="30" rx="12" ry="5" fill="#ffffff" />
           <ellipse cx="38" cy="28" rx="9" ry="6" fill="#ffffff" />
           <ellipse cx="24" cy="29" rx="7" ry="4.5" fill="#ffffff" />
         </g>
 
-        {/* Soleil brillant */}
         <g className="sunWarm">
           <circle cx="90" cy="28" r="10" fill="#fbbf24" />
           <circle cx="90" cy="28" r="7" fill="#fcd34d" />
         </g>
 
-        {/* Sol */}
         <ellipse cx="60" cy="100" rx="46" ry="6" fill="#78716c" opacity="0.2" />
 
-        {/* Balle de jeu */}
         <g className="ball">
           <circle cx="26" cy="90" r="7" fill="#ef4444" />
           <path d="M26 84 Q32 90 26 96" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
           <path d="M20 90 Q26 88 32 90" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
         </g>
 
-        {/* Chat assis, tête haute, une patte qui joue */}
         <g>
-          {/* Queue qui remue */}
           <path className="tailIdle" d="M86 88 Q98 82 100 92" stroke="url(#aftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          {/* Corps assis */}
           <path d="M52 92 Q48 74 62 68 Q80 66 84 84 Q86 92 84 96 L52 96 Z" fill="url(#aftFur)" />
-          {/* Pattes arrière */}
           <ellipse cx="80" cy="94" rx="9" ry="4" fill="url(#aftFur)" />
-          {/* Pattes avant */}
           <rect x="56" y="88" width="6" height="10" rx="3" fill="url(#aftFur)" />
           <rect x="66" y="88" width="6" height="10" rx="3" fill="url(#aftFur)" />
-          {/* Patte qui joue (gauche tendue) */}
           <g className="paw">
             <path d="M52 90 Q40 84 34 88" stroke="url(#aftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
             <ellipse cx="34" cy="88" rx="3.5" ry="3" fill="url(#aftFur)" />
           </g>
-          {/* Tête */}
           <ellipse cx="58" cy="58" rx="16" ry="15" fill="url(#aftFur)" />
-          {/* Oreilles */}
           <path d="M46 48 L44 38 L54 46 Z" fill="url(#aftFur)" />
           <path d="M68 48 L74 38 L70 50 Z" fill="url(#aftFur)" />
-          {/* Yeux ouverts brillants */}
           <ellipse cx="52" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
           <ellipse cx="64" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
           <circle cx="52.5" cy="58.5" r="1.6" fill="#1f2937" />
           <circle cx="64.5" cy="58.5" r="1.6" fill="#1f2937" />
           <circle cx="53" cy="57.5" r="0.5" fill="#ffffff" />
           <circle cx="65" cy="57.5" r="0.5" fill="#ffffff" />
-          {/* Nez */}
           <path d="M57 66 L56 68 L59 68 Z" fill="#d98848" />
-          {/* Bouche souriante */}
           <path d="M58 68 Q55 71 53 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
           <path d="M58 68 Q61 71 63 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          {/* Joues */}
           <ellipse cx="46" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
           <ellipse cx="70" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
-          {/* Moustaches */}
           <path d="M42 64 L32 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           <path d="M42 67 L32 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           <path d="M74 64 L84 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
@@ -631,55 +579,38 @@ function EveningCatSVG() {
           .bird1 { animation: birdFly 4s ease-in-out infinite alternate; }
         `}</style>
 
-        {/* Ciel du coucher */}
         <circle cx="60" cy="60" r="52" fill="url(#eveSky)" />
 
-        {/* Étoiles précoces */}
         <circle className="star" cx="22" cy="22" r="1.2" fill="#ffffff" />
         <circle className="star" cx="98" cy="30" r="1" fill="#ffffff" />
 
-        {/* Oiseaux rentrant */}
         <g className="bird1" opacity="0.75">
           <path d="M30 24 Q33 21 36 24" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
           <path d="M40 18 Q43 15 46 18" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
         </g>
 
-        {/* Soleil couchant */}
         <g className="sunSet">
           <circle cx="60" cy="78" r="22" fill="url(#eveSun)" />
         </g>
 
-        {/* Sol / colline */}
         <ellipse cx="60" cy="100" rx="46" ry="8" fill="#7c2d12" opacity="0.35" />
 
-        {/* Chat assis de profil, regarde le soleil */}
         <g>
-          {/* Queue */}
           <path className="tailSway" d="M84 92 Q96 88 98 96" stroke="url(#eveFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          {/* Corps */}
           <path d="M56 94 Q54 76 66 70 Q82 68 84 88 Q84 94 82 98 L56 98 Z" fill="url(#eveFur)" />
-          {/* Pattes */}
           <ellipse cx="80" cy="96" rx="8" ry="3.5" fill="url(#eveFur)" />
           <rect x="58" y="90" width="5" height="8" rx="2.5" fill="url(#eveFur)" />
-          {/* Tête (de profil, tournée vers la gauche pour regarder le soleil) */}
           <g className="headNod">
             <ellipse cx="62" cy="60" rx="15" ry="14" fill="url(#eveFur)" />
-            {/* Oreilles */}
             <path d="M50 50 L48 40 L58 48 Z" fill="url(#eveFur)" />
             <path d="M72 50 L78 40 L74 52 Z" fill="url(#eveFur)" />
-            {/* Œil visible (côté) */}
             <ellipse cx="56" cy="60" rx="2.4" ry="3" fill="#ffffff" />
             <circle cx="56.3" cy="60.5" r="1.5" fill="#1f2937" />
             <circle cx="56.6" cy="59.7" r="0.45" fill="#ffffff" />
-            {/* Reflet orange du soleil dans l'œil */}
             <circle cx="55.4" cy="60" r="0.4" fill="#fbbf24" />
-            {/* Nez */}
             <path d="M60 66 L59 68 L62 68 Z" fill="#d98848" />
-            {/* Bouche paisible */}
             <path d="M61 68 Q58 70 56 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-            {/* Joues */}
             <ellipse cx="58" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.55" />
-            {/* Moustaches */}
             <path d="M48 64 L38 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
             <path d="M48 67 L38 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           </g>
@@ -886,7 +817,6 @@ function PastOrderCard({ order, currency }: { order: Order; currency?: string | 
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Colonne 1 : Service + Pays + Numéro */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-secondary/80 flex items-center justify-center shrink-0 overflow-hidden">
@@ -936,7 +866,6 @@ function PastOrderCard({ order, currency }: { order: Order; currency?: string | 
             )}
           </div>
 
-          {/* Colonne 2 : Code SMS */}
           <div className="flex flex-col justify-center">
             {hasSmsCode ? (
               <div className="bg-green-50/80 rounded-xl p-4 border border-green-200 relative overflow-hidden">
@@ -964,7 +893,6 @@ function PastOrderCard({ order, currency }: { order: Order; currency?: string | 
             )}
           </div>
 
-          {/* Colonne 3 : Prix + Action */}
           <div className="flex flex-col justify-center gap-3">
             <div className="bg-white border border-border/60 rounded-xl p-4">
               <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Prix payé</div>
@@ -1020,7 +948,7 @@ function OrderFilters({
   counts: Record<OrderFilter, number>;
 }) {
   return (
-    <div className="bg-white/70 backdrop-blur-sm border border-border/60 rounded-2xl p-2 flex items-center gap-1.5 overflow-x-auto scrollbar-hide shadow-sm">
+    <div className="bg-white/80 backdrop-blur-sm border border-border/60 rounded-2xl p-2 flex items-center gap-1.5 overflow-x-auto scrollbar-hide shadow-sm">
       <div className="pl-2 pr-1 text-muted-foreground shrink-0">
         <Filter className="w-4 h-4" />
       </div>
@@ -1123,7 +1051,6 @@ function RechargesTab({ currency }: { currency?: string | null }) {
     );
   }
 
-  // Total cumulé des recharges créditées
   const totalCredited = topups
     .filter(t => t.status === "completed")
     .reduce((sum, t) => sum + (Number(t.amountEur) || 0), 0);
@@ -1132,7 +1059,6 @@ function RechargesTab({ currency }: { currency?: string | null }) {
 
   return (
     <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-5">
-      {/* Résumé en en-tête */}
       <motion.div
         variants={listItem}
         className="relative overflow-hidden bg-white border border-border/80 rounded-2xl p-5 shadow-sm"
@@ -1166,9 +1092,7 @@ function RechargesTab({ currency }: { currency?: string | null }) {
         </div>
       </motion.div>
 
-      {/* Timeline */}
       <div className="relative pl-6 sm:pl-8">
-        {/* Ligne verticale */}
         <div
           className="absolute left-[10px] sm:left-[14px] top-3 bottom-3 w-[2px] rounded-full"
           style={{ background: `linear-gradient(180deg, ${BRAND.primary}55, ${BRAND.primary}15)` }}
@@ -1188,21 +1112,18 @@ function RechargesTab({ currency }: { currency?: string | null }) {
                 variants={listItem}
                 className="relative"
               >
-                {/* Point sur la timeline */}
                 <div
                   className="absolute -left-6 sm:-left-8 top-5 w-3 h-3 rounded-full border-2 border-white shadow-sm z-10"
                   style={{ background: cfg.dot }}
                 />
 
                 <div className="bg-white border border-border/80 rounded-2xl p-4 hover:shadow-md transition-all duration-300 relative overflow-hidden group">
-                  {/* Bande latérale colorée */}
                   <div
                     className="absolute left-0 top-0 bottom-0 w-1 opacity-80"
                     style={{ background: cfg.dot }}
                   />
 
                   <div className="flex items-start justify-between gap-3">
-                    {/* Montant bien mis en avant */}
                     <div className="flex items-center gap-3">
                       <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ring-1 ${cfg.bg} ${cfg.ring}`}>
                         {isCompleted ? (
@@ -1226,14 +1147,12 @@ function RechargesTab({ currency }: { currency?: string | null }) {
                       </div>
                     </div>
 
-                    {/* Statut */}
                     <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ring-1 ${cfg.bg} ${cfg.color} ${cfg.ring}`}>
                       <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
                       {cfg.label}
                     </span>
                   </div>
 
-                  {/* Date / heure en bas */}
                   <div className="flex items-center gap-3 mt-3 pt-3 border-t border-dashed border-border/60 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
@@ -1607,177 +1526,210 @@ export default function Dashboard() {
   const balanceLocal = me && me.balance !== undefined ? formatLocalPrice(me.balance, me.currency) : null;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      {/* Header avec salutation + illustration animée */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-5">
-        <div className="flex items-center gap-4 sm:gap-5">
-          <TimeIllustration slot={slot} />
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
-              {greeting}
-            </h1>
-            {subline ? (
-              <p className="text-sm font-medium mt-1" style={{ color: BRAND.primaryDark }}>{subline}</p>
-            ) : (
-              <p className="text-muted-foreground text-sm sm:text-base mt-1">Gérez vos commandes, votre solde et votre compte avec simplicité.</p>
-            )}
+    <div
+      className="min-h-screen w-full"
+      style={{ background: "linear-gradient(180deg, #FAF7F2 0%, #F2EDE4 100%)" }}
+    >
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        {/* Header avec salutation + illustration animée */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-5">
+          <div className="flex items-center gap-4 sm:gap-5">
+            <TimeIllustration slot={slot} />
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
+                {greeting}
+              </h1>
+              {subline ? (
+                <p className="text-sm font-medium mt-1" style={{ color: BRAND.primaryDark }}>{subline}</p>
+              ) : (
+                <p className="text-muted-foreground text-sm sm:text-base mt-1">Gérez vos commandes, votre solde et votre compte avec simplicité.</p>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
+            {/* ⚠️ CARTE SOLDE — INCHANGÉE */}
+            <Link href="/wallet" className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-border/80 px-5 py-3 rounded-2xl text-sm font-bold hover:border-primary/50 hover:shadow-md hover:shadow-primary/5 transition-all active:scale-95">
+              <Wallet className="w-4 h-4 text-primary" />
+              {loadingMe ? "—" : `${me?.balance?.toFixed(2) ?? "0.00"} €`}
+              <Plus className="w-4 h-4 text-muted-foreground" />
+            </Link>
           </div>
         </div>
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
-          {/* ⚠️ CARTE SOLDE — INCHANGÉE */}
-          <Link href="/wallet" className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-border/80 px-5 py-3 rounded-2xl text-sm font-bold hover:border-primary/50 hover:shadow-md hover:shadow-primary/5 transition-all active:scale-95">
-            <Wallet className="w-4 h-4 text-primary" />
-            {loadingMe ? "—" : `${me?.balance?.toFixed(2) ?? "0.00"} €`}
-            <Plus className="w-4 h-4 text-muted-foreground" />
-          </Link>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+          {tabs.map(t => {
+            const isActive = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${
+                  isActive ? "text-white shadow-md" : "bg-white/60 text-muted-foreground hover:bg-white hover:text-foreground border border-transparent hover:border-border/50"
+                }`}
+                style={isActive ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
+              >
+                {t.icon} {t.label}
+              </button>
+            );
+          })}
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-        {tabs.map(t => {
-          const isActive = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${
-                isActive ? "text-white shadow-md" : "bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground border border-transparent hover:border-border/50"
-              }`}
-              style={isActive ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
-            >
-              {t.icon} {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -15 }}
-          transition={{ duration: 0.2 }}
-        >
-          {tab === "profile" ? (
-            loadingMe ? <div className="h-72 bg-secondary/50 animate-pulse rounded-3xl" /> : me ? <ProfileTab me={me} /> : null
-          ) : tab === "topups" ? (
-            <RechargesTab currency={me?.currency} />
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
-                {/* ⚠️ CARTE SOLDE (STAT) — INCHANGÉE + ajout conversion */}
-                <div className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-3xl p-6 shadow-sm group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                    <Wallet size={80} className="text-primary" />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.2 }}
+          >
+            {tab === "profile" ? (
+              loadingMe ? <div className="h-72 bg-secondary/50 animate-pulse rounded-3xl" /> : me ? <ProfileTab me={me} /> : null
+            ) : tab === "topups" ? (
+              <RechargesTab currency={me?.currency} />
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
+                  {/* ⚠️ CARTE SOLDE (STAT) — INCHANGÉE + ajout conversion */}
+                  <div className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-3xl p-6 shadow-sm group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                      <Wallet size={80} className="text-primary" />
+                    </div>
+                    <div className="relative z-10">
+                      <div className="text-[11px] font-bold text-primary uppercase tracking-widest mb-2">Solde Actuel</div>
+                      {loadingMe ? (
+                        <div className="h-10 w-24 bg-primary/10 animate-pulse rounded-lg" />
+                      ) : (
+                        <div className="text-4xl font-black text-foreground drop-shadow-sm">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
+                      )}
+                      {!loadingMe && balanceLocal && (
+                        <div className="text-sm font-bold mt-1 flex items-center gap-1" style={{ color: BRAND.primaryDark }}>
+                          <span className="opacity-70">≈</span> {balanceLocal}
+                        </div>
+                      )}
+                      <Link href="/wallet" className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary bg-white/60 hover:bg-white px-3 py-1.5 rounded-lg font-bold transition-colors shadow-sm backdrop-blur-sm border border-primary/10">
+                        Recharger le compte <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   </div>
-                  <div className="relative z-10">
-                    <div className="text-[11px] font-bold text-primary uppercase tracking-widest mb-2">Solde Actuel</div>
-                    {loadingMe ? (
-                      <div className="h-10 w-24 bg-primary/10 animate-pulse rounded-lg" />
-                    ) : (
-                      <div className="text-4xl font-black text-foreground drop-shadow-sm">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
-                    )}
-                    {!loadingMe && balanceLocal && (
-                      <div className="text-sm font-bold mt-1 flex items-center gap-1" style={{ color: BRAND.primaryDark }}>
-                        <span className="opacity-70">≈</span> {balanceLocal}
+
+                  {/* Carte "En cours" — nouvelle palette bleu ciel + icône */}
+                  <div
+                    className="relative overflow-hidden rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow group"
+                    style={{
+                      background: "linear-gradient(135deg, #EFF5FB 0%, #DCE9F3 100%)",
+                      border: "1px solid #C8DBEC"
+                    }}
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-15 group-hover:scale-110 transition-transform duration-500">
+                      <Activity size={80} style={{ color: "#0369A1" }} />
+                    </div>
+                    <div className="relative">
+                      <div className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#0C4A6E" }}>
+                        En cours
                       </div>
-                    )}
-                    <Link href="/wallet" className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary bg-white/60 hover:bg-white px-3 py-1.5 rounded-lg font-bold transition-colors shadow-sm backdrop-blur-sm border border-primary/10">
-                      Recharger le compte <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                </div>
-
-                {/* En cours */}
-                <div className="relative overflow-hidden bg-white border border-border/80 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="absolute top-0 right-0 w-24 h-24 rounded-full -mr-8 -mt-8 blur-2xl" style={{ background: `${BRAND.primary}1a` }} />
-                  <div className="relative">
-                    <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">En cours</div>
-                    <div className="text-4xl font-black text-foreground">{activeOrders.length}</div>
-                    <div className="text-[11px] text-muted-foreground mt-1">Commande{activeOrders.length > 1 ? "s" : ""} active{activeOrders.length > 1 ? "s" : ""}</div>
-                  </div>
-                </div>
-
-                {/* Historique */}
-                <div className="relative overflow-hidden bg-white border border-border/80 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="absolute top-0 right-0 w-24 h-24 rounded-full -mr-8 -mt-8 blur-2xl" style={{ background: `${BRAND.primary}1a` }} />
-                  <div className="relative">
-                    <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Historique Total</div>
-                    <div className="text-4xl font-black text-foreground">{orders?.length ?? 0}</div>
-                    <div className="text-[11px] text-muted-foreground mt-1">Commandes passées</div>
-                  </div>
-                </div>
-              </div>
-
-              {activeOrders.length > 0 && (
-                <div className="mb-12">
-                  <h2 className="text-lg font-extrabold mb-5 flex items-center gap-2 text-foreground">
-                    <div className="p-2 rounded-lg" style={{ background: BRAND.primarySoft }}>
-                      <RefreshCw className="w-5 h-5 animate-spin" style={{ color: BRAND.primary }} />
+                      <div className="text-4xl font-black" style={{ color: "#0C4A6E" }}>
+                        {activeOrders.length}
+                      </div>
+                      <div className="text-[11px] mt-1" style={{ color: "#0369A1", opacity: 0.9 }}>
+                        Commande{activeOrders.length > 1 ? "s" : ""} active{activeOrders.length > 1 ? "s" : ""}
+                      </div>
                     </div>
-                    Commandes en cours d'activation
-                  </h2>
-                  <motion.div variants={listContainer} initial="hidden" animate="show" className="grid gap-5 sm:grid-cols-2">
-                    {activeOrders.map(o => <ActiveOrderCard key={o.id} orderId={o.id} currency={me?.currency} />)}
-                  </motion.div>
-                </div>
-              )}
+                  </div>
 
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-                  <h2 className="text-lg font-extrabold text-foreground flex items-center gap-2">
-                    <div className="p-2 bg-secondary rounded-lg">
-                      <ShoppingBag className="w-5 h-5 text-muted-foreground" />
+                  {/* Carte "Historique Total" — nouvelle palette sauge + icône */}
+                  <div
+                    className="relative overflow-hidden rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow group"
+                    style={{
+                      background: "linear-gradient(135deg, #F3F5EE 0%, #E5EBD9 100%)",
+                      border: "1px solid #D2DBC5"
+                    }}
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-15 group-hover:scale-110 transition-transform duration-500">
+                      <BarChart3 size={80} style={{ color: "#3F6212" }} />
                     </div>
-                    Toutes les commandes
-                  </h2>
+                    <div className="relative">
+                      <div className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#365314" }}>
+                        Historique Total
+                      </div>
+                      <div className="text-4xl font-black" style={{ color: "#365314" }}>
+                        {orders?.length ?? 0}
+                      </div>
+                      <div className="text-[11px] mt-1" style={{ color: "#4D7C0F", opacity: 0.9 }}>
+                        Commandes passées
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {orders && orders.length > 0 && (
-                  <div className="mb-5">
-                    <OrderFilters value={orderFilter} onChange={setOrderFilter} counts={filterCounts} />
+                {activeOrders.length > 0 && (
+                  <div className="mb-12">
+                    <h2 className="text-lg font-extrabold mb-5 flex items-center gap-2 text-foreground">
+                      <div className="p-2 rounded-lg" style={{ background: BRAND.primarySoft }}>
+                        <RefreshCw className="w-5 h-5 animate-spin" style={{ color: BRAND.primary }} />
+                      </div>
+                      Commandes en cours d'activation
+                    </h2>
+                    <motion.div variants={listContainer} initial="hidden" animate="show" className="grid gap-5 sm:grid-cols-2">
+                      {activeOrders.map(o => <ActiveOrderCard key={o.id} orderId={o.id} currency={me?.currency} />)}
+                    </motion.div>
                   </div>
                 )}
 
-                {loadingOrders ? (
-                  <div className="space-y-4">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="h-28 bg-secondary/50 animate-pulse rounded-2xl" />
-                    ))}
+                <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                    <h2 className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                      <div className="p-2 bg-secondary rounded-lg">
+                        <ShoppingBag className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      Toutes les commandes
+                    </h2>
                   </div>
-                ) : filteredPastOrders.length === 0 && activeOrders.length === 0 ? (
-                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-24 bg-white border border-border/80 rounded-3xl shadow-sm">
-                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner" style={{ background: BRAND.primarySoft }}>
-                      <ShoppingBag className="w-8 h-8" style={{ color: BRAND.primary }} />
-                    </div>
-                    <h3 className="text-xl font-bold mb-2 text-foreground">Votre historique est vide</h3>
-                    <p className="text-muted-foreground text-sm mb-8 max-w-sm mx-auto">Toutes vos commandes et réceptions de codes SMS seront conservées ici.</p>
-                    <Link href="/order" className="inline-flex items-center gap-2 px-8 py-3.5 text-white font-bold rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl active:translate-y-0 text-sm"
-                      style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, boxShadow: `0 8px 24px ${BRAND.primary}33` }}>
-                      Démarrer une commande <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </motion.div>
-                ) : filteredPastOrders.length === 0 ? (
-                  <div className="text-center py-12 bg-white border border-dashed border-border/60 rounded-2xl">
-                    <Search className="w-6 h-6 text-muted-foreground/60 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Aucune commande dans cette catégorie</p>
-                  </div>
-                ) : (
-                  <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-4">
-                    {filteredPastOrders.map(o => (
-                      <PastOrderCard key={o.id} order={o} currency={me?.currency} />
-                    ))}
-                  </motion.div>
-                )}
 
-                <ImportantNotice />
-              </div>
-            </>
-          )}
-        </motion.div>
-      </AnimatePresence>
+                  {orders && orders.length > 0 && (
+                    <div className="mb-5">
+                      <OrderFilters value={orderFilter} onChange={setOrderFilter} counts={filterCounts} />
+                    </div>
+                  )}
+
+                  {loadingOrders ? (
+                    <div className="space-y-4">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="h-28 bg-secondary/50 animate-pulse rounded-2xl" />
+                      ))}
+                    </div>
+                  ) : filteredPastOrders.length === 0 && activeOrders.length === 0 ? (
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-24 bg-white border border-border/80 rounded-3xl shadow-sm">
+                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner" style={{ background: BRAND.primarySoft }}>
+                        <ShoppingBag className="w-8 h-8" style={{ color: BRAND.primary }} />
+                      </div>
+                      <h3 className="text-xl font-bold mb-2 text-foreground">Votre historique est vide</h3>
+                      <p className="text-muted-foreground text-sm mb-8 max-w-sm mx-auto">Toutes vos commandes et réceptions de codes SMS seront conservées ici.</p>
+                      <Link href="/order" className="inline-flex items-center gap-2 px-8 py-3.5 text-white font-bold rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl active:translate-y-0 text-sm"
+                        style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, boxShadow: `0 8px 24px ${BRAND.primary}33` }}>
+                        Démarrer une commande <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </motion.div>
+                  ) : filteredPastOrders.length === 0 ? (
+                    <div className="text-center py-12 bg-white border border-dashed border-border/60 rounded-2xl">
+                      <Search className="w-6 h-6 text-muted-foreground/60 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Aucune commande dans cette catégorie</p>
+                    </div>
+                  ) : (
+                    <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-4">
+                      {filteredPastOrders.map(o => (
+                        <PastOrderCard key={o.id} order={o} currency={me?.currency} />
+                      ))}
+                    </motion.div>
+                  )}
+
+                  <ImportantNotice />
+                </div>
+              </>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
