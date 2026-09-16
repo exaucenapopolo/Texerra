@@ -4,7 +4,7 @@ import { auth } from "../lib/firebase";
 import {
   Wallet, Plus, ArrowRight, ArrowLeft, CheckCircle2, Clock, Loader2, ExternalLink,
   User, Mail, Phone, RefreshCw, XCircle, History, AlertCircle, Sparkles, Receipt,
-  TrendingUp, Calendar, Pencil, LayoutGrid, List, Target, Coins
+  TrendingUp, Calendar, LayoutGrid, List, Coins
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -17,8 +17,6 @@ import { getCurrency, formatLocalAmount } from "../lib/currencies";
 
 const MIN_AMOUNT = 1.65;
 const PRESET_AMOUNTS = [2, 5, 10, 20];
-const DEFAULT_GOAL = 20;
-const GOAL_STORAGE_KEY = "texerra:wallet:goal";
 const VIEW_STORAGE_KEY = "texerra:wallet:view";
 
 const BRAND = {
@@ -107,13 +105,10 @@ function PiggyBankSVG() {
 
         <circle cx="60" cy="60" r="52" fill="url(#pgSky)" />
 
-        {/* Soleil */}
         <circle cx="98" cy="22" r="10" fill="#fef9c3" opacity="0.85" className="pgGlow" />
 
-        {/* Sol */}
         <ellipse cx="60" cy="102" rx="46" ry="6" fill="#78350f" opacity="0.2" />
 
-        {/* Tirelire */}
         <g>
           <ellipse cx="84" cy="88" rx="17" ry="13" fill="url(#pgPig)" />
           <circle cx="80" cy="84" r="1.3" fill="#1f2937" />
@@ -127,13 +122,11 @@ function PiggyBankSVG() {
           <rect x="90" y="98" width="4" height="5" rx="1" fill="#db2777" />
         </g>
 
-        {/* Pièce qui tombe */}
         <g className="pgCoin">
           <circle cx="83" cy="60" r="6" fill="url(#pgCoin)" stroke="#a16207" strokeWidth="0.6" />
           <text x="83" y="63" textAnchor="middle" fontSize="7" fontWeight="900" fill="#78350f" fontFamily="system-ui">€</text>
         </g>
 
-        {/* Chat */}
         <g>
           <path className="pgTail" d="M32 92 Q22 88 22 80" stroke="url(#pgCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M28 94 Q26 78 40 72 Q54 70 56 86 Q58 94 56 98 L28 98 Z" fill="url(#pgCat)" />
@@ -141,7 +134,6 @@ function PiggyBankSVG() {
           <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#pgCat)" />
           <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#pgCat)" />
 
-          {/* Tête */}
           <ellipse cx="36" cy="58" rx="14" ry="13" fill="url(#pgCat)" />
           <path d="M24 48 L22 40 L32 46 Z" fill="url(#pgCat)" />
           <path d="M46 48 L52 40 L48 52 Z" fill="url(#pgCat)" />
@@ -158,7 +150,6 @@ function PiggyBankSVG() {
           <path d="M24 64 L16 65" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           <path d="M48 62 L56 60" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           <path d="M48 64 L56 65" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          {/* Patte levée */}
           <path d="M52 76 Q62 70 76 64" stroke="url(#pgCat)" strokeWidth="4" fill="none" strokeLinecap="round" />
           <ellipse cx="76" cy="64" rx="3" ry="2.5" fill="url(#pgCat)" />
         </g>
@@ -210,29 +201,23 @@ function WalletCoinsSVG() {
 
         <circle cx="60" cy="60" r="52" fill="url(#wcSky)" />
 
-        {/* Nuage */}
         <g className="wcCloud" opacity="0.9">
           <ellipse cx="26" cy="26" rx="12" ry="5" fill="#ffffff" />
           <ellipse cx="34" cy="24" rx="9" ry="6" fill="#ffffff" />
           <ellipse cx="20" cy="25" rx="7" ry="4.5" fill="#ffffff" />
         </g>
 
-        {/* Sol */}
         <ellipse cx="60" cy="102" rx="46" ry="6" fill="#1e40af" opacity="0.18" />
 
-        {/* Portefeuille ouvert */}
         <g>
           <path d="M70 78 L104 78 Q108 78 108 82 L108 96 Q108 100 104 100 L70 100 Q66 100 66 96 L66 82 Q66 78 70 78 Z" fill="url(#wcWallet)" />
           <path d="M70 78 L104 78 Q108 78 108 82 L108 86 L66 86 L66 82 Q66 78 70 78 Z" fill="#9a3412" opacity="0.85" />
           <path d="M100 86 L108 86 L108 94 L100 94 Z" fill="#fed7aa" opacity="0.35" />
-          {/* Fermoir */}
           <circle cx="103" cy="90" r="1.8" fill="#fbbf24" />
-          {/* Billets qui dépassent */}
           <path d="M72 78 L78 70 L102 70 L104 78 Z" fill="#86efac" stroke="#16a34a" strokeWidth="0.4" />
           <path d="M74 78 L80 72 L98 72 L100 78 Z" fill="#4ade80" opacity="0.9" />
         </g>
 
-        {/* Pièces flottantes */}
         <g className="wcC1">
           <circle cx="58" cy="62" r="5.5" fill="url(#wcCoin)" stroke="#a16207" strokeWidth="0.5" />
           <text x="58" y="65" textAnchor="middle" fontSize="6" fontWeight="900" fill="#78350f">€</text>
@@ -246,7 +231,6 @@ function WalletCoinsSVG() {
           <text x="80" y="69" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#78350f">€</text>
         </g>
 
-        {/* Chat assis à gauche */}
         <g>
           <path className="wcTail" d="M32 92 Q22 88 22 80" stroke="url(#wcCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M28 94 Q26 78 40 72 Q52 70 54 86 Q56 94 54 98 L28 98 Z" fill="url(#wcCat)" />
@@ -254,7 +238,6 @@ function WalletCoinsSVG() {
           <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#wcCat)" />
           <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#wcCat)" />
 
-          {/* Tête */}
           <ellipse cx="34" cy="56" rx="14" ry="13" fill="url(#wcCat)" />
           <path d="M22 46 L20 38 L30 44 Z" fill="url(#wcCat)" />
           <path d="M44 46 L50 38 L46 50 Z" fill="url(#wcCat)" />
@@ -313,17 +296,13 @@ function CoinStackSVG() {
 
         <circle cx="60" cy="60" r="52" fill="url(#csSky)" />
 
-        {/* Étoiles précoces */}
         <circle className="csStar" cx="22" cy="20" r="1.2" fill="#ffffff" />
         <circle className="csStar" cx="100" cy="28" r="1" fill="#ffffff" style={{ animationDelay: "1.5s" }} />
 
-        {/* Soleil couchant */}
         <circle cx="60" cy="78" r="20" fill="#fcd34d" opacity="0.85" />
 
-        {/* Sol */}
         <ellipse cx="60" cy="102" rx="46" ry="7" fill="#4c1d95" opacity="0.35" />
 
-        {/* Pile de pièces */}
         <g>
           <ellipse cx="82" cy="98" rx="12" ry="2.5" fill="#a16207" opacity="0.6" />
           <ellipse cx="82" cy="96" rx="11" ry="4" fill="url(#csCoin)" stroke="#a16207" strokeWidth="0.5" />
@@ -331,11 +310,9 @@ function CoinStackSVG() {
           <ellipse cx="82" cy="88" rx="11" ry="4" fill="url(#csCoin)" stroke="#a16207" strokeWidth="0.5" />
           <ellipse cx="82" cy="84" rx="11" ry="4" fill="#fde047" stroke="#a16207" strokeWidth="0.5" />
           <text x="82" y="87" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#78350f">€</text>
-          {/* Petit rayon de lumière */}
           <path className="csShine" d="M82 76 L80 72 L82 68 L84 72 Z" fill="#fef9c3" />
         </g>
 
-        {/* Chat à droite ? Non, à gauche */}
         <g>
           <path className="csTail" d="M32 92 Q22 88 22 80" stroke="url(#csCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M28 94 Q26 78 40 72 Q52 70 54 86 Q56 94 54 98 L28 98 Z" fill="url(#csCat)" />
@@ -343,12 +320,10 @@ function CoinStackSVG() {
           <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#csCat)" />
           <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#csCat)" />
 
-          {/* Tête */}
           <g className="csHead">
             <ellipse cx="34" cy="56" rx="14" ry="13" fill="url(#csCat)" />
             <path d="M22 46 L20 38 L30 44 Z" fill="url(#csCat)" />
             <path d="M44 46 L50 38 L46 50 Z" fill="url(#csCat)" />
-            {/* Yeux mi-clos contemplatifs */}
             <path d="M25 56 Q28 58 31 56" stroke="#1f2937" strokeWidth="1.6" fill="none" strokeLinecap="round" />
             <path d="M37 56 Q40 58 43 56" stroke="#1f2937" strokeWidth="1.6" fill="none" strokeLinecap="round" />
             <path d="M34 62 L33 64 L35 64 Z" fill="#d98848" />
@@ -408,60 +383,44 @@ function MoneyBagSleepSVG() {
 
         <circle cx="60" cy="60" r="52" fill="url(#mbSky)" />
 
-        {/* Étoiles */}
         <circle className="mbStarA" cx="24" cy="26" r="1.2" fill="#fef3c7" />
         <circle className="mbStarB" cx="94" cy="22" r="1.5" fill="#fef3c7" />
         <circle className="mbStarC" cx="100" cy="54" r="1" fill="#fef3c7" />
         <circle className="mbStarA" cx="16" cy="52" r="0.9" fill="#fef3c7" />
         <circle className="mbStarB" cx="82" cy="14" r="1" fill="#fef3c7" />
 
-        {/* Lune */}
         <g className="mbMoon">
           <circle cx="96" cy="32" r="8" fill="#fef3c7" />
           <circle cx="99" cy="29" r="7" fill="#1a2547" />
         </g>
 
-        {/* Sol */}
         <ellipse cx="60" cy="100" rx="42" ry="7" fill="#0f1833" opacity="0.75" />
 
-        {/* Sac d'argent */}
         <g>
-          {/* Corps du sac */}
           <path d="M30 88 Q26 78 34 74 L86 74 Q94 78 90 88 Q90 98 60 100 Q30 98 30 88 Z" fill="url(#mbBag)" />
-          {/* Nouveau du haut */}
           <path d="M42 74 Q52 70 60 70 Q68 70 78 74" stroke="#fbbf24" strokeWidth="1.5" fill="none" strokeLinecap="round" />
           <path d="M46 72 Q54 68 60 68 Q66 68 74 72" stroke="#fbbf24" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-          {/* Symbole € sur le sac */}
           <circle cx="60" cy="86" r="7" fill="#fbbf24" opacity="0.9" />
           <text x="60" y="90" textAnchor="middle" fontSize="11" fontWeight="900" fill="#78350f" fontFamily="system-ui">€</text>
         </g>
 
-        {/* Chat endormi sur le sac */}
         <g className="mbBody">
           <ellipse cx="58" cy="72" rx="26" ry="12" fill="url(#mbCat)" />
-          {/* Rayures */}
           <path d="M42 68 Q46 72 42 76" stroke="#c9723a" strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round" />
           <path d="M50 66 Q54 72 50 78" stroke="#c9723a" strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round" />
-          {/* Queue */}
           <path d="M82 74 Q92 70 94 78 Q92 82 88 80" stroke="url(#mbCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          {/* Tête */}
           <ellipse cx="38" cy="70" rx="13" ry="11" fill="url(#mbCat)" />
           <path d="M29 60 L27 53 L35 58 Z" fill="url(#mbCat)" />
           <path d="M46 60 L52 53 L48 62 Z" fill="url(#mbCat)" />
-          {/* Yeux fermés */}
           <path d="M32 70 Q34 72 36 70" stroke="#3a2417" strokeWidth="1.4" fill="none" strokeLinecap="round" />
           <path d="M40 70 Q42 72 44 70" stroke="#3a2417" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-          {/* Nez */}
           <path d="M38 74 L37 76 L39 76 Z" fill="#d98848" />
-          {/* Joues */}
           <ellipse cx="30" cy="75" rx="2.5" ry="1.5" fill="#f4a76b" opacity="0.6" />
           <ellipse cx="46" cy="75" rx="2.5" ry="1.5" fill="#f4a76b" opacity="0.6" />
-          {/* Moustaches */}
           <path d="M26 73 L18 71" stroke="#3a2417" strokeWidth="0.7" opacity="0.55" strokeLinecap="round" />
           <path d="M26 75 L18 76" stroke="#3a2417" strokeWidth="0.7" opacity="0.55" strokeLinecap="round" />
         </g>
 
-        {/* Zzz */}
         <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
           <text className="mbZ1" x="72" y="54" fontSize="11">Z</text>
           <text className="mbZ2" x="78" y="52" fontSize="13">Z</text>
@@ -550,7 +509,6 @@ function TopupHistoryItem({
   if (view === "grid") {
     return (
       <div className="flex flex-col gap-3 h-full">
-        {/* Ligne du haut : icône + montant + statut */}
         <div className="flex items-start justify-between gap-3">
           <div
             className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
@@ -567,7 +525,6 @@ function TopupHistoryItem({
           </span>
         </div>
 
-        {/* Montant */}
         <div>
           <div className="font-bold text-foreground text-lg leading-tight">
             +{amount.toFixed(2)} €
@@ -579,12 +536,10 @@ function TopupHistoryItem({
           )}
         </div>
 
-        {/* Date */}
         <div className="text-[11px] text-muted-foreground mt-auto">
           {date} · {time}
         </div>
 
-        {/* Bouton vérifier */}
         {topup.status === "pending" && (
           <button
             onClick={handleVerify}
@@ -615,7 +570,6 @@ function TopupHistoryItem({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        {/* Bloc gauche : icône + infos */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div
             className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
@@ -640,7 +594,6 @@ function TopupHistoryItem({
           </div>
         </div>
 
-        {/* Bloc droit : statut + bouton */}
         <div className="flex items-center justify-between gap-2 sm:justify-end shrink-0">
           <span
             className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap"
@@ -752,19 +705,6 @@ export default function WalletPage() {
   const [forceChecking, setForceChecking] = useState(false);
   const [forceCheckMsg, setForceCheckMsg] = useState<{ type: "info" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", mobile: "" });
-
-  /* Objectif d'épargne */
-  const [goal, setGoal] = useState<number>(() => {
-    const saved = localStorage.getItem(GOAL_STORAGE_KEY);
-    const n = saved ? parseFloat(saved) : DEFAULT_GOAL;
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_GOAL;
-  });
-  const [editingGoal, setEditingGoal] = useState(false);
-  const [goalInput, setGoalInput] = useState(goal.toString());
-
-  useEffect(() => {
-    localStorage.setItem(GOAL_STORAGE_KEY, String(goal));
-  }, [goal]);
 
   /* Vue liste / grille */
   const [view, setView] = useState<"list" | "grid">(() => {
@@ -919,16 +859,6 @@ export default function WalletPage() {
     }
   };
 
-  const handleSaveGoal = () => {
-    const n = parseFloat(goalInput);
-    if (Number.isFinite(n) && n > 0) {
-      setGoal(n);
-    } else {
-      setGoalInput(goal.toString());
-    }
-    setEditingGoal(false);
-  };
-
   const historyTopups = (topups ?? []).filter(t => t.id !== pendingTopupId || step === "select");
   const balanceLocal = me && me.balance !== undefined && me.currency && me.currency !== "EUR"
     ? formatLocalAmount(me.balance, me.currency)
@@ -937,13 +867,6 @@ export default function WalletPage() {
   const totalCredited = historyTopups
     .filter(t => t.status === "completed")
     .reduce((sum, t) => sum + parseFloat(String(t.amountEur)), 0);
-
-  /* Barre de progression objectif */
-  const balance = me?.balance ?? 0;
-  const goalProgress = Math.min(100, Math.max(0, (balance / goal) * 100));
-  const goalLocal = localCurrency && localCurrency.code !== "EUR"
-    ? formatLocalAmount(goal, localCurrency.code)
-    : null;
 
   const slot = getTimeSlot();
 
@@ -986,7 +909,7 @@ export default function WalletPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-4 shadow-sm group"
+          className="relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-8 shadow-sm group"
           style={{
             background: `linear-gradient(135deg, ${BRAND.primarySoft} 0%, #ffffff 60%, #FDF6F1 100%)`,
             border: `1px solid ${BRAND.primary}26`
@@ -1034,93 +957,6 @@ export default function WalletPage() {
           </div>
         </motion.div>
 
-        {/* Objectif d'épargne */}
-        {user && !loadingMe && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="relative overflow-hidden rounded-2xl bg-white border border-border/80 p-4 mb-8 shadow-sm"
-          >
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: BRAND.primarySoft, color: BRAND.primary }}
-                >
-                  <Target className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs uppercase font-bold text-muted-foreground tracking-wider">Objectif d'épargne</div>
-                  {editingGoal ? (
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={goalInput}
-                        onChange={(e) => setGoalInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveGoal(); if (e.key === "Escape") { setEditingGoal(false); setGoalInput(goal.toString()); } }}
-                        autoFocus
-                        className="w-24 px-2 py-1 text-sm border rounded-lg focus:outline-none"
-                        style={{ borderColor: `${BRAND.primary}66` }}
-                      />
-                      <span className="text-sm font-bold text-foreground">€</span>
-                      <button
-                        onClick={handleSaveGoal}
-                        className="text-xs font-bold px-2 py-1 rounded-md text-white"
-                        style={{ background: BRAND.primary }}
-                      >
-                        OK
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-sm font-bold text-foreground flex items-center gap-2">
-                      {balance.toFixed(2)} € <span className="text-muted-foreground font-normal">sur {goal.toFixed(0)} €</span>
-                      {goalLocal && (
-                        <span className="text-xs font-semibold" style={{ color: BRAND.primaryDark }}>
-                          ≈ {goalLocal}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {!editingGoal && (
-                <button
-                  onClick={() => { setEditingGoal(true); setGoalInput(goal.toString()); }}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                  title="Modifier l'objectif"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Barre de progression */}
-            <div className="relative h-2 rounded-full overflow-hidden" style={{ background: "#F0EBE3" }}>
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${goalProgress}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{
-                  background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})`,
-                  boxShadow: `0 0 12px ${BRAND.primary}55`
-                }}
-              />
-            </div>
-            <div className="flex items-center justify-between mt-2 text-[11px]">
-              <span className="font-semibold" style={{ color: BRAND.primaryDark }}>
-                {goalProgress.toFixed(0)} % atteint
-              </span>
-              <span className="text-muted-foreground">
-                {balance >= goal ? "🎉 Objectif atteint !" : `Encore ${(goal - balance).toFixed(2)} €`}
-              </span>
-            </div>
-          </motion.div>
-        )}
-
         {/* ── ÉTAPE : sélection du montant ── */}
         {step === "select" && (
           <motion.div
@@ -1147,7 +983,7 @@ export default function WalletPage() {
               </div>
             </div>
 
-            {/* ⚠️ AVERTISSEMENT VISIBLE */}
+            {/* Avertissement */}
             <motion.div
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1595,7 +1431,6 @@ export default function WalletPage() {
               style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
             />
 
-            {/* En-tête avec résumé + toggle vue */}
             <div className="p-5 sm:p-6 border-b border-border/60 bg-gradient-to-br from-white to-secondary/30">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -1613,7 +1448,6 @@ export default function WalletPage() {
                   </div>
                 </div>
 
-                {/* Toggle liste / grille */}
                 <div className="flex items-center gap-1 bg-white border border-border/70 rounded-xl p-0.5">
                   <button
                     onClick={() => setView("list")}
