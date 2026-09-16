@@ -4,7 +4,7 @@ import { auth } from "../lib/firebase";
 import {
   Wallet, Plus, ArrowRight, ArrowLeft, CheckCircle2, Clock, Loader2, ExternalLink,
   User, Mail, Phone, RefreshCw, XCircle, History, AlertCircle, Sparkles, Receipt,
-  TrendingUp, Calendar
+  TrendingUp, Calendar, Pencil, LayoutGrid, List, Target, Coins
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -17,6 +17,9 @@ import { getCurrency, formatLocalAmount } from "../lib/currencies";
 
 const MIN_AMOUNT = 1.65;
 const PRESET_AMOUNTS = [2, 5, 10, 20];
+const DEFAULT_GOAL = 20;
+const GOAL_STORAGE_KEY = "texerra:wallet:goal";
+const VIEW_STORAGE_KEY = "texerra:wallet:view";
 
 const BRAND = {
   primary: "#C55A34",
@@ -45,7 +48,7 @@ interface UserProfile {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Salutations & SVG animés contextuels                               */
+/* Slot temporel                                                      */
 /* ────────────────────────────────────────────────────────────────── */
 
 type TimeSlot = "night" | "morning" | "afternoon" | "evening";
@@ -59,276 +62,304 @@ function getTimeSlot(): TimeSlot {
   return "night";
 }
 
-function SleepingCatSVG() {
+/* ────────────────────────────────────────────────────────────────── */
+/* SVG 1 — Matin : Chat + tirelire (pièce qui tombe)                  */
+/* ────────────────────────────────────────────────────────────────── */
+
+function PiggyBankSVG() {
   return (
     <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
-          <radialGradient id="wNightSky" cx="0.5" cy="0.5" r="0.7">
-            <stop offset="0" stopColor="#2d3f72" />
-            <stop offset="1" stopColor="#1a2547" />
+          <radialGradient id="pgSky" cx="0.5" cy="0.4" r="0.75">
+            <stop offset="0" stopColor="#fef3c7" />
+            <stop offset="1" stopColor="#fcd34d" />
           </radialGradient>
-          <linearGradient id="wCatFur" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="pgCat" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#ffd4a8" />
             <stop offset="1" stopColor="#f4a76b" />
           </linearGradient>
-          <linearGradient id="wCatEar" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#f4a76b" />
-            <stop offset="1" stopColor="#d98848" />
+          <linearGradient id="pgPig" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fbcfe8" />
+            <stop offset="1" stopColor="#f472b6" />
+          </linearGradient>
+          <linearGradient id="pgCoin" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fde047" />
+            <stop offset="1" stopColor="#ca8a04" />
           </linearGradient>
         </defs>
         <style>{`
-          @keyframes wCatBreathe { 0%,100%{transform:scale(1) translateY(0)} 50%{transform:scale(1.025,1.015) translateY(-1px)} }
-          @keyframes wFloatZ1 { 0%{opacity:0;transform:translate(0,0) scale(.5)} 25%{opacity:1;transform:translate(4px,-14px) scale(.8)} 100%{opacity:0;transform:translate(10px,-34px) scale(1.1)} }
-          @keyframes wFloatZ2 { 0%{opacity:0;transform:translate(0,0) scale(.5)} 25%{opacity:1;transform:translate(6px,-16px) scale(.9)} 100%{opacity:0;transform:translate(14px,-38px) scale(1.2)} }
-          @keyframes wFloatZ3 { 0%{opacity:0;transform:translate(0,0) scale(.6)} 25%{opacity:1;transform:translate(8px,-18px) scale(1)} 100%{opacity:0;transform:translate(18px,-42px) scale(1.35)} }
-          @keyframes wTwinkle { 0%,100%{opacity:.25} 50%{opacity:1} }
-          @keyframes wMoonGlow { 0%,100%{opacity:.7} 50%{opacity:1} }
-          .wCatBody { animation: wCatBreathe 3.4s ease-in-out infinite; transform-origin: 60px 76px; }
-          .wz1 { animation: wFloatZ1 3s ease-out infinite; }
-          .wz2 { animation: wFloatZ2 3s ease-out infinite .9s; }
-          .wz3 { animation: wFloatZ3 3s ease-out infinite 1.8s; }
-          .wStarA { animation: wTwinkle 2.2s ease-in-out infinite; }
-          .wStarB { animation: wTwinkle 2.2s ease-in-out infinite .8s; }
-          .wStarC { animation: wTwinkle 2.2s ease-in-out infinite 1.5s; }
-          .wMoon { animation: wMoonGlow 4s ease-in-out infinite; }
+          @keyframes pgCoinDrop {
+            0% { transform: translateY(-22px); opacity: 0; }
+            15% { opacity: 1; }
+            70% { transform: translateY(0); opacity: 1; }
+            78% { transform: translateY(2px) scale(0.9); opacity: 0; }
+            100% { opacity: 0; }
+          }
+          @keyframes pgTail { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-9deg); } }
+          @keyframes pgBlink { 0%,92%,100% { transform: scaleY(1); } 96% { transform: scaleY(0.15); } }
+          @keyframes pgGlow { 0%,100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+          .pgCoin { animation: pgCoinDrop 2s ease-in infinite; }
+          .pgTail { animation: pgTail 2.2s ease-in-out infinite; transform-origin: 32px 92px; }
+          .pgBlink { animation: pgBlink 4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+          .pgGlow { animation: pgGlow 3s ease-in-out infinite; }
         `}</style>
-        <circle cx="60" cy="60" r="52" fill="url(#wNightSky)" />
-        <circle className="wStarA" cx="24" cy="28" r="1.2" fill="#fef3c7" />
-        <circle className="wStarB" cx="92" cy="22" r="1.5" fill="#fef3c7" />
-        <circle className="wStarC" cx="98" cy="52" r="1" fill="#fef3c7" />
-        <circle className="wStarA" cx="18" cy="52" r="0.9" fill="#fef3c7" />
-        <circle className="wStarB" cx="80" cy="14" r="1" fill="#fef3c7" />
-        <g className="wMoon">
-          <circle cx="94" cy="32" r="8" fill="#fef3c7" />
-          <circle cx="97" cy="29" r="7" fill="#1a2547" />
+
+        <circle cx="60" cy="60" r="52" fill="url(#pgSky)" />
+
+        {/* Soleil */}
+        <circle cx="98" cy="22" r="10" fill="#fef9c3" opacity="0.85" className="pgGlow" />
+
+        {/* Sol */}
+        <ellipse cx="60" cy="102" rx="46" ry="6" fill="#78350f" opacity="0.2" />
+
+        {/* Tirelire */}
+        <g>
+          <ellipse cx="84" cy="88" rx="17" ry="13" fill="url(#pgPig)" />
+          <circle cx="80" cy="84" r="1.3" fill="#1f2937" />
+          <ellipse cx="98" cy="88" rx="3.5" ry="4" fill="#fbcfe8" />
+          <circle cx="98" cy="87" r="0.9" fill="#831843" />
+          <circle cx="98" cy="90" r="0.9" fill="#831843" />
+          <path d="M76 80 L73 74 L81 78 Z" fill="#db2777" />
+          <path d="M90 80 L93 74 L85 78 Z" fill="#db2777" />
+          <rect x="78" y="76" width="10" height="2" rx="1" fill="#831843" opacity="0.65" />
+          <rect x="74" y="98" width="4" height="5" rx="1" fill="#db2777" />
+          <rect x="90" y="98" width="4" height="5" rx="1" fill="#db2777" />
         </g>
-        <ellipse cx="60" cy="98" rx="42" ry="8" fill="#0f1833" opacity="0.7" />
-        <g className="wCatBody">
-          <ellipse cx="58" cy="82" rx="32" ry="18" fill="url(#wCatFur)" />
-          <path d="M38 76 Q44 82 40 88" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
-          <path d="M48 74 Q54 82 48 90" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
-          <path d="M88 82 Q98 80 100 88 Q98 94 92 92" stroke="url(#wCatFur)" strokeWidth="6" fill="none" strokeLinecap="round" />
-          <ellipse cx="38" cy="78" rx="16" ry="14" fill="url(#wCatFur)" />
-          <path d="M28 68 L26 60 L34 66 Z" fill="url(#wCatEar)" />
-          <path d="M46 68 L52 60 L48 70 Z" fill="url(#wCatEar)" />
-          <path d="M31 78 Q34 81 37 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-          <path d="M41 78 Q44 81 47 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-          <path d="M38 84 L37 86 L39 86 Z" fill="#d98848" />
-          <path d="M38 86 Q36 88 34 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M38 86 Q40 88 42 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M24 82 L16 80" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M24 85 L16 86" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <ellipse cx="30" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
-          <ellipse cx="46" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
+
+        {/* Pièce qui tombe */}
+        <g className="pgCoin">
+          <circle cx="83" cy="60" r="6" fill="url(#pgCoin)" stroke="#a16207" strokeWidth="0.6" />
+          <text x="83" y="63" textAnchor="middle" fontSize="7" fontWeight="900" fill="#78350f" fontFamily="system-ui">€</text>
         </g>
-        <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
-          <text className="wz1" x="72" y="60" fontSize="11">Z</text>
-          <text className="wz2" x="78" y="58" fontSize="13">Z</text>
-          <text className="wz3" x="86" y="56" fontSize="15">Z</text>
+
+        {/* Chat */}
+        <g>
+          <path className="pgTail" d="M32 92 Q22 88 22 80" stroke="url(#pgCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <path d="M28 94 Q26 78 40 72 Q54 70 56 86 Q58 94 56 98 L28 98 Z" fill="url(#pgCat)" />
+          <ellipse cx="52" cy="96" rx="7" ry="3.2" fill="url(#pgCat)" />
+          <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#pgCat)" />
+          <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#pgCat)" />
+
+          {/* Tête */}
+          <ellipse cx="36" cy="58" rx="14" ry="13" fill="url(#pgCat)" />
+          <path d="M24 48 L22 40 L32 46 Z" fill="url(#pgCat)" />
+          <path d="M46 48 L52 40 L48 52 Z" fill="url(#pgCat)" />
+          <ellipse className="pgBlink" cx="30" cy="58" rx="2" ry="2.5" fill="#1f2937" />
+          <ellipse className="pgBlink" cx="42" cy="58" rx="2" ry="2.5" fill="#1f2937" />
+          <circle cx="30.5" cy="57.5" r="0.6" fill="#ffffff" />
+          <circle cx="42.5" cy="57.5" r="0.6" fill="#ffffff" />
+          <path d="M36 64 L35 66 L37 66 Z" fill="#d98848" />
+          <path d="M36 66 Q33 68 31 67" stroke="#3a2417" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+          <path d="M36 66 Q39 68 41 67" stroke="#3a2417" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+          <ellipse cx="26" cy="64" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
+          <ellipse cx="46" cy="64" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
+          <path d="M24 62 L16 60" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M24 64 L16 65" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M48 62 L56 60" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M48 64 L56 65" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          {/* Patte levée */}
+          <path d="M52 76 Q62 70 76 64" stroke="url(#pgCat)" strokeWidth="4" fill="none" strokeLinecap="round" />
+          <ellipse cx="76" cy="64" rx="3" ry="2.5" fill="url(#pgCat)" />
         </g>
       </svg>
     </div>
   );
 }
 
-function MorningCatSVG() {
-  return (
-    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
-      <svg viewBox="0 0 120 120" className="w-full h-full">
-        <defs>
-          <radialGradient id="wMornSky" cx="0.5" cy="0.4" r="0.7">
-            <stop offset="0" stopColor="#fde68a" />
-            <stop offset="1" stopColor="#fb923c" />
-          </radialGradient>
-          <linearGradient id="wMornFur" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#ffd4a8" />
-            <stop offset="1" stopColor="#f4a76b" />
-          </linearGradient>
-          <linearGradient id="wSunGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#fef08a" />
-            <stop offset="1" stopColor="#f59e0b" />
-          </linearGradient>
-        </defs>
-        <style>{`
-          @keyframes wSunRise { 0%{transform:translateY(8px);opacity:.6} 100%{transform:translateY(0);opacity:1} }
-          @keyframes wCatStretch { 0%,100%{transform:scale(1) rotate(0)} 50%{transform:scale(1.02,1.03) rotate(-1deg)} }
-          @keyframes wTailWag { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-6deg)} }
-          @keyframes wBlink { 0%,92%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
-          @keyframes wRayRotate { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
-          .wSun { animation: wSunRise 1.4s ease-out; transform-origin: 60px 78px; }
-          .wCatStretch { animation: wCatStretch 3s ease-in-out infinite; transform-origin: 60px 82px; }
-          .wTail { animation: wTailWag 1.8s ease-in-out infinite; transform-origin: 88px 84px; }
-          .wEye { animation: wBlink 5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
-          .wRays { animation: wRayRotate 30s linear infinite; transform-origin: 60px 78px; }
-        `}</style>
-        <circle cx="60" cy="60" r="52" fill="url(#wMornSky)" />
-        <g className="wRays" opacity="0.35">
-          <line x1="60" y1="78" x2="60" y2="30" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="82" y2="40" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="38" y2="40" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="90" y2="70" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="30" y2="70" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-        </g>
-        <g className="wSun"><circle cx="60" cy="78" r="24" fill="url(#wSunGrad)" /></g>
-        <path d="M22 26 Q25 23 28 26" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
-        <path d="M32 20 Q35 17 38 20" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
-        <ellipse cx="60" cy="100" rx="46" ry="6" fill="#7c2d12" opacity="0.25" />
-        <g className="wCatStretch">
-          <path className="wTail" d="M88 84 Q100 80 102 88" stroke="url(#wMornFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          <path d="M30 88 Q40 70 60 74 Q78 78 88 86 L88 94 Q60 96 30 94 Z" fill="url(#wMornFur)" />
-          <rect x="26" y="86" width="14" height="4" rx="2" fill="url(#wMornFur)" />
-          <rect x="26" y="90" width="14" height="4" rx="2" fill="#e89456" />
-          <ellipse cx="42" cy="72" rx="14" ry="12" fill="url(#wMornFur)" />
-          <path d="M32 62 L30 54 L38 60 Z" fill="url(#wMornFur)" />
-          <path d="M50 62 L56 54 L52 64 Z" fill="url(#wMornFur)" />
-          <ellipse className="wEye" cx="36" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
-          <ellipse className="wEye" cx="48" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
-          <path d="M42 78 L41 80 L43 80 Z" fill="#d98848" />
-          <ellipse cx="34" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
-          <ellipse cx="50" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
-          <path d="M28 76 L20 74" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M28 80 L20 81" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-        </g>
-      </svg>
-    </div>
-  );
-}
+/* ────────────────────────────────────────────────────────────────── */
+/* SVG 2 — Après-midi : Chat + portefeuille ouvert avec pièces        */
+/* ────────────────────────────────────────────────────────────────── */
 
-function AfternoonCatSVG() {
+function WalletCoinsSVG() {
   return (
     <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
-          <linearGradient id="wAftSky" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="wcSky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#93c5fd" />
             <stop offset="1" stopColor="#dbeafe" />
           </linearGradient>
-          <linearGradient id="wAftFur" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="wcCat" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#ffd4a8" />
             <stop offset="1" stopColor="#f4a76b" />
           </linearGradient>
+          <linearGradient id="wcWallet" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#c2410c" />
+            <stop offset="1" stopColor="#7c2d12" />
+          </linearGradient>
+          <linearGradient id="wcCoin" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fde047" />
+            <stop offset="1" stopColor="#ca8a04" />
+          </linearGradient>
         </defs>
         <style>{`
-          @keyframes wPawPlay { 0%,100%{transform:translate(0,0) rotate(0)} 50%{transform:translate(2px,-6px) rotate(-8deg)} }
-          @keyframes wBallBounce { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-3px,-5px)} }
-          @keyframes wTailIdle { 0%,100%{transform:rotate(0)} 40%{transform:rotate(-8deg)} 70%{transform:rotate(5deg)} }
-          @keyframes wCloudDrift { 0%{transform:translateX(0)} 100%{transform:translateX(15px)} }
-          @keyframes wSunWarm { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-          .wPaw { animation: wPawPlay 1.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
-          .wBall { animation: wBallBounce 1.6s ease-in-out infinite; }
-          .wTailIdle { animation: wTailIdle 2.4s ease-in-out infinite; transform-origin: 88px 88px; }
-          .wCloud { animation: wCloudDrift 6s ease-in-out infinite alternate; }
-          .wSunWarm { animation: wSunWarm 4s ease-in-out infinite; transform-origin: 90px 28px; }
+          @keyframes wcFloat1 { 0%,100% { transform: translate(0,0); opacity:.9; } 50% { transform: translate(-3px,-5px); opacity:1; } }
+          @keyframes wcFloat2 { 0%,100% { transform: translate(0,0); opacity:.85; } 50% { transform: translate(2px,-6px); opacity:1; } }
+          @keyframes wcFloat3 { 0%,100% { transform: translate(0,0); opacity:.8; } 50% { transform: translate(-2px,-4px); opacity:1; } }
+          @keyframes wcTailIdle { 0%,100% { transform: rotate(0); } 40% { transform: rotate(-9deg); } 70% { transform: rotate(5deg); } }
+          @keyframes wcBlink { 0%,92%,100% { transform: scaleY(1); } 96% { transform: scaleY(0.15); } }
+          @keyframes wcCloud { 0% { transform: translateX(0); } 100% { transform: translateX(14px); } }
+          .wcC1 { animation: wcFloat1 2.2s ease-in-out infinite; }
+          .wcC2 { animation: wcFloat2 2.6s ease-in-out infinite; }
+          .wcC3 { animation: wcFloat3 2.4s ease-in-out infinite; }
+          .wcTail { animation: wcTailIdle 2.5s ease-in-out infinite; transform-origin: 32px 92px; }
+          .wcBlink { animation: wcBlink 4.5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+          .wcCloud { animation: wcCloud 7s ease-in-out infinite alternate; }
         `}</style>
-        <circle cx="60" cy="60" r="52" fill="url(#wAftSky)" />
-        <g className="wCloud" opacity="0.85">
-          <ellipse cx="30" cy="30" rx="12" ry="5" fill="#ffffff" />
-          <ellipse cx="38" cy="28" rx="9" ry="6" fill="#ffffff" />
-          <ellipse cx="24" cy="29" rx="7" ry="4.5" fill="#ffffff" />
+
+        <circle cx="60" cy="60" r="52" fill="url(#wcSky)" />
+
+        {/* Nuage */}
+        <g className="wcCloud" opacity="0.9">
+          <ellipse cx="26" cy="26" rx="12" ry="5" fill="#ffffff" />
+          <ellipse cx="34" cy="24" rx="9" ry="6" fill="#ffffff" />
+          <ellipse cx="20" cy="25" rx="7" ry="4.5" fill="#ffffff" />
         </g>
-        <g className="wSunWarm">
-          <circle cx="90" cy="28" r="10" fill="#fbbf24" />
-          <circle cx="90" cy="28" r="7" fill="#fcd34d" />
-        </g>
-        <ellipse cx="60" cy="100" rx="46" ry="6" fill="#78716c" opacity="0.2" />
-        <g className="wBall">
-          <circle cx="26" cy="90" r="7" fill="#ef4444" />
-          <path d="M26 84 Q32 90 26 96" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
-          <path d="M20 90 Q26 88 32 90" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
-        </g>
+
+        {/* Sol */}
+        <ellipse cx="60" cy="102" rx="46" ry="6" fill="#1e40af" opacity="0.18" />
+
+        {/* Portefeuille ouvert */}
         <g>
-          <path className="wTailIdle" d="M86 88 Q98 82 100 92" stroke="url(#wAftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          <path d="M52 92 Q48 74 62 68 Q80 66 84 84 Q86 92 84 96 L52 96 Z" fill="url(#wAftFur)" />
-          <ellipse cx="80" cy="94" rx="9" ry="4" fill="url(#wAftFur)" />
-          <rect x="56" y="88" width="6" height="10" rx="3" fill="url(#wAftFur)" />
-          <rect x="66" y="88" width="6" height="10" rx="3" fill="url(#wAftFur)" />
-          <g className="wPaw">
-            <path d="M52 90 Q40 84 34 88" stroke="url(#wAftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-            <ellipse cx="34" cy="88" rx="3.5" ry="3" fill="url(#wAftFur)" />
-          </g>
-          <ellipse cx="58" cy="58" rx="16" ry="15" fill="url(#wAftFur)" />
-          <path d="M46 48 L44 38 L54 46 Z" fill="url(#wAftFur)" />
-          <path d="M68 48 L74 38 L70 50 Z" fill="url(#wAftFur)" />
-          <ellipse cx="52" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
-          <ellipse cx="64" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
-          <circle cx="52.5" cy="58.5" r="1.6" fill="#1f2937" />
-          <circle cx="64.5" cy="58.5" r="1.6" fill="#1f2937" />
-          <circle cx="53" cy="57.5" r="0.5" fill="#ffffff" />
-          <circle cx="65" cy="57.5" r="0.5" fill="#ffffff" />
-          <path d="M57 66 L56 68 L59 68 Z" fill="#d98848" />
-          <path d="M58 68 Q55 71 53 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M58 68 Q61 71 63 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <ellipse cx="46" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
-          <ellipse cx="70" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
-          <path d="M42 64 L32 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M42 67 L32 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M74 64 L84 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M74 67 L84 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M70 78 L104 78 Q108 78 108 82 L108 96 Q108 100 104 100 L70 100 Q66 100 66 96 L66 82 Q66 78 70 78 Z" fill="url(#wcWallet)" />
+          <path d="M70 78 L104 78 Q108 78 108 82 L108 86 L66 86 L66 82 Q66 78 70 78 Z" fill="#9a3412" opacity="0.85" />
+          <path d="M100 86 L108 86 L108 94 L100 94 Z" fill="#fed7aa" opacity="0.35" />
+          {/* Fermoir */}
+          <circle cx="103" cy="90" r="1.8" fill="#fbbf24" />
+          {/* Billets qui dépassent */}
+          <path d="M72 78 L78 70 L102 70 L104 78 Z" fill="#86efac" stroke="#16a34a" strokeWidth="0.4" />
+          <path d="M74 78 L80 72 L98 72 L100 78 Z" fill="#4ade80" opacity="0.9" />
+        </g>
+
+        {/* Pièces flottantes */}
+        <g className="wcC1">
+          <circle cx="58" cy="62" r="5.5" fill="url(#wcCoin)" stroke="#a16207" strokeWidth="0.5" />
+          <text x="58" y="65" textAnchor="middle" fontSize="6" fontWeight="900" fill="#78350f">€</text>
+        </g>
+        <g className="wcC2">
+          <circle cx="70" cy="54" r="4.5" fill="url(#wcCoin)" stroke="#a16207" strokeWidth="0.5" />
+          <text x="70" y="57" textAnchor="middle" fontSize="5" fontWeight="900" fill="#78350f">€</text>
+        </g>
+        <g className="wcC3">
+          <circle cx="80" cy="66" r="5" fill="url(#wcCoin)" stroke="#a16207" strokeWidth="0.5" />
+          <text x="80" y="69" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#78350f">€</text>
+        </g>
+
+        {/* Chat assis à gauche */}
+        <g>
+          <path className="wcTail" d="M32 92 Q22 88 22 80" stroke="url(#wcCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <path d="M28 94 Q26 78 40 72 Q52 70 54 86 Q56 94 54 98 L28 98 Z" fill="url(#wcCat)" />
+          <ellipse cx="50" cy="96" rx="6" ry="3" fill="url(#wcCat)" />
+          <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#wcCat)" />
+          <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#wcCat)" />
+
+          {/* Tête */}
+          <ellipse cx="34" cy="56" rx="14" ry="13" fill="url(#wcCat)" />
+          <path d="M22 46 L20 38 L30 44 Z" fill="url(#wcCat)" />
+          <path d="M44 46 L50 38 L46 50 Z" fill="url(#wcCat)" />
+          <ellipse className="wcBlink" cx="28" cy="56" rx="2.2" ry="2.7" fill="#1f2937" />
+          <ellipse className="wcBlink" cx="40" cy="56" rx="2.2" ry="2.7" fill="#1f2937" />
+          <circle cx="28.6" cy="55.4" r="0.6" fill="#ffffff" />
+          <circle cx="40.6" cy="55.4" r="0.6" fill="#ffffff" />
+          <path d="M34 62 L33 64 L35 64 Z" fill="#d98848" />
+          <path d="M34 64 Q31 66 29 65" stroke="#3a2417" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+          <path d="M34 64 Q37 66 39 65" stroke="#3a2417" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+          <ellipse cx="24" cy="62" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
+          <ellipse cx="44" cy="62" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
+          <path d="M22 60 L14 58" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M22 62 L14 63" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M46 60 L54 58" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M46 62 L54 63" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
         </g>
       </svg>
     </div>
   );
 }
 
-function EveningCatSVG() {
+/* ────────────────────────────────────────────────────────────────── */
+/* SVG 3 — Soir : Chat contemplant une pile de pièces                 */
+/* ────────────────────────────────────────────────────────────────── */
+
+function CoinStackSVG() {
   return (
     <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
-          <linearGradient id="wEveSky" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="csSky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#fb923c" />
-            <stop offset="0.5" stopColor="#f472b6" />
+            <stop offset="0.55" stopColor="#f472b6" />
             <stop offset="1" stopColor="#a855f7" />
           </linearGradient>
-          <linearGradient id="wEveFur" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="csCat" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#ffd4a8" />
             <stop offset="1" stopColor="#f4a76b" />
           </linearGradient>
-          <radialGradient id="wEveSun" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0" stopColor="#fef08a" />
-            <stop offset="1" stopColor="#f59e0b" />
-          </radialGradient>
+          <linearGradient id="csCoin" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fde047" />
+            <stop offset="1" stopColor="#ca8a04" />
+          </linearGradient>
         </defs>
         <style>{`
-          @keyframes wSunSet { 0%,100%{transform:translateY(0)} 50%{transform:translateY(2px)} }
-          @keyframes wTailSway { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-5deg)} }
-          @keyframes wHeadNod { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
-          @keyframes wStarFade { 0%,100%{opacity:0} 40%,60%{opacity:.9} }
-          @keyframes wBirdFly { 0%{transform:translate(0,0)} 100%{transform:translate(20px,-4px)} }
-          .wSunSet { animation: wSunSet 5s ease-in-out infinite; transform-origin: 60px 78px; }
-          .wTailSway { animation: wTailSway 3s ease-in-out infinite; transform-origin: 84px 90px; }
-          .wHeadNod { animation: wHeadNod 3s ease-in-out infinite; }
-          .wStar { animation: wStarFade 5s ease-in-out infinite; }
-          .wBird1 { animation: wBirdFly 4s ease-in-out infinite alternate; }
+          @keyframes csTailSway { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-6deg); } }
+          @keyframes csHeadNod { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+          @keyframes csStar { 0%,100% { opacity: 0; } 40%,60% { opacity: .95; } }
+          @keyframes csShine { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+          .csTail { animation: csTailSway 3s ease-in-out infinite; transform-origin: 32px 92px; }
+          .csHead { animation: csHeadNod 3s ease-in-out infinite; }
+          .csStar { animation: csStar 5s ease-in-out infinite; }
+          .csShine { animation: csShine 2.5s ease-in-out infinite; }
         `}</style>
-        <circle cx="60" cy="60" r="52" fill="url(#wEveSky)" />
-        <circle className="wStar" cx="22" cy="22" r="1.2" fill="#ffffff" />
-        <circle className="wStar" cx="98" cy="30" r="1" fill="#ffffff" />
-        <g className="wBird1" opacity="0.75">
-          <path d="M30 24 Q33 21 36 24" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-          <path d="M40 18 Q43 15 46 18" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-        </g>
-        <g className="wSunSet"><circle cx="60" cy="78" r="22" fill="url(#wEveSun)" /></g>
-        <ellipse cx="60" cy="100" rx="46" ry="8" fill="#7c2d12" opacity="0.35" />
+
+        <circle cx="60" cy="60" r="52" fill="url(#csSky)" />
+
+        {/* Étoiles précoces */}
+        <circle className="csStar" cx="22" cy="20" r="1.2" fill="#ffffff" />
+        <circle className="csStar" cx="100" cy="28" r="1" fill="#ffffff" style={{ animationDelay: "1.5s" }} />
+
+        {/* Soleil couchant */}
+        <circle cx="60" cy="78" r="20" fill="#fcd34d" opacity="0.85" />
+
+        {/* Sol */}
+        <ellipse cx="60" cy="102" rx="46" ry="7" fill="#4c1d95" opacity="0.35" />
+
+        {/* Pile de pièces */}
         <g>
-          <path className="wTailSway" d="M84 92 Q96 88 98 96" stroke="url(#wEveFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-          <path d="M56 94 Q54 76 66 70 Q82 68 84 88 Q84 94 82 98 L56 98 Z" fill="url(#wEveFur)" />
-          <ellipse cx="80" cy="96" rx="8" ry="3.5" fill="url(#wEveFur)" />
-          <rect x="58" y="90" width="5" height="8" rx="2.5" fill="url(#wEveFur)" />
-          <g className="wHeadNod">
-            <ellipse cx="62" cy="60" rx="15" ry="14" fill="url(#wEveFur)" />
-            <path d="M50 50 L48 40 L58 48 Z" fill="url(#wEveFur)" />
-            <path d="M72 50 L78 40 L74 52 Z" fill="url(#wEveFur)" />
-            <ellipse cx="56" cy="60" rx="2.4" ry="3" fill="#ffffff" />
-            <circle cx="56.3" cy="60.5" r="1.5" fill="#1f2937" />
-            <circle cx="56.6" cy="59.7" r="0.45" fill="#ffffff" />
-            <circle cx="55.4" cy="60" r="0.4" fill="#fbbf24" />
-            <path d="M60 66 L59 68 L62 68 Z" fill="#d98848" />
-            <path d="M61 68 Q58 70 56 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-            <ellipse cx="58" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.55" />
-            <path d="M48 64 L38 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-            <path d="M48 67 L38 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <ellipse cx="82" cy="98" rx="12" ry="2.5" fill="#a16207" opacity="0.6" />
+          <ellipse cx="82" cy="96" rx="11" ry="4" fill="url(#csCoin)" stroke="#a16207" strokeWidth="0.5" />
+          <ellipse cx="82" cy="92" rx="11" ry="4" fill="url(#csCoin)" stroke="#a16207" strokeWidth="0.5" />
+          <ellipse cx="82" cy="88" rx="11" ry="4" fill="url(#csCoin)" stroke="#a16207" strokeWidth="0.5" />
+          <ellipse cx="82" cy="84" rx="11" ry="4" fill="#fde047" stroke="#a16207" strokeWidth="0.5" />
+          <text x="82" y="87" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#78350f">€</text>
+          {/* Petit rayon de lumière */}
+          <path className="csShine" d="M82 76 L80 72 L82 68 L84 72 Z" fill="#fef9c3" />
+        </g>
+
+        {/* Chat à droite ? Non, à gauche */}
+        <g>
+          <path className="csTail" d="M32 92 Q22 88 22 80" stroke="url(#csCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <path d="M28 94 Q26 78 40 72 Q52 70 54 86 Q56 94 54 98 L28 98 Z" fill="url(#csCat)" />
+          <ellipse cx="50" cy="96" rx="6" ry="3" fill="url(#csCat)" />
+          <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#csCat)" />
+          <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#csCat)" />
+
+          {/* Tête */}
+          <g className="csHead">
+            <ellipse cx="34" cy="56" rx="14" ry="13" fill="url(#csCat)" />
+            <path d="M22 46 L20 38 L30 44 Z" fill="url(#csCat)" />
+            <path d="M44 46 L50 38 L46 50 Z" fill="url(#csCat)" />
+            {/* Yeux mi-clos contemplatifs */}
+            <path d="M25 56 Q28 58 31 56" stroke="#1f2937" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            <path d="M37 56 Q40 58 43 56" stroke="#1f2937" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            <path d="M34 62 L33 64 L35 64 Z" fill="#d98848" />
+            <path d="M34 64 Q31 66 29 65" stroke="#3a2417" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+            <path d="M34 64 Q37 66 39 65" stroke="#3a2417" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+            <ellipse cx="24" cy="62" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.55" />
+            <ellipse cx="44" cy="62" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.55" />
+            <path d="M22 60 L14 58" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+            <path d="M22 62 L14 63" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+            <path d="M46 60 L54 58" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+            <path d="M46 62 L54 63" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           </g>
         </g>
       </svg>
@@ -336,18 +367,133 @@ function EveningCatSVG() {
   );
 }
 
-function TimeIllustration({ slot }: { slot: TimeSlot }) {
-  if (slot === "night") return <SleepingCatSVG />;
-  if (slot === "morning") return <MorningCatSVG />;
-  if (slot === "afternoon") return <AfternoonCatSVG />;
-  return <EveningCatSVG />;
+/* ────────────────────────────────────────────────────────────────── */
+/* SVG 4 — Nuit : Chat dormant sur un sac d'argent                    */
+/* ────────────────────────────────────────────────────────────────── */
+
+function MoneyBagSleepSVG() {
+  return (
+    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+      <svg viewBox="0 0 120 120" className="w-full h-full">
+        <defs>
+          <radialGradient id="mbSky" cx="0.5" cy="0.5" r="0.75">
+            <stop offset="0" stopColor="#2d3f72" />
+            <stop offset="1" stopColor="#1a2547" />
+          </radialGradient>
+          <linearGradient id="mbCat" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffd4a8" />
+            <stop offset="1" stopColor="#f4a76b" />
+          </linearGradient>
+          <linearGradient id="mbBag" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#a16207" />
+            <stop offset="1" stopColor="#78350f" />
+          </linearGradient>
+        </defs>
+        <style>{`
+          @keyframes mbBreathe { 0%,100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.02,1.015) translateY(-1px); } }
+          @keyframes mbZ1 { 0% { opacity:0; transform: translate(0,0) scale(.5); } 25% { opacity:1; transform: translate(4px,-14px) scale(.8); } 100% { opacity:0; transform: translate(10px,-34px) scale(1.1); } }
+          @keyframes mbZ2 { 0% { opacity:0; transform: translate(0,0) scale(.5); } 25% { opacity:1; transform: translate(6px,-16px) scale(.9); } 100% { opacity:0; transform: translate(14px,-38px) scale(1.2); } }
+          @keyframes mbZ3 { 0% { opacity:0; transform: translate(0,0) scale(.6); } 25% { opacity:1; transform: translate(8px,-18px) scale(1); } 100% { opacity:0; transform: translate(18px,-42px) scale(1.35); } }
+          @keyframes mbTwinkle { 0%,100% { opacity:.25; } 50% { opacity:1; } }
+          @keyframes mbMoon { 0%,100% { opacity:.7; } 50% { opacity:1; } }
+          .mbBody { animation: mbBreathe 3.4s ease-in-out infinite; transform-origin: 60px 82px; }
+          .mbZ1 { animation: mbZ1 3s ease-out infinite; }
+          .mbZ2 { animation: mbZ2 3s ease-out infinite .9s; }
+          .mbZ3 { animation: mbZ3 3s ease-out infinite 1.8s; }
+          .mbStarA { animation: mbTwinkle 2.2s ease-in-out infinite; }
+          .mbStarB { animation: mbTwinkle 2.2s ease-in-out infinite .8s; }
+          .mbStarC { animation: mbTwinkle 2.2s ease-in-out infinite 1.5s; }
+          .mbMoon { animation: mbMoon 4s ease-in-out infinite; }
+        `}</style>
+
+        <circle cx="60" cy="60" r="52" fill="url(#mbSky)" />
+
+        {/* Étoiles */}
+        <circle className="mbStarA" cx="24" cy="26" r="1.2" fill="#fef3c7" />
+        <circle className="mbStarB" cx="94" cy="22" r="1.5" fill="#fef3c7" />
+        <circle className="mbStarC" cx="100" cy="54" r="1" fill="#fef3c7" />
+        <circle className="mbStarA" cx="16" cy="52" r="0.9" fill="#fef3c7" />
+        <circle className="mbStarB" cx="82" cy="14" r="1" fill="#fef3c7" />
+
+        {/* Lune */}
+        <g className="mbMoon">
+          <circle cx="96" cy="32" r="8" fill="#fef3c7" />
+          <circle cx="99" cy="29" r="7" fill="#1a2547" />
+        </g>
+
+        {/* Sol */}
+        <ellipse cx="60" cy="100" rx="42" ry="7" fill="#0f1833" opacity="0.75" />
+
+        {/* Sac d'argent */}
+        <g>
+          {/* Corps du sac */}
+          <path d="M30 88 Q26 78 34 74 L86 74 Q94 78 90 88 Q90 98 60 100 Q30 98 30 88 Z" fill="url(#mbBag)" />
+          {/* Nouveau du haut */}
+          <path d="M42 74 Q52 70 60 70 Q68 70 78 74" stroke="#fbbf24" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          <path d="M46 72 Q54 68 60 68 Q66 68 74 72" stroke="#fbbf24" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+          {/* Symbole € sur le sac */}
+          <circle cx="60" cy="86" r="7" fill="#fbbf24" opacity="0.9" />
+          <text x="60" y="90" textAnchor="middle" fontSize="11" fontWeight="900" fill="#78350f" fontFamily="system-ui">€</text>
+        </g>
+
+        {/* Chat endormi sur le sac */}
+        <g className="mbBody">
+          <ellipse cx="58" cy="72" rx="26" ry="12" fill="url(#mbCat)" />
+          {/* Rayures */}
+          <path d="M42 68 Q46 72 42 76" stroke="#c9723a" strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round" />
+          <path d="M50 66 Q54 72 50 78" stroke="#c9723a" strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round" />
+          {/* Queue */}
+          <path d="M82 74 Q92 70 94 78 Q92 82 88 80" stroke="url(#mbCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          {/* Tête */}
+          <ellipse cx="38" cy="70" rx="13" ry="11" fill="url(#mbCat)" />
+          <path d="M29 60 L27 53 L35 58 Z" fill="url(#mbCat)" />
+          <path d="M46 60 L52 53 L48 62 Z" fill="url(#mbCat)" />
+          {/* Yeux fermés */}
+          <path d="M32 70 Q34 72 36 70" stroke="#3a2417" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+          <path d="M40 70 Q42 72 44 70" stroke="#3a2417" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+          {/* Nez */}
+          <path d="M38 74 L37 76 L39 76 Z" fill="#d98848" />
+          {/* Joues */}
+          <ellipse cx="30" cy="75" rx="2.5" ry="1.5" fill="#f4a76b" opacity="0.6" />
+          <ellipse cx="46" cy="75" rx="2.5" ry="1.5" fill="#f4a76b" opacity="0.6" />
+          {/* Moustaches */}
+          <path d="M26 73 L18 71" stroke="#3a2417" strokeWidth="0.7" opacity="0.55" strokeLinecap="round" />
+          <path d="M26 75 L18 76" stroke="#3a2417" strokeWidth="0.7" opacity="0.55" strokeLinecap="round" />
+        </g>
+
+        {/* Zzz */}
+        <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
+          <text className="mbZ1" x="72" y="54" fontSize="11">Z</text>
+          <text className="mbZ2" x="78" y="52" fontSize="13">Z</text>
+          <text className="mbZ3" x="86" y="50" fontSize="15">Z</text>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function MoneyIllustration({ slot }: { slot: TimeSlot }) {
+  if (slot === "night") return <MoneyBagSleepSVG />;
+  if (slot === "morning") return <PiggyBankSVG />;
+  if (slot === "afternoon") return <WalletCoinsSVG />;
+  return <CoinStackSVG />;
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Item d'historique avec bouton vérifier                             */
+/* Item d'historique responsive                                       */
 /* ────────────────────────────────────────────────────────────────── */
 
-function TopupHistoryItem({ topup, onCredited, currency }: { topup: Topup; onCredited: () => void; currency?: string | null }) {
+function TopupHistoryItem({
+  topup,
+  onCredited,
+  currency,
+  view,
+}: {
+  topup: Topup;
+  onCredited: () => void;
+  currency?: string | null;
+  view: "list" | "grid";
+}) {
   const [checking, setChecking] = useState(false);
   const [msg, setMsg] = useState<{ type: "info" | "error"; text: string } | null>(null);
 
@@ -383,7 +529,7 @@ function TopupHistoryItem({ topup, onCredited, currency }: { topup: Topup; onCre
   };
 
   const date = new Date(topup.createdAt).toLocaleDateString("fr-FR", {
-    day: "numeric", month: "long", year: "numeric",
+    day: "numeric", month: "short", year: "numeric",
   });
   const time = new Date(topup.createdAt).toLocaleTimeString("fr-FR", {
     hour: "2-digit", minute: "2-digit",
@@ -400,49 +546,122 @@ function TopupHistoryItem({ topup, onCredited, currency }: { topup: Topup; onCre
   const amount = parseFloat(String(topup.amountEur));
   const localAmount = currency && currency !== "EUR" ? formatLocalAmount(amount, currency) : null;
 
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-4">
-        <div
-          className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-          style={{ background: cfg.grad, border: `1px solid ${cfg.border}` }}
-        >
-          <StatusIcon className="w-5 h-5" style={{ color: cfg.text }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2">
-            <span className="font-bold text-foreground text-base">
-              +{amount.toFixed(2)} €
-            </span>
-            {localAmount && (
-              <span className="text-xs font-semibold" style={{ color: BRAND.primaryDark }}>
-                ≈ {localAmount}
-              </span>
-            )}
+  /* Layout compact pour mode grille */
+  if (view === "grid") {
+    return (
+      <div className="flex flex-col gap-3 h-full">
+        {/* Ligne du haut : icône + montant + statut */}
+        <div className="flex items-start justify-between gap-3">
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+            style={{ background: cfg.grad, border: `1px solid ${cfg.border}` }}
+          >
+            <StatusIcon className="w-5 h-5" style={{ color: cfg.text }} />
           </div>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {date} · {time}
-          </div>
+          <span
+            className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap"
+            style={{ background: cfg.grad, border: `1px solid ${cfg.border}`, color: cfg.text }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
+            {cfg.label}
+          </span>
         </div>
-        <span
-          className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
-          style={{ background: cfg.grad, border: `1px solid ${cfg.border}`, color: cfg.text }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
-          {cfg.label}
-        </span>
+
+        {/* Montant */}
+        <div>
+          <div className="font-bold text-foreground text-lg leading-tight">
+            +{amount.toFixed(2)} €
+          </div>
+          {localAmount && (
+            <div className="text-xs font-semibold mt-0.5" style={{ color: BRAND.primaryDark }}>
+              ≈ {localAmount}
+            </div>
+          )}
+        </div>
+
+        {/* Date */}
+        <div className="text-[11px] text-muted-foreground mt-auto">
+          {date} · {time}
+        </div>
+
+        {/* Bouton vérifier */}
         {topup.status === "pending" && (
           <button
             onClick={handleVerify}
             disabled={checking}
-            className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white disabled:opacity-60 transition-all active:scale-95"
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl text-white disabled:opacity-60 transition-all active:scale-95"
             style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}
-            title="Vérifier si ce paiement a été confirmé"
           >
             {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            {checking ? "Vérif…" : "Vérifier"}
+            {checking ? "Vérification…" : "Vérifier"}
           </button>
         )}
+
+        {msg && (
+          <div className={`flex items-start gap-2 text-[11px] px-2.5 py-2 rounded-lg ${
+            msg.type === "error"
+              ? "bg-red-50 border border-red-200 text-red-700"
+              : "bg-blue-50 border border-blue-200 text-blue-700"
+          }`}>
+            <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+            <span>{msg.text}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* Layout liste responsive (2 lignes sur mobile) */
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        {/* Bloc gauche : icône + infos */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+            style={{ background: cfg.grad, border: `1px solid ${cfg.border}` }}
+          >
+            <StatusIcon className="w-5 h-5" style={{ color: cfg.text }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="font-bold text-foreground text-base">
+                +{amount.toFixed(2)} €
+              </span>
+              {localAmount && (
+                <span className="text-xs font-semibold" style={{ color: BRAND.primaryDark }}>
+                  ≈ {localAmount}
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5 truncate">
+              {date} · {time}
+            </div>
+          </div>
+        </div>
+
+        {/* Bloc droit : statut + bouton */}
+        <div className="flex items-center justify-between gap-2 sm:justify-end shrink-0">
+          <span
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap"
+            style={{ background: cfg.grad, border: `1px solid ${cfg.border}`, color: cfg.text }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
+            {cfg.label}
+          </span>
+          {topup.status === "pending" && (
+            <button
+              onClick={handleVerify}
+              disabled={checking}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white disabled:opacity-60 transition-all active:scale-95 whitespace-nowrap"
+              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}
+              title="Vérifier si ce paiement a été confirmé"
+            >
+              {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {checking ? "Vérif…" : "Vérifier"}
+            </button>
+          )}
+        </div>
       </div>
 
       <AnimatePresence>
@@ -451,7 +670,7 @@ function TopupHistoryItem({ topup, onCredited, currency }: { topup: Topup; onCre
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden pl-15"
+            className="overflow-hidden"
           >
             <div className={`flex items-start gap-2 text-xs px-3 py-2 rounded-lg ${
               msg.type === "error"
@@ -533,6 +752,29 @@ export default function WalletPage() {
   const [forceChecking, setForceChecking] = useState(false);
   const [forceCheckMsg, setForceCheckMsg] = useState<{ type: "info" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", mobile: "" });
+
+  /* Objectif d'épargne */
+  const [goal, setGoal] = useState<number>(() => {
+    const saved = localStorage.getItem(GOAL_STORAGE_KEY);
+    const n = saved ? parseFloat(saved) : DEFAULT_GOAL;
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_GOAL;
+  });
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState(goal.toString());
+
+  useEffect(() => {
+    localStorage.setItem(GOAL_STORAGE_KEY, String(goal));
+  }, [goal]);
+
+  /* Vue liste / grille */
+  const [view, setView] = useState<"list" | "grid">(() => {
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+    return saved === "grid" ? "grid" : "list";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+  }, [view]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -677,6 +919,16 @@ export default function WalletPage() {
     }
   };
 
+  const handleSaveGoal = () => {
+    const n = parseFloat(goalInput);
+    if (Number.isFinite(n) && n > 0) {
+      setGoal(n);
+    } else {
+      setGoalInput(goal.toString());
+    }
+    setEditingGoal(false);
+  };
+
   const historyTopups = (topups ?? []).filter(t => t.id !== pendingTopupId || step === "select");
   const balanceLocal = me && me.balance !== undefined && me.currency && me.currency !== "EUR"
     ? formatLocalAmount(me.balance, me.currency)
@@ -685,6 +937,13 @@ export default function WalletPage() {
   const totalCredited = historyTopups
     .filter(t => t.status === "completed")
     .reduce((sum, t) => sum + parseFloat(String(t.amountEur)), 0);
+
+  /* Barre de progression objectif */
+  const balance = me?.balance ?? 0;
+  const goalProgress = Math.min(100, Math.max(0, (balance / goal) * 100));
+  const goalLocal = localCurrency && localCurrency.code !== "EUR"
+    ? formatLocalAmount(goal, localCurrency.code)
+    : null;
 
   const slot = getTimeSlot();
 
@@ -705,7 +964,7 @@ export default function WalletPage() {
           Retour
         </motion.button>
 
-        {/* Header avec SVG à droite (opposé du dashboard) */}
+        {/* Header avec SVG à droite */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -719,7 +978,7 @@ export default function WalletPage() {
               Gérez votre solde et rechargez votre compte en toute sécurité.
             </p>
           </div>
-          <TimeIllustration slot={slot} />
+          <MoneyIllustration slot={slot} />
         </motion.div>
 
         {/* Carte solde */}
@@ -727,13 +986,12 @@ export default function WalletPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-8 shadow-sm group"
+          className="relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-4 shadow-sm group"
           style={{
             background: `linear-gradient(135deg, ${BRAND.primarySoft} 0%, #ffffff 60%, #FDF6F1 100%)`,
             border: `1px solid ${BRAND.primary}26`
           }}
         >
-          {/* Halo animé */}
           <div
             className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-60 group-hover:opacity-90 transition-opacity"
             style={{ background: `${BRAND.primary}22` }}
@@ -776,6 +1034,93 @@ export default function WalletPage() {
           </div>
         </motion.div>
 
+        {/* Objectif d'épargne */}
+        {user && !loadingMe && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="relative overflow-hidden rounded-2xl bg-white border border-border/80 p-4 mb-8 shadow-sm"
+          >
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{ background: BRAND.primarySoft, color: BRAND.primary }}
+                >
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs uppercase font-bold text-muted-foreground tracking-wider">Objectif d'épargne</div>
+                  {editingGoal ? (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={goalInput}
+                        onChange={(e) => setGoalInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleSaveGoal(); if (e.key === "Escape") { setEditingGoal(false); setGoalInput(goal.toString()); } }}
+                        autoFocus
+                        className="w-24 px-2 py-1 text-sm border rounded-lg focus:outline-none"
+                        style={{ borderColor: `${BRAND.primary}66` }}
+                      />
+                      <span className="text-sm font-bold text-foreground">€</span>
+                      <button
+                        onClick={handleSaveGoal}
+                        className="text-xs font-bold px-2 py-1 rounded-md text-white"
+                        style={{ background: BRAND.primary }}
+                      >
+                        OK
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-sm font-bold text-foreground flex items-center gap-2">
+                      {balance.toFixed(2)} € <span className="text-muted-foreground font-normal">sur {goal.toFixed(0)} €</span>
+                      {goalLocal && (
+                        <span className="text-xs font-semibold" style={{ color: BRAND.primaryDark }}>
+                          ≈ {goalLocal}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {!editingGoal && (
+                <button
+                  onClick={() => { setEditingGoal(true); setGoalInput(goal.toString()); }}
+                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  title="Modifier l'objectif"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Barre de progression */}
+            <div className="relative h-2 rounded-full overflow-hidden" style={{ background: "#F0EBE3" }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${goalProgress}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="absolute inset-y-0 left-0 rounded-full"
+                style={{
+                  background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})`,
+                  boxShadow: `0 0 12px ${BRAND.primary}55`
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-2 text-[11px]">
+              <span className="font-semibold" style={{ color: BRAND.primaryDark }}>
+                {goalProgress.toFixed(0)} % atteint
+              </span>
+              <span className="text-muted-foreground">
+                {balance >= goal ? "🎉 Objectif atteint !" : `Encore ${(goal - balance).toFixed(2)} €`}
+              </span>
+            </div>
+          </motion.div>
+        )}
+
         {/* ── ÉTAPE : sélection du montant ── */}
         {step === "select" && (
           <motion.div
@@ -801,6 +1146,35 @@ export default function WalletPage() {
                 <p className="text-xs text-muted-foreground">Sélectionnez un montant ou saisissez-le manuellement</p>
               </div>
             </div>
+
+            {/* ⚠️ AVERTISSEMENT VISIBLE */}
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 flex items-start gap-3 rounded-2xl px-4 py-3"
+              style={{
+                background: `linear-gradient(135deg, ${BRAND.primarySoft}, #ffffff)`,
+                border: `1px solid ${BRAND.primary}33`
+              }}
+            >
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                style={{ background: BRAND.primary, color: "#ffffff" }}
+              >
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div className="text-xs leading-relaxed" style={{ color: "#7a3415" }}>
+                <strong className="block mb-0.5 text-sm" style={{ color: BRAND.primaryDark }}>
+                  Après votre paiement
+                </strong>
+                Si votre solde n'est pas mis à jour automatiquement dans quelques minutes, descendez dans{" "}
+                <strong>l'historique des recharges ci-dessous</strong>, trouvez votre paiement et cliquez sur le bouton{" "}
+                <span className="inline-flex items-center gap-1 font-bold px-1.5 py-0.5 rounded" style={{ background: `${BRAND.primary}22` }}>
+                  <RefreshCw className="w-3 h-3" /> Vérifier
+                </span>{" "}
+                pour créditer votre solde manuellement.
+              </div>
+            </motion.div>
 
             {/* Tiles présélectionnées */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
@@ -832,7 +1206,6 @@ export default function WalletPage() {
                           }
                     }
                   >
-                    {/* Pulse ring sur la sélection */}
                     {isSelected && (
                       <motion.span
                         className="absolute inset-0 rounded-2xl"
@@ -857,7 +1230,6 @@ export default function WalletPage() {
               })}
             </div>
 
-            {/* Montant personnalisé */}
             <div className="mb-5">
               <label className="text-sm font-medium text-muted-foreground block mb-2">
                 Autre montant <span className="text-xs opacity-70">(minimum {MIN_AMOUNT.toFixed(2)} €)</span>
@@ -876,7 +1248,6 @@ export default function WalletPage() {
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">€</span>
               </div>
 
-              {/* Avertissement sous le minimum */}
               {customAmount && parseFloat(customAmount) > 0 && parseFloat(customAmount) < MIN_AMOUNT && (
                 <div className="mt-2 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -884,7 +1255,6 @@ export default function WalletPage() {
                 </div>
               )}
 
-              {/* Conversion du montant personnalisé */}
               {localCurrency && localCurrency.code !== "EUR" && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -896,7 +1266,6 @@ export default function WalletPage() {
               )}
             </div>
 
-            {/* Conversion affichée pour un preset sélectionné */}
             {showConversion && (
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
@@ -930,7 +1299,6 @@ export default function WalletPage() {
                 boxShadow: amount && amount >= MIN_AMOUNT ? `0 8px 24px ${BRAND.primary}44` : "none"
               }}
             >
-              {/* Effet shine */}
               {amount && amount >= MIN_AMOUNT && (
                 <motion.span
                   className="absolute inset-0 -translate-x-full"
@@ -1059,7 +1427,6 @@ export default function WalletPage() {
               style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
             />
 
-            {/* Animation d'attente */}
             <div className="relative w-20 h-20 mx-auto mb-6">
               <motion.div
                 className="absolute inset-0 rounded-full"
@@ -1215,7 +1582,7 @@ export default function WalletPage() {
           </motion.div>
         )}
 
-        {/* ── Historique redesigné ── */}
+        {/* ── Historique ── */}
         {user && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -1228,8 +1595,8 @@ export default function WalletPage() {
               style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
             />
 
-            {/* En-tête avec résumé */}
-            <div className="p-6 border-b border-border/60 bg-gradient-to-br from-white to-secondary/30">
+            {/* En-tête avec résumé + toggle vue */}
+            <div className="p-5 sm:p-6 border-b border-border/60 bg-gradient-to-br from-white to-secondary/30">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div
@@ -1240,32 +1607,55 @@ export default function WalletPage() {
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-foreground">Historique des recharges</h2>
-                    <p className="text-xs text-muted-foreground">Toutes vos transactions</p>
+                    <p className="text-xs text-muted-foreground">
+                      {historyTopups.length} opération{historyTopups.length > 1 ? "s" : ""} · Total {totalCredited.toFixed(2)} €
+                    </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Total crédité</div>
-                    <div className="text-lg font-black text-foreground">{totalCredited.toFixed(2)} €</div>
-                  </div>
+
+                {/* Toggle liste / grille */}
+                <div className="flex items-center gap-1 bg-white border border-border/70 rounded-xl p-0.5">
+                  <button
+                    onClick={() => setView("list")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      view === "list" ? "text-white shadow-sm" : "text-muted-foreground hover:bg-secondary/60"
+                    }`}
+                    style={view === "list" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
+                    title="Vue liste"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Liste</span>
+                  </button>
+                  <button
+                    onClick={() => setView("grid")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      view === "grid" ? "text-white shadow-sm" : "text-muted-foreground hover:bg-secondary/60"
+                    }`}
+                    style={view === "grid" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
+                    title="Vue grille"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Grille</span>
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-5 sm:p-6">
               {loadingTopups ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="flex items-center gap-4">
-                      <div className="w-11 h-11 rounded-2xl bg-muted animate-pulse" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-                        <div className="h-3 w-16 bg-muted animate-pulse rounded" />
-                      </div>
-                      <div className="h-6 w-20 bg-muted animate-pulse rounded-full" />
-                    </div>
-                  ))}
-                </div>
+                view === "grid" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="h-32 bg-muted animate-pulse rounded-2xl" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="h-16 bg-muted animate-pulse rounded-2xl" />
+                    ))}
+                  </div>
+                )
               ) : historyTopups.length === 0 ? (
                 <div className="text-center py-10">
                   <div
@@ -1276,6 +1666,28 @@ export default function WalletPage() {
                   </div>
                   <p className="text-sm text-muted-foreground">Aucune recharge pour l'instant.</p>
                 </div>
+              ) : view === "grid" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {historyTopups.map((topup, i) => (
+                    <motion.div
+                      key={topup.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      className="rounded-2xl border border-border/60 p-4 hover:shadow-md transition-all bg-white"
+                    >
+                      <TopupHistoryItem
+                        topup={topup}
+                        view="grid"
+                        currency={me?.currency}
+                        onCredited={() => {
+                          queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
+                          queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+                        }}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
               ) : (
                 <div className="space-y-3">
                   {historyTopups.map((topup, i) => (
@@ -1284,11 +1696,11 @@ export default function WalletPage() {
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.03 }}
-                      className="rounded-2xl border border-border/60 p-4 hover:shadow-md transition-all"
-                      style={{ background: "#ffffff" }}
+                      className="rounded-2xl border border-border/60 p-4 hover:shadow-md transition-all bg-white"
                     >
                       <TopupHistoryItem
                         topup={topup}
+                        view="list"
                         currency={me?.currency}
                         onCredited={() => {
                           queryClient.invalidateQueries({ queryKey: ["/api/topups"] });
