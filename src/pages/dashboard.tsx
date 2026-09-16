@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Clock, XCircle, Loader2, Copy, RefreshCw, Plus, Wallet,
   ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard, TrendingUp,
-  Filter, MessageCircle, Search, Sparkles
+  Filter, MessageCircle, Search, Sparkles, Receipt, Calendar, BadgeCheck
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -21,6 +21,25 @@ const BRAND = {
   primaryLight: "#E8A47F",
   primarySoft: "#FBEEE7",
 };
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Conversion devise locale                                           */
+/* ────────────────────────────────────────────────────────────────── */
+
+/**
+ * Convertit un montant EUR dans la devise locale de l'utilisateur.
+ * Retourne null si aucune devise spécifique n'est configurée (EUR = neutre).
+ */
+function formatLocalPrice(amountEur: number, currencyCode: string | null | undefined): string | null {
+  if (!currencyCode || currencyCode === "EUR") return null;
+  const curr = getCurrency(currencyCode);
+  if (!curr || !curr.rateFromEur) return null;
+  const converted = amountEur * curr.rateFromEur;
+  const formatted = converted.toLocaleString("fr-FR", {
+    maximumFractionDigits: converted < 1000 ? 2 : 0,
+  });
+  return `${formatted} ${curr.symbol}`;
+}
 
 const ICON_COLORS: Record<string, string> = {
   instagram: "E1306C", whatsapp: "25D366", telegram: "26A5E4", facebook: "1877F2",
@@ -39,42 +58,15 @@ const ICON_COLORS: Record<string, string> = {
 /* ────────────────────────────────────────────────────────────────── */
 
 const SERVICE_DISPLAY: Record<string, string> = {
-  wa: "WhatsApp",
-  wb: "WhatsApp Business",
-  fb: "Facebook",
-  ig: "Instagram",
-  tg: "Telegram",
-  tt: "TikTok",
-  go: "Google",
-  am: "Amazon",
-  nf: "Netflix",
-  pp: "PayPal",
-  tw: "X (Twitter)",
-  dc: "Discord",
-  sp: "Spotify",
-  ub: "Uber",
-  ms: "Microsoft",
-  ap: "Apple",
-  sn: "Snapchat",
-  li: "LinkedIn",
-  yt: "YouTube",
-  rd: "Reddit",
-  ab: "Airbnb",
-  bi: "Binance",
-  tn: "Tinder",
-  vb: "Viber",
-  sg: "Signal",
-  sl: "Slack",
-  gh: "GitHub",
-  tv: "Twitch",
-  pt: "Pinterest",
-  wc: "WeChat",
-  vk: "VK",
-  yd: "Yandex",
-  ae: "AliExpress",
-  eb: "eBay",
-  et: "Etsy",
-  cb: "Coinbase",
+  wa: "WhatsApp", wb: "WhatsApp Business", fb: "Facebook", ig: "Instagram",
+  tg: "Telegram", tt: "TikTok", go: "Google", am: "Amazon",
+  nf: "Netflix", pp: "PayPal", tw: "X (Twitter)", dc: "Discord",
+  sp: "Spotify", ub: "Uber", ms: "Microsoft", ap: "Apple",
+  sn: "Snapchat", li: "LinkedIn", yt: "YouTube", rd: "Reddit",
+  ab: "Airbnb", bi: "Binance", tn: "Tinder", vb: "Viber",
+  sg: "Signal", sl: "Slack", gh: "GitHub", tv: "Twitch",
+  pt: "Pinterest", wc: "WeChat", vk: "VK", yd: "Yandex",
+  ae: "AliExpress", eb: "eBay", et: "Etsy", cb: "Coinbase",
 };
 
 const normalizeService = (code: string) => {
@@ -109,7 +101,7 @@ function svcIconUrl(code: string | null | undefined, overrideUrl?: string | null
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Résolution pays : indicatif téléphonique → drapeau + nom           */
+/* Résolution pays                                                    */
 /* ────────────────────────────────────────────────────────────────── */
 
 type CountryInfo = { name: string; iso: string; callingCode: string };
@@ -284,18 +276,30 @@ export interface UserProfile {
 /* Salutations personnalisées                                         */
 /* ────────────────────────────────────────────────────────────────── */
 
-function getGreeting(name?: string | null): { greeting: string; subline: string } {
+type TimeSlot = "night" | "morning" | "afternoon" | "evening";
+
+function getTimeSlot(): TimeSlot {
+  const hour = new Date().getHours();
+  if (hour >= 0 && hour < 5) return "night";
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 18) return "afternoon";
+  if (hour >= 18 && hour < 22) return "evening";
+  return "night";
+}
+
+function getGreeting(name?: string | null): { greeting: string; subline: string; slot: TimeSlot } {
   const now = new Date();
   const hour = now.getHours();
   const day = now.getDay();
+  const slot = getTimeSlot();
 
   const firstName = (name ?? "").trim().split(" ")[0] || "";
 
   let greeting = "Bonjour";
-  if (hour < 5) greeting = "Bonne nuit";
-  else if (hour < 12) greeting = "Bonjour";
-  else if (hour < 18) greeting = "Bon après-midi";
-  else greeting = "Bonsoir";
+  if (slot === "night") greeting = "Bonne nuit";
+  else if (slot === "morning") greeting = "Bonjour";
+  else if (slot === "afternoon") greeting = "Bon après-midi";
+  else if (slot === "evening") greeting = "Bonsoir";
 
   const withName = firstName ? `${greeting}, ${firstName}` : greeting;
 
@@ -304,16 +308,399 @@ function getGreeting(name?: string | null): { greeting: string; subline: string 
   else if (day === 5) subline = "Bon vendredi — bon week-end en avance !";
   else if (day === 6) subline = "Bon week-end !";
   else if (day === 0) subline = "Bon dimanche !";
+  else if (slot === "night") subline = "La nuit porte conseil, reposez-vous bien.";
   else subline = "";
 
-  return { greeting: withName, subline };
+  return { greeting: withName, subline, slot };
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Composant ActiveOrderCard                                          */
+/* Illustrations SVG animées contextuelles                            */
 /* ────────────────────────────────────────────────────────────────── */
 
-function ActiveOrderCard({ orderId }: { orderId: string }) {
+function SleepingCatSVG() {
+  return (
+    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+      <svg viewBox="0 0 120 120" className="w-full h-full">
+        <defs>
+          <radialGradient id="nightSky" cx="0.5" cy="0.5" r="0.7">
+            <stop offset="0" stopColor="#2d3f72" />
+            <stop offset="1" stopColor="#1a2547" />
+          </radialGradient>
+          <linearGradient id="catFur" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffd4a8" />
+            <stop offset="1" stopColor="#f4a76b" />
+          </linearGradient>
+          <linearGradient id="catEar" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#f4a76b" />
+            <stop offset="1" stopColor="#d98848" />
+          </linearGradient>
+        </defs>
+        <style>{`
+          @keyframes catBreathe { 0%,100%{transform:scale(1) translateY(0)} 50%{transform:scale(1.025,1.015) translateY(-1px)} }
+          @keyframes floatZ1 { 0%{opacity:0;transform:translate(0,0) scale(.5)} 25%{opacity:1;transform:translate(4px,-14px) scale(.8)} 100%{opacity:0;transform:translate(10px,-34px) scale(1.1)} }
+          @keyframes floatZ2 { 0%{opacity:0;transform:translate(0,0) scale(.5)} 25%{opacity:1;transform:translate(6px,-16px) scale(.9)} 100%{opacity:0;transform:translate(14px,-38px) scale(1.2)} }
+          @keyframes floatZ3 { 0%{opacity:0;transform:translate(0,0) scale(.6)} 25%{opacity:1;transform:translate(8px,-18px) scale(1)} 100%{opacity:0;transform:translate(18px,-42px) scale(1.35)} }
+          @keyframes twinkle { 0%,100%{opacity:.25} 50%{opacity:1} }
+          @keyframes moonGlow { 0%,100%{opacity:.7} 50%{opacity:1} }
+          .catBody { animation: catBreathe 3.4s ease-in-out infinite; transform-origin: 60px 76px; }
+          .z1 { animation: floatZ1 3s ease-out infinite; }
+          .z2 { animation: floatZ2 3s ease-out infinite .9s; }
+          .z3 { animation: floatZ3 3s ease-out infinite 1.8s; }
+          .starA { animation: twinkle 2.2s ease-in-out infinite; }
+          .starB { animation: twinkle 2.2s ease-in-out infinite .8s; }
+          .starC { animation: twinkle 2.2s ease-in-out infinite 1.5s; }
+          .moon { animation: moonGlow 4s ease-in-out infinite; }
+        `}</style>
+
+        {/* Ciel nocturne */}
+        <circle cx="60" cy="60" r="52" fill="url(#nightSky)" />
+
+        {/* Étoiles */}
+        <circle className="starA" cx="24" cy="28" r="1.2" fill="#fef3c7" />
+        <circle className="starB" cx="92" cy="22" r="1.5" fill="#fef3c7" />
+        <circle className="starC" cx="98" cy="52" r="1" fill="#fef3c7" />
+        <circle className="starA" cx="18" cy="52" r="0.9" fill="#fef3c7" />
+        <circle className="starB" cx="80" cy="14" r="1" fill="#fef3c7" />
+
+        {/* Croissant de lune */}
+        <g className="moon">
+          <circle cx="94" cy="32" r="8" fill="#fef3c7" />
+          <circle cx="97" cy="29" r="7" fill="#1a2547" />
+        </g>
+
+        {/* Coussin / tapis */}
+        <ellipse cx="60" cy="98" rx="42" ry="8" fill="#0f1833" opacity="0.7" />
+
+        {/* Chat endormi */}
+        <g className="catBody">
+          {/* Corps */}
+          <ellipse cx="58" cy="82" rx="32" ry="18" fill="url(#catFur)" />
+          {/* Rayures */}
+          <path d="M38 76 Q44 82 40 88" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
+          <path d="M48 74 Q54 82 48 90" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
+          {/* Queue */}
+          <path d="M88 82 Q98 80 100 88 Q98 94 92 92" stroke="url(#catFur)" strokeWidth="6" fill="none" strokeLinecap="round" />
+          {/* Tête */}
+          <ellipse cx="38" cy="78" rx="16" ry="14" fill="url(#catFur)" />
+          {/* Oreilles */}
+          <path d="M28 68 L26 60 L34 66 Z" fill="url(#catEar)" />
+          <path d="M46 68 L52 60 L48 70 Z" fill="url(#catEar)" />
+          {/* Yeux fermés (arcs vers le bas = paisible) */}
+          <path d="M31 78 Q34 81 37 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          <path d="M41 78 Q44 81 47 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          {/* Nez */}
+          <path d="M38 84 L37 86 L39 86 Z" fill="#d98848" />
+          {/* Bouche */}
+          <path d="M38 86 Q36 88 34 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
+          <path d="M38 86 Q40 88 42 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
+          {/* Moustaches */}
+          <path d="M24 82 L16 80" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M24 85 L16 86" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          {/* Joues roses */}
+          <ellipse cx="30" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
+          <ellipse cx="46" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
+        </g>
+
+        {/* Zzz flottants */}
+        <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
+          <text className="z1" x="72" y="60" fontSize="11">Z</text>
+          <text className="z2" x="78" y="58" fontSize="13">Z</text>
+          <text className="z3" x="86" y="56" fontSize="15">Z</text>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function MorningCatSVG() {
+  return (
+    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+      <svg viewBox="0 0 120 120" className="w-full h-full">
+        <defs>
+          <radialGradient id="mornSky" cx="0.5" cy="0.4" r="0.7">
+            <stop offset="0" stopColor="#fde68a" />
+            <stop offset="1" stopColor="#fb923c" />
+          </radialGradient>
+          <linearGradient id="mornFur" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffd4a8" />
+            <stop offset="1" stopColor="#f4a76b" />
+          </linearGradient>
+          <linearGradient id="sunGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fef08a" />
+            <stop offset="1" stopColor="#f59e0b" />
+          </linearGradient>
+        </defs>
+        <style>{`
+          @keyframes sunRise { 0%{transform:translateY(8px);opacity:.6} 100%{transform:translateY(0);opacity:1} }
+          @keyframes catStretch { 0%,100%{transform:scale(1) rotate(0)} 50%{transform:scale(1.02,1.03) rotate(-1deg)} }
+          @keyframes tailWag { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-6deg)} }
+          @keyframes blink { 0%,92%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
+          @keyframes rayRotate { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+          .sun { animation: sunRise 1.4s ease-out; transform-origin: 60px 78px; }
+          .catStretch { animation: catStretch 3s ease-in-out infinite; transform-origin: 60px 82px; }
+          .tail { animation: tailWag 1.8s ease-in-out infinite; transform-origin: 88px 84px; }
+          .eye { animation: blink 5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+          .rays { animation: rayRotate 30s linear infinite; transform-origin: 60px 78px; }
+        `}</style>
+
+        {/* Ciel du matin */}
+        <circle cx="60" cy="60" r="52" fill="url(#mornSky)" />
+
+        {/* Rayons rotatifs */}
+        <g className="rays" opacity="0.35">
+          <line x1="60" y1="78" x2="60" y2="30" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
+          <line x1="60" y1="78" x2="82" y2="40" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
+          <line x1="60" y1="78" x2="38" y2="40" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
+          <line x1="60" y1="78" x2="90" y2="70" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
+          <line x1="60" y1="78" x2="30" y2="70" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
+        </g>
+
+        {/* Soleil levant */}
+        <g className="sun">
+          <circle cx="60" cy="78" r="24" fill="url(#sunGrad)" />
+        </g>
+
+        {/* Oiseaux au loin */}
+        <path d="M22 26 Q25 23 28 26" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
+        <path d="M32 20 Q35 17 38 20" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
+
+        {/* Sol */}
+        <ellipse cx="60" cy="100" rx="46" ry="6" fill="#7c2d12" opacity="0.25" />
+
+        {/* Chat qui s'étire (arc de dos haut, pattes tendues) */}
+        <g className="catStretch">
+          {/* Queue */}
+          <path className="tail" d="M88 84 Q100 80 102 88" stroke="url(#mornFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          {/* Corps étiré */}
+          <path d="M30 88 Q40 70 60 74 Q78 78 88 86 L88 94 Q60 96 30 94 Z" fill="url(#mornFur)" />
+          {/* Pattes avant tendues */}
+          <rect x="26" y="86" width="14" height="4" rx="2" fill="url(#mornFur)" />
+          <rect x="26" y="90" width="14" height="4" rx="2" fill="#e89456" />
+          {/* Tête penchée vers le bas */}
+          <ellipse cx="42" cy="72" rx="14" ry="12" fill="url(#mornFur)" />
+          {/* Oreilles */}
+          <path d="M32 62 L30 54 L38 60 Z" fill="url(#mornFur)" />
+          <path d="M50 62 L56 54 L52 64 Z" fill="url(#mornFur)" />
+          {/* Yeux qui clignent (encore endormi) */}
+          <ellipse className="eye" cx="36" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
+          <ellipse className="eye" cx="48" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
+          {/* Nez */}
+          <path d="M42 78 L41 80 L43 80 Z" fill="#d98848" />
+          {/* Joues */}
+          <ellipse cx="34" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
+          <ellipse cx="50" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
+          {/* Moustaches */}
+          <path d="M28 76 L20 74" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M28 80 L20 81" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function AfternoonCatSVG() {
+  return (
+    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+      <svg viewBox="0 0 120 120" className="w-full h-full">
+        <defs>
+          <linearGradient id="aftSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#93c5fd" />
+            <stop offset="1" stopColor="#dbeafe" />
+          </linearGradient>
+          <linearGradient id="aftFur" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffd4a8" />
+            <stop offset="1" stopColor="#f4a76b" />
+          </linearGradient>
+        </defs>
+        <style>{`
+          @keyframes pawPlay { 0%,100%{transform:translate(0,0) rotate(0)} 50%{transform:translate(2px,-6px) rotate(-8deg)} }
+          @keyframes ballBounce { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-3px,-5px)} }
+          @keyframes tailIdle { 0%,100%{transform:rotate(0)} 40%{transform:rotate(-8deg)} 70%{transform:rotate(5deg)} }
+          @keyframes cloudDrift { 0%{transform:translateX(0)} 100%{transform:translateX(15px)} }
+          @keyframes sunWarm { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+          .paw { animation: pawPlay 1.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+          .ball { animation: ballBounce 1.6s ease-in-out infinite; }
+          .tailIdle { animation: tailIdle 2.4s ease-in-out infinite; transform-origin: 88px 88px; }
+          .cloud { animation: cloudDrift 6s ease-in-out infinite alternate; }
+          .sunWarm { animation: sunWarm 4s ease-in-out infinite; transform-origin: 90px 28px; }
+        `}</style>
+
+        {/* Ciel bleu */}
+        <circle cx="60" cy="60" r="52" fill="url(#aftSky)" />
+
+        {/* Nuages */}
+        <g className="cloud" opacity="0.85">
+          <ellipse cx="30" cy="30" rx="12" ry="5" fill="#ffffff" />
+          <ellipse cx="38" cy="28" rx="9" ry="6" fill="#ffffff" />
+          <ellipse cx="24" cy="29" rx="7" ry="4.5" fill="#ffffff" />
+        </g>
+
+        {/* Soleil brillant */}
+        <g className="sunWarm">
+          <circle cx="90" cy="28" r="10" fill="#fbbf24" />
+          <circle cx="90" cy="28" r="7" fill="#fcd34d" />
+        </g>
+
+        {/* Sol */}
+        <ellipse cx="60" cy="100" rx="46" ry="6" fill="#78716c" opacity="0.2" />
+
+        {/* Balle de jeu */}
+        <g className="ball">
+          <circle cx="26" cy="90" r="7" fill="#ef4444" />
+          <path d="M26 84 Q32 90 26 96" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
+          <path d="M20 90 Q26 88 32 90" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
+        </g>
+
+        {/* Chat assis, tête haute, une patte qui joue */}
+        <g>
+          {/* Queue qui remue */}
+          <path className="tailIdle" d="M86 88 Q98 82 100 92" stroke="url(#aftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          {/* Corps assis */}
+          <path d="M52 92 Q48 74 62 68 Q80 66 84 84 Q86 92 84 96 L52 96 Z" fill="url(#aftFur)" />
+          {/* Pattes arrière */}
+          <ellipse cx="80" cy="94" rx="9" ry="4" fill="url(#aftFur)" />
+          {/* Pattes avant */}
+          <rect x="56" y="88" width="6" height="10" rx="3" fill="url(#aftFur)" />
+          <rect x="66" y="88" width="6" height="10" rx="3" fill="url(#aftFur)" />
+          {/* Patte qui joue (gauche tendue) */}
+          <g className="paw">
+            <path d="M52 90 Q40 84 34 88" stroke="url(#aftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
+            <ellipse cx="34" cy="88" rx="3.5" ry="3" fill="url(#aftFur)" />
+          </g>
+          {/* Tête */}
+          <ellipse cx="58" cy="58" rx="16" ry="15" fill="url(#aftFur)" />
+          {/* Oreilles */}
+          <path d="M46 48 L44 38 L54 46 Z" fill="url(#aftFur)" />
+          <path d="M68 48 L74 38 L70 50 Z" fill="url(#aftFur)" />
+          {/* Yeux ouverts brillants */}
+          <ellipse cx="52" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
+          <ellipse cx="64" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
+          <circle cx="52.5" cy="58.5" r="1.6" fill="#1f2937" />
+          <circle cx="64.5" cy="58.5" r="1.6" fill="#1f2937" />
+          <circle cx="53" cy="57.5" r="0.5" fill="#ffffff" />
+          <circle cx="65" cy="57.5" r="0.5" fill="#ffffff" />
+          {/* Nez */}
+          <path d="M57 66 L56 68 L59 68 Z" fill="#d98848" />
+          {/* Bouche souriante */}
+          <path d="M58 68 Q55 71 53 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
+          <path d="M58 68 Q61 71 63 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
+          {/* Joues */}
+          <ellipse cx="46" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
+          <ellipse cx="70" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
+          {/* Moustaches */}
+          <path d="M42 64 L32 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M42 67 L32 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M74 64 L84 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          <path d="M74 67 L84 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function EveningCatSVG() {
+  return (
+    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+      <svg viewBox="0 0 120 120" className="w-full h-full">
+        <defs>
+          <linearGradient id="eveSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fb923c" />
+            <stop offset="0.5" stopColor="#f472b6" />
+            <stop offset="1" stopColor="#a855f7" />
+          </linearGradient>
+          <linearGradient id="eveFur" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffd4a8" />
+            <stop offset="1" stopColor="#f4a76b" />
+          </linearGradient>
+          <radialGradient id="eveSun" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#fef08a" />
+            <stop offset="1" stopColor="#f59e0b" />
+          </radialGradient>
+        </defs>
+        <style>{`
+          @keyframes sunSet { 0%,100%{transform:translateY(0)} 50%{transform:translateY(2px)} }
+          @keyframes tailSway { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-5deg)} }
+          @keyframes headNod { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
+          @keyframes starFade { 0%,100%{opacity:0} 40%,60%{opacity:.9} }
+          @keyframes birdFly { 0%{transform:translate(0,0)} 100%{transform:translate(20px,-4px)} }
+          .sunSet { animation: sunSet 5s ease-in-out infinite; transform-origin: 60px 78px; }
+          .tailSway { animation: tailSway 3s ease-in-out infinite; transform-origin: 84px 90px; }
+          .headNod { animation: headNod 3s ease-in-out infinite; }
+          .star { animation: starFade 5s ease-in-out infinite; }
+          .bird1 { animation: birdFly 4s ease-in-out infinite alternate; }
+        `}</style>
+
+        {/* Ciel du coucher */}
+        <circle cx="60" cy="60" r="52" fill="url(#eveSky)" />
+
+        {/* Étoiles précoces */}
+        <circle className="star" cx="22" cy="22" r="1.2" fill="#ffffff" />
+        <circle className="star" cx="98" cy="30" r="1" fill="#ffffff" />
+
+        {/* Oiseaux rentrant */}
+        <g className="bird1" opacity="0.75">
+          <path d="M30 24 Q33 21 36 24" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+          <path d="M40 18 Q43 15 46 18" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+        </g>
+
+        {/* Soleil couchant */}
+        <g className="sunSet">
+          <circle cx="60" cy="78" r="22" fill="url(#eveSun)" />
+        </g>
+
+        {/* Sol / colline */}
+        <ellipse cx="60" cy="100" rx="46" ry="8" fill="#7c2d12" opacity="0.35" />
+
+        {/* Chat assis de profil, regarde le soleil */}
+        <g>
+          {/* Queue */}
+          <path className="tailSway" d="M84 92 Q96 88 98 96" stroke="url(#eveFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
+          {/* Corps */}
+          <path d="M56 94 Q54 76 66 70 Q82 68 84 88 Q84 94 82 98 L56 98 Z" fill="url(#eveFur)" />
+          {/* Pattes */}
+          <ellipse cx="80" cy="96" rx="8" ry="3.5" fill="url(#eveFur)" />
+          <rect x="58" y="90" width="5" height="8" rx="2.5" fill="url(#eveFur)" />
+          {/* Tête (de profil, tournée vers la gauche pour regarder le soleil) */}
+          <g className="headNod">
+            <ellipse cx="62" cy="60" rx="15" ry="14" fill="url(#eveFur)" />
+            {/* Oreilles */}
+            <path d="M50 50 L48 40 L58 48 Z" fill="url(#eveFur)" />
+            <path d="M72 50 L78 40 L74 52 Z" fill="url(#eveFur)" />
+            {/* Œil visible (côté) */}
+            <ellipse cx="56" cy="60" rx="2.4" ry="3" fill="#ffffff" />
+            <circle cx="56.3" cy="60.5" r="1.5" fill="#1f2937" />
+            <circle cx="56.6" cy="59.7" r="0.45" fill="#ffffff" />
+            {/* Reflet orange du soleil dans l'œil */}
+            <circle cx="55.4" cy="60" r="0.4" fill="#fbbf24" />
+            {/* Nez */}
+            <path d="M60 66 L59 68 L62 68 Z" fill="#d98848" />
+            {/* Bouche paisible */}
+            <path d="M61 68 Q58 70 56 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
+            {/* Joues */}
+            <ellipse cx="58" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.55" />
+            {/* Moustaches */}
+            <path d="M48 64 L38 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+            <path d="M48 67 L38 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
+          </g>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function TimeIllustration({ slot }: { slot: TimeSlot }) {
+  if (slot === "night") return <SleepingCatSVG />;
+  if (slot === "morning") return <MorningCatSVG />;
+  if (slot === "afternoon") return <AfternoonCatSVG />;
+  return <EveningCatSVG />;
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* ActiveOrderCard                                                    */
+/* ────────────────────────────────────────────────────────────────── */
+
+function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: string | null }) {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState<string>("");
   const [remaining, setRemaining] = useState<string | null>(null);
@@ -358,6 +745,7 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
   const iconUrl = svcIconUrl(order.serviceCode, order.serviceIcon);
   const country = resolveCountryFromPhone(order.phoneNumber, order.countryCode);
   const displayService = serviceDisplayName(order.serviceCode);
+  const localPrice = order.price !== undefined ? formatLocalPrice(order.price, currency) : null;
 
   const copyText = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -390,6 +778,12 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
                 <>
                   <span className="w-1 h-1 rounded-full bg-border" />
                   <span className="font-medium">{Number(order.price).toFixed(2)} €</span>
+                  {localPrice && (
+                    <>
+                      <span className="w-1 h-1 rounded-full bg-border" />
+                      <span className="font-medium" style={{ color: BRAND.primaryDark }}>≈ {localPrice}</span>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -412,7 +806,7 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Numéro attribué</span>
             <span className="font-mono font-bold text-base tracking-wide text-foreground">{order.phoneNumber}</span>
           </div>
-          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border border-border text-muted-foreground hover:border-primary/30 transition-all active:scale-95" style={{ color: copied === "phone" ? "#16a34a" : undefined }}>
+          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border border-border text-muted-foreground hover:border-primary/30 transition-all active:scale-95">
             {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
@@ -435,10 +829,10 @@ function ActiveOrderCard({ orderId }: { orderId: string }) {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* PastOrderCard refondu — 3 colonnes                                 */
+/* PastOrderCard                                                      */
 /* ────────────────────────────────────────────────────────────────── */
 
-function PastOrderCard({ order }: { order: Order }) {
+function PastOrderCard({ order, currency }: { order: Order; currency?: string | null }) {
   const [copied, setCopied] = useState<string>("");
   const [imageError, setImageError] = useState(false);
 
@@ -451,6 +845,8 @@ function PastOrderCard({ order }: { order: Order }) {
 
   const phoneWithPrefix = order.phoneNumber ?? "";
   const phoneWithoutPrefix = phoneWithPrefix.replace(/^\+\d{1,4}/, "").replace(/\D/g, "");
+
+  const localPrice = order.price !== undefined ? formatLocalPrice(order.price, currency) : null;
 
   const copyText = (text: string, key: string) => {
     if (!text) return;
@@ -466,7 +862,6 @@ function PastOrderCard({ order }: { order: Order }) {
       variants={listItem}
       className="bg-white border border-border/80 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
     >
-      {/* Barre de couleur supérieure selon le statut */}
       <div
         className="h-1 w-full"
         style={{
@@ -479,7 +874,6 @@ function PastOrderCard({ order }: { order: Order }) {
       />
 
       <div className="p-5">
-        {/* En-tête : Statut + Date */}
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide shadow-sm ${cfg.color}`}>
             <StatusIcon className="w-3.5 h-3.5" />
@@ -491,7 +885,6 @@ function PastOrderCard({ order }: { order: Order }) {
           </div>
         </div>
 
-        {/* Grille 3 colonnes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Colonne 1 : Service + Pays + Numéro */}
           <div className="flex flex-col gap-3">
@@ -578,6 +971,11 @@ function PastOrderCard({ order }: { order: Order }) {
               <div className="font-black text-2xl text-foreground">
                 {order.price !== undefined ? `${Number(order.price).toFixed(2)} €` : "—"}
               </div>
+              {localPrice && (
+                <div className="text-xs font-bold mt-1 flex items-center gap-1" style={{ color: BRAND.primaryDark }}>
+                  <span className="opacity-70">≈</span> {localPrice}
+                </div>
+              )}
             </div>
 
             <Link
@@ -656,10 +1054,10 @@ function OrderFilters({
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* RechargesTab (design amélioré, logique inchangée)                  */
+/* RechargesTab — Design timeline/reçu unique                         */
 /* ────────────────────────────────────────────────────────────────── */
 
-function RechargesTab() {
+function RechargesTab({ currency }: { currency?: string | null }) {
   const { data: topups, isLoading } = useQuery<Topup[]>({
     queryKey: ["/api/topups"],
     queryFn: async () => {
@@ -673,16 +1071,34 @@ function RechargesTab() {
   });
 
   const topupStatusConfig = {
-    pending: { label: "En attente", color: "text-amber-700 bg-amber-50 ring-1 ring-amber-200" },
-    completed: { label: "Crédité", color: "text-green-700 bg-green-50 ring-1 ring-green-200" },
-    failed: { label: "Échoué", color: "text-red-700 bg-red-50 ring-1 ring-red-200" },
+    pending: {
+      label: "En attente",
+      color: "text-amber-700",
+      ring: "ring-amber-200",
+      bg: "bg-amber-50",
+      dot: "#f59e0b",
+    },
+    completed: {
+      label: "Crédité",
+      color: "text-green-700",
+      ring: "ring-green-200",
+      bg: "bg-green-50",
+      dot: "#16a34a",
+    },
+    failed: {
+      label: "Échoué",
+      color: "text-red-700",
+      ring: "ring-red-200",
+      bg: "bg-red-50",
+      dot: "#dc2626",
+    },
   };
 
   if (isLoading) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-20 bg-secondary/50 animate-pulse rounded-2xl" />
+          <div key={i} className="h-24 bg-secondary/50 animate-pulse rounded-2xl" />
         ))}
       </div>
     );
@@ -695,7 +1111,7 @@ function RechargesTab() {
           className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner"
           style={{ background: BRAND.primarySoft }}
         >
-          <CreditCard className="w-8 h-8" style={{ color: BRAND.primary }} />
+          <Receipt className="w-8 h-8" style={{ color: BRAND.primary }} />
         </div>
         <h3 className="text-lg font-bold mb-2 text-foreground">Aucune recharge effectuée</h3>
         <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">Votre historique de recharges financières apparaîtra ici une fois que vous aurez approvisionné votre compte.</p>
@@ -707,38 +1123,140 @@ function RechargesTab() {
     );
   }
 
+  // Total cumulé des recharges créditées
+  const totalCredited = topups
+    .filter(t => t.status === "completed")
+    .reduce((sum, t) => sum + (Number(t.amountEur) || 0), 0);
+
+  const totalLocal = formatLocalPrice(totalCredited, currency);
+
   return (
-    <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-3">
-      {topups.map(t => {
-        const cfg = topupStatusConfig[t.status as keyof typeof topupStatusConfig] ?? topupStatusConfig.pending;
-        const date = new Date(t.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-        const time = new Date(t.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-        return (
-          <motion.div variants={listItem} key={t.id} className="bg-white border border-border/80 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:shadow-md transition-all duration-300">
+    <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-5">
+      {/* Résumé en en-tête */}
+      <motion.div
+        variants={listItem}
+        className="relative overflow-hidden bg-white border border-border/80 rounded-2xl p-5 shadow-sm"
+      >
+        <div
+          className="absolute top-0 left-0 h-1 w-full"
+          style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <div
-              className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-inner"
-              style={{ background: BRAND.primarySoft }}
+              className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm"
+              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, color: "#ffffff" }}
             >
-              <TrendingUp className="w-5 h-5" style={{ color: BRAND.primary }} />
+              <Receipt className="w-6 h-6" />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-bold text-base text-foreground">Recharge de {Number(t.amountEur).toFixed(2)} €</div>
-              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                <Clock className="w-3 h-3" /> {date} à {time}
-              </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground">Historique des recharges</div>
+              <div className="text-2xl font-black text-foreground">{totalCredited.toFixed(2)} €</div>
+              {totalLocal && (
+                <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
+                  ≈ {totalLocal} crédités
+                </div>
+              )}
             </div>
-            <div className={`shrink-0 inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${cfg.color}`}>
-              {cfg.label}
-            </div>
-          </motion.div>
-        );
-      })}
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/60 border border-border/60">
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-bold text-foreground">{topups.length} opération{topups.length > 1 ? "s" : ""}</span>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Timeline */}
+      <div className="relative pl-6 sm:pl-8">
+        {/* Ligne verticale */}
+        <div
+          className="absolute left-[10px] sm:left-[14px] top-3 bottom-3 w-[2px] rounded-full"
+          style={{ background: `linear-gradient(180deg, ${BRAND.primary}55, ${BRAND.primary}15)` }}
+        />
+
+        <div className="space-y-3">
+          {topups.map((t, idx) => {
+            const cfg = topupStatusConfig[t.status as keyof typeof topupStatusConfig] ?? topupStatusConfig.pending;
+            const date = new Date(t.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+            const time = new Date(t.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+            const localAmount = formatLocalPrice(Number(t.amountEur), currency);
+            const isCompleted = t.status === "completed";
+
+            return (
+              <motion.div
+                key={t.id}
+                variants={listItem}
+                className="relative"
+              >
+                {/* Point sur la timeline */}
+                <div
+                  className="absolute -left-6 sm:-left-8 top-5 w-3 h-3 rounded-full border-2 border-white shadow-sm z-10"
+                  style={{ background: cfg.dot }}
+                />
+
+                <div className="bg-white border border-border/80 rounded-2xl p-4 hover:shadow-md transition-all duration-300 relative overflow-hidden group">
+                  {/* Bande latérale colorée */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-1 opacity-80"
+                    style={{ background: cfg.dot }}
+                  />
+
+                  <div className="flex items-start justify-between gap-3">
+                    {/* Montant bien mis en avant */}
+                    <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ring-1 ${cfg.bg} ${cfg.ring}`}>
+                        {isCompleted ? (
+                          <BadgeCheck className={`w-5 h-5 ${cfg.color}`} />
+                        ) : t.status === "failed" ? (
+                          <XCircle className={`w-5 h-5 ${cfg.color}`} />
+                        ) : (
+                          <Clock className={`w-5 h-5 ${cfg.color}`} />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Recharge</div>
+                        <div className="text-xl font-black text-foreground leading-tight">
+                          +{Number(t.amountEur).toFixed(2)} €
+                        </div>
+                        {localAmount && (
+                          <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
+                            ≈ {localAmount}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Statut */}
+                    <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ring-1 ${cfg.bg} ${cfg.color} ${cfg.ring}`}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
+                      {cfg.label}
+                    </span>
+                  </div>
+
+                  {/* Date / heure en bas */}
+                  <div className="flex items-center gap-3 mt-3 pt-3 border-t border-dashed border-border/60 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {date}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-border" />
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {time}
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
     </motion.div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* ProfileTab (logique inchangée)                                     */
+/* ProfileTab                                                         */
 /* ────────────────────────────────────────────────────────────────── */
 
 type EditableField = "name" | "phone" | null;
@@ -838,7 +1356,7 @@ function ProfileTab({ me }: { me: UserProfile }) {
               <div className="space-y-3">
                 <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus
                   className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-4 transition-all shadow-sm"
-                  style={{ borderColor: `${BRAND.primary}55`, outlineColor: BRAND.primary }}
+                  style={{ borderColor: `${BRAND.primary}55` }}
                   placeholder="Votre nom" />
                 {error && <p className="text-xs text-destructive font-medium">{error}</p>}
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -941,7 +1459,7 @@ function ProfileTab({ me }: { me: UserProfile }) {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Encart d'information (bas de l'historique)                         */
+/* Encart d'information                                               */
 /* ────────────────────────────────────────────────────────────────── */
 
 function ImportantNotice() {
@@ -1064,7 +1582,6 @@ export default function Dashboard() {
   const activeOrders = orders?.filter(o => o.status === "active" || o.status === "pending_payment") ?? [];
   const pastOrders = orders?.filter(o => o.status !== "active" && o.status !== "pending_payment") ?? [];
 
-  // Compteurs de filtres
   const allOrders = orders ?? [];
   const filterCounts: Record<OrderFilter, number> = {
     all: allOrders.length,
@@ -1086,32 +1603,25 @@ export default function Dashboard() {
     { id: "profile", label: "Mon Profil", icon: <User className="w-4 h-4" /> },
   ];
 
-  const { greeting, subline } = getGreeting(me?.name);
+  const { greeting, subline, slot } = getGreeting(me?.name);
+  const balanceLocal = me && me.balance !== undefined ? formatLocalPrice(me.balance, me.currency) : null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      {/* Header avec salutation personnalisée */}
+      {/* Header avec salutation + illustration animée */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-5">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <motion.div
-              initial={{ rotate: -10, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 200 }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
-              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, color: "#fff" }}
-            >
-              <Sparkles className="w-4 h-4" />
-            </motion.div>
+        <div className="flex items-center gap-4 sm:gap-5">
+          <TimeIllustration slot={slot} />
+          <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
               {greeting}
             </h1>
+            {subline ? (
+              <p className="text-sm font-medium mt-1" style={{ color: BRAND.primaryDark }}>{subline}</p>
+            ) : (
+              <p className="text-muted-foreground text-sm sm:text-base mt-1">Gérez vos commandes, votre solde et votre compte avec simplicité.</p>
+            )}
           </div>
-          {subline ? (
-            <p className="text-sm font-medium" style={{ color: BRAND.primaryDark }}>{subline}</p>
-          ) : (
-            <p className="text-muted-foreground text-sm sm:text-base">Gérez vos commandes, votre solde et votre compte avec simplicité.</p>
-          )}
         </div>
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
           {/* ⚠️ CARTE SOLDE — INCHANGÉE */}
@@ -1153,11 +1663,11 @@ export default function Dashboard() {
           {tab === "profile" ? (
             loadingMe ? <div className="h-72 bg-secondary/50 animate-pulse rounded-3xl" /> : me ? <ProfileTab me={me} /> : null
           ) : tab === "topups" ? (
-            <RechargesTab />
+            <RechargesTab currency={me?.currency} />
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
-                {/* ⚠️ CARTE SOLDE (STAT) — INCHANGÉE */}
+                {/* ⚠️ CARTE SOLDE (STAT) — INCHANGÉE + ajout conversion */}
                 <div className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-3xl p-6 shadow-sm group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
                     <Wallet size={80} className="text-primary" />
@@ -1168,6 +1678,11 @@ export default function Dashboard() {
                       <div className="h-10 w-24 bg-primary/10 animate-pulse rounded-lg" />
                     ) : (
                       <div className="text-4xl font-black text-foreground drop-shadow-sm">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
+                    )}
+                    {!loadingMe && balanceLocal && (
+                      <div className="text-sm font-bold mt-1 flex items-center gap-1" style={{ color: BRAND.primaryDark }}>
+                        <span className="opacity-70">≈</span> {balanceLocal}
+                      </div>
                     )}
                     <Link href="/wallet" className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary bg-white/60 hover:bg-white px-3 py-1.5 rounded-lg font-bold transition-colors shadow-sm backdrop-blur-sm border border-primary/10">
                       Recharger le compte <ArrowRight className="w-3.5 h-3.5" />
@@ -1205,7 +1720,7 @@ export default function Dashboard() {
                     Commandes en cours d'activation
                   </h2>
                   <motion.div variants={listContainer} initial="hidden" animate="show" className="grid gap-5 sm:grid-cols-2">
-                    {activeOrders.map(o => <ActiveOrderCard key={o.id} orderId={o.id} />)}
+                    {activeOrders.map(o => <ActiveOrderCard key={o.id} orderId={o.id} currency={me?.currency} />)}
                   </motion.div>
                 </div>
               )}
@@ -1220,7 +1735,6 @@ export default function Dashboard() {
                   </h2>
                 </div>
 
-                {/* Filtres */}
                 {orders && orders.length > 0 && (
                   <div className="mb-5">
                     <OrderFilters value={orderFilter} onChange={setOrderFilter} counts={filterCounts} />
@@ -1253,12 +1767,11 @@ export default function Dashboard() {
                 ) : (
                   <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-4">
                     {filteredPastOrders.map(o => (
-                      <PastOrderCard key={o.id} order={o} />
+                      <PastOrderCard key={o.id} order={o} currency={me?.currency} />
                     ))}
                   </motion.div>
                 )}
 
-                {/* Encart d'information */}
                 <ImportantNotice />
               </div>
             </>
