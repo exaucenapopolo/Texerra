@@ -14,6 +14,13 @@ import FaqPage from "./pages/faq";
 import NotFound from "./pages/not-found";
 // ➕ NOUVEAU : page admin
 import AdminPage from "./pages/admin";
+// ➕ NOUVEAU : pages légales
+import MentionsLegales from "./pages/mentions-legales";
+import ConditionsUtilisation from "./pages/conditions-utilisation";
+import ConditionsVente from "./pages/conditions-vente";
+import Confidentialite from "./pages/confidentialite";
+import Cookies from "./pages/cookies";
+import UtilisationAcceptable from "./pages/utilisation-acceptable";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -740,6 +747,27 @@ function AppRoutes() {
           <Route path="/faq">
             <Layout><FaqPage /></Layout>
           </Route>
+
+          {/* ➕ NOUVEAU : pages légales */}
+          <Route path="/mentions-legales">
+            <Layout><MentionsLegales /></Layout>
+          </Route>
+          <Route path="/conditions-utilisation">
+            <Layout><ConditionsUtilisation /></Layout>
+          </Route>
+          <Route path="/conditions-vente">
+            <Layout><ConditionsVente /></Layout>
+          </Route>
+          <Route path="/confidentialite">
+            <Layout><Confidentialite /></Layout>
+          </Route>
+          <Route path="/cookies">
+            <Layout><Cookies /></Layout>
+          </Route>
+          <Route path="/utilisation-acceptable">
+            <Layout><UtilisationAcceptable /></Layout>
+          </Route>
+
           {/* ➕ NOUVEAU : route admin (hors Layout public) */}
           <Route path="/admin">
             <AdminRoute component={AdminPage} />
