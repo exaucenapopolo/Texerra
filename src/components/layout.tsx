@@ -168,65 +168,87 @@ export default function Layout({ children }: { children: ReactNode }) {
       </main>
 
       <footer className="border-t border-border bg-white pt-10 pb-8">
-        <div className="max-w-7xl mx-auto px-6 space-y-6">
+  <div className="max-w-7xl mx-auto px-6 space-y-6">
 
-          {/* Top row: logo + nav */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-3">
-              <img src={`${import.meta.env.BASE_URL}logo-full.png`} alt="Texerra" className="h-12 w-auto" />
-            </div>
-            <div className="flex items-center gap-6">
-              <Link href="/faq" className="hover:text-foreground transition-colors">FAQ</Link>
-              <a href="mailto:support@texerra.site" className="hover:text-foreground transition-colors">Email</a>
-              <a
-                href="https://wa.me/12424542961"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-              >
-                <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="" className="w-3.5 h-3.5" />
-                Support
-              </a>
-            </div>
-          </div>
+    {/* Top row: logo + nav + contact */}
+    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 text-sm text-muted-foreground">
+      <div className="flex items-center gap-3">
+        <img src={`${import.meta.env.BASE_URL}logo-full.png`} alt="Texerra" className="h-12 w-auto" />
+      </div>
 
-          {/* Divider */}
-          <div className="border-t border-border" />
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Link href="/faq" className="hover:text-foreground transition-colors">FAQ</Link>
+        <a href="mailto:contact@texerra.site" className="hover:text-foreground transition-colors">
+          contact@texerra.site
+        </a>
+        <a
+          href="tel:+12424542961"
+          className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+        >
+          +1 (242) 454-2961
+        </a>
+        <a
+          href="https://t.me/texerra.sms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+        >
+          <img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="" className="w-3.5 h-3.5" />
+          Telegram
+        </a>
+      </div>
+    </div>
 
-          {/* Bottom row: social + copyright */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Texerra — Numéros virtuels SMS</p>
+    {/* Divider */}
+    <div className="border-t border-border" />
 
-            <div className="flex items-center gap-3">
-              {/* Facebook */}
-              <a href="https://www.facebook.com/share/1EeWWxhVyX/" target="_blank" rel="noopener noreferrer"
-                className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#1877F2]/10 flex items-center justify-center transition-colors group"
-                title="Facebook">
-                <img src="https://cdn.simpleicons.org/facebook/1877F2" alt="Facebook" className="w-4 h-4" />
-              </a>
-              {/* Instagram */}
-              <a href="https://www.instagram.com/texerra.sms?igsh=OWl0MGtod2lhcDkx" target="_blank" rel="noopener noreferrer"
-                className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#E1306C]/10 flex items-center justify-center transition-colors"
-                title="Instagram">
-                <img src="https://cdn.simpleicons.org/instagram/E1306C" alt="Instagram" className="w-4 h-4" />
-              </a>
-              {/* WhatsApp Channel */}
-              <a href="https://whatsapp.com/channel/0029VbDCWHB0gcfAf1ugqS1w" target="_blank" rel="noopener noreferrer"
-                className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#25D366]/10 flex items-center justify-center transition-colors"
-                title="Chaîne WhatsApp">
-                <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" className="w-4 h-4" />
-              </a>
-              {/* YouTube */}
-              <a href="https://youtube.com/@texerra-sms?si=Juk4QmB-rUdSB7XB" target="_blank" rel="noopener noreferrer"
-                className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#FF0000]/10 flex items-center justify-center transition-colors"
-                title="YouTube">
-                <img src="https://cdn.simpleicons.org/youtube/FF0000" alt="YouTube" className="w-4 h-4" />
-              </a>
-            </div>
-          </div>
+    {/* Legal links */}
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+      <Link href="/mentions-legales" className="hover:text-foreground transition-colors">Mentions légales</Link>
+      <Link href="/conditions-utilisation" className="hover:text-foreground transition-colors">Conditions d'utilisation</Link>
+      <Link href="/conditions-vente" className="hover:text-foreground transition-colors">CGV</Link>
+      <Link href="/confidentialite" className="hover:text-foreground transition-colors">Confidentialité</Link>
+      <Link href="/cookies" className="hover:text-foreground transition-colors">Cookies</Link>
+      <Link href="/utilisation-acceptable" className="hover:text-foreground transition-colors">Utilisation acceptable</Link>
+    </div>
 
-        </div>
-      </footer>
+    {/* Divider */}
+    <div className="border-t border-border" />
+
+    {/* Bottom row: social + copyright */}
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Texerra — Numéros virtuels SMS</p>
+
+      <div className="flex items-center gap-3">
+        {/* Facebook */}
+        <a href="https://www.facebook.com/share/1EeWWxhVyX/" target="_blank" rel="noopener noreferrer"
+          className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#1877F2]/10 flex items-center justify-center transition-colors group"
+          title="Facebook">
+          <img src="https://cdn.simpleicons.org/facebook/1877F2" alt="Facebook" className="w-4 h-4" />
+        </a>
+        {/* Instagram */}
+        <a href="https://www.instagram.com/texerra.sms?igsh=OWl0MGtod2lhcDkx" target="_blank" rel="noopener noreferrer"
+          className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#E1306C]/10 flex items-center justify-center transition-colors"
+          title="Instagram">
+          <img src="https://cdn.simpleicons.org/instagram/E1306C" alt="Instagram" className="w-4 h-4" />
+        </a>
+        {/* WhatsApp Channel */}
+        <a href="https://whatsapp.com/channel/0029VbDCWHB0gcfAf1ugqS1w" target="_blank" rel="noopener noreferrer"
+          className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#25D366]/10 flex items-center justify-center transition-colors"
+          title="Chaîne WhatsApp">
+          <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" className="w-4 h-4" />
+        </a>
+        {/* YouTube */}
+        <a href="https://youtube.com/@texerra-sms?si=Juk4QmB-rUdSB7XB" target="_blank" rel="noopener noreferrer"
+          className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#FF0000]/10 flex items-center justify-center transition-colors"
+          title="YouTube">
+          <img src="https://cdn.simpleicons.org/youtube/FF0000" alt="YouTube" className="w-4 h-4" />
+        </a>
+      </div>
+    </div>
+
+  </div>
+</footer>
     </div>
   );
 }
