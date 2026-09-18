@@ -236,14 +236,192 @@ export default function Layout({ children }: { children: ReactNode }) {
         <a href="https://whatsapp.com/channel/0029VbDCWHB0gcfAf1ugqS1w" target="_blank" rel="noopener noreferrer"
           className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#25D366]/10 flex items-center justify-center transition-colors"
           title="Chaîne WhatsApp">
-          <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" className="w-4 h-4" />
-        </a>
-        {/* YouTube */}
-        <a href="https://youtube.com/@texerra-sms?si=Juk4QmB-rUdSB7XB" target="_blank" rel="noopener noreferrer"
-          className="w-8 h-8 rounded-lg bg-secondary hover:bg-[#FF0000]/10 flex items-center justify-center transition-colors"
-          title="YouTube">
-          <img src="https://cdn.simpleicons.org/youtube/FF0000" alt="YouTube" className="w-4 h-4" />
-        </a>
+<footer className="border-t border-border bg-white pt-12 pb-8">
+  <div className="max-w-7xl mx-auto px-6">
+
+    {/* ─── Grille principale : 4 sections ─── */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-12">
+
+      {/* ── Section 1 : Marque ── */}
+      <div className="sm:col-span-2 lg:col-span-1">
+        <img
+          src={`${import.meta.env.BASE_URL}logo-full.png`}
+          alt="Texerra"
+          className="h-12 w-auto mb-4"
+        />
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+          Recevez vos SMS de vérification en ligne, rapidement et en toute simplicité.
+        </p>
+      </div>
+
+      {/* ── Section 2 : Navigation ── */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-4">Navigation</h3>
+        <ul className="space-y-2.5 text-sm">
+          <li>
+            <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+              Accueil
+            </Link>
+          </li>
+          <li>
+            <Link href="/order" className="text-muted-foreground hover:text-foreground transition-colors">
+              Commander
+            </Link>
+          </li>
+          <li>
+            <Link href="/faq" className="text-muted-foreground hover:text-foreground transition-colors">
+              FAQ
+            </Link>
+          </li>
+          <li>
+            <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
+              Tableau de bord
+            </Link>
+          </li>
+        </ul>
+      </div>
+
+      {/* ── Section 3 : Informations légales ── */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-4">Informations légales</h3>
+        <ul className="space-y-2.5 text-sm">
+          <li>
+            <Link href="/mentions-legales" className="text-muted-foreground hover:text-foreground transition-colors">
+              Mentions légales
+            </Link>
+          </li>
+          <li>
+            <Link href="/conditions-utilisation" className="text-muted-foreground hover:text-foreground transition-colors">
+              Conditions d'utilisation
+            </Link>
+          </li>
+          <li>
+            <Link href="/conditions-vente" className="text-muted-foreground hover:text-foreground transition-colors">
+              Conditions de vente (CGV)
+            </Link>
+          </li>
+          <li>
+            <Link href="/confidentialite" className="text-muted-foreground hover:text-foreground transition-colors">
+              Confidentialité
+            </Link>
+          </li>
+          <li>
+            <Link href="/cookies" className="text-muted-foreground hover:text-foreground transition-colors">
+              Cookies
+            </Link>
+          </li>
+          <li>
+            <Link href="/utilisation-acceptable" className="text-muted-foreground hover:text-foreground transition-colors">
+              Utilisation acceptable
+            </Link>
+          </li>
+        </ul>
+      </div>
+
+      {/* ── Section 4 : Contact ── */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-4">Contact</h3>
+        <div className="flex flex-col gap-3">
+          {/* Bouton Support WhatsApp (message pré-rempli) */}
+          <a
+            href="https://wa.me/12424542961?text=Bonjour%20Texerra%20SMS%2C%20j%27ai%20besoin%20d%27aide."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20BD5A] text-white text-sm font-semibold transition-colors shadow-sm"
+          >
+            <img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="" className="w-4 h-4" />
+            Support WhatsApp
+          </a>
+
+          {/* Bouton Email */}
+          <a
+            href="mailto:contact@texerra.site?subject=Demande%20de%20support"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary border border-border hover:bg-muted text-foreground text-sm font-medium transition-colors"
+          >
+            <svg
+              className="w-4 h-4 text-muted-foreground"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="m22 6-10 7L2 6" />
+            </svg>
+            Nous écrire
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    {/* ─── Barre inférieure : copyright + réseaux sociaux ─── */}
+    <div className="border-t border-border mt-10 pt-6">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+
+        <p className="text-xs text-muted-foreground text-center sm:text-left">
+          © {new Date().getFullYear()} Texerra — Numéros virtuels SMS
+        </p>
+
+        <div className="flex items-center gap-2.5">
+          {/* Facebook */}
+          <a
+            href="https://www.facebook.com/share/1EeWWxhVyX/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-9 h-9 rounded-lg bg-secondary hover:bg-[#1877F2]/10 flex items-center justify-center transition-colors"
+            title="Facebook"
+          >
+            <img src="https://cdn.simpleicons.org/facebook/1877F2" alt="Facebook" className="w-4 h-4" />
+          </a>
+
+          {/* Instagram */}
+          <a
+            href="https://www.instagram.com/texerra.sms?igsh=OWl0MGtod2lhcDkx"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-9 h-9 rounded-lg bg-secondary hover:bg-[#E1306C]/10 flex items-center justify-center transition-colors"
+            title="Instagram"
+          >
+            <img src="https://cdn.simpleicons.org/instagram/E1306C" alt="Instagram" className="w-4 h-4" />
+          </a>
+
+          {/* WhatsApp Channel */}
+          <a
+            href="https://whatsapp.com/channel/0029VbDCWHB0gcfAf1ugqS1w"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-9 h-9 rounded-lg bg-secondary hover:bg-[#25D366]/10 flex items-center justify-center transition-colors"
+            title="Chaîne WhatsApp"
+          >
+            <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" className="w-4 h-4" />
+          </a>
+
+          {/* Telegram ➕ NOUVEAU — au même niveau que les autres */}
+          <a
+            href="https://t.me/texerra.sms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-9 h-9 rounded-lg bg-secondary hover:bg-[#26A5E4]/10 flex items-center justify-center transition-colors"
+            title="Telegram"
+          >
+            <img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="Telegram" className="w-4 h-4" />
+          </a>
+
+          {/* YouTube */}
+          <a
+            href="https://youtube.com/@texerra-sms?si=Juk4QmB-rUdSB7XB"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-9 h-9 rounded-lg bg-secondary hover:bg-[#FF0000]/10 flex items-center justify-center transition-colors"
+            title="YouTube"
+          >
+            <img src="https://cdn.simpleicons.org/youtube/FF0000" alt="YouTube" className="w-4 h-4" />
+          </a>
+        </div>
+
       </div>
     </div>
 
