@@ -335,7 +335,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
                 {/* Telegram — au même niveau que les autres */}
                 <a
-                  href="https://t.me/texerra.sms"
+                  href="https://t.me/+VmvSLjDldkk1Y2Q0"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-9 h-9 rounded-lg bg-secondary hover:bg-[#26A5E4]/10 flex items-center justify-center transition-colors"
