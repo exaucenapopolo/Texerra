@@ -13,7 +13,7 @@ import {
 import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
 import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer.js";
 import { requireAuth } from "../lib/requireAuth.js";
-// ➕ NOUVEAU : service de commission (idempotent, non bloquant)
+// ➕ Service de commission (calcul sur la MARGE nette)
 import { createCommissionForOrder } from "../lib/affiliate-commission.js";
 
 const router = Router();
@@ -25,15 +25,14 @@ const CreateOrderBody = z.object({
 });
 
 /**
- * ➕ NOUVEAU : Constantes du calcul de marge.
+ * Constantes du calcul de marge.
  * Doivent rester synchronisées avec lib/priceCache.ts.
  */
 const USD_TO_EUR = 0.92;
 const MARGIN = 3.0;
 
 /**
- * ➕ NOUVEAU : Extrait le coût fournisseur (USD) depuis le cache de prix.
- * Retourne null si absent — ne lève jamais d'exception.
+ * Extrait le coût fournisseur (USD) depuis le cache de prix.
  */
 function extractCostUsd(
   prices: unknown,
@@ -234,14 +233,12 @@ router.post("/", requireAuth, async (req, res) => {
     externalOrderId: String(grizzlyOrder.id),
     status: "active",
     price: priceEur.toFixed(4),
-    // ➕ NOUVEAU : version numérique pour les agrégations Firestore (sum)
     priceNum: priceEur,
     currency: "EUR",
     expiresAt: expiresAt.toISOString(),
     createdAt: new Date().toISOString(),
   };
 
-  // ➕ NOUVEAU : champs numériques pour les agrégations (nouvelles commandes uniquement)
   if (costUsd !== null && marginEur !== null) {
     orderData.costUsd = costUsd.toFixed(6);
     orderData.costUsdNum = costUsd;
@@ -323,15 +320,25 @@ router.get("/:id", requireAuth, async (req, res) => {
         finishOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
 
         // ➕ NOUVEAU : création de la commission d'affiliation (idempotente)
-        //    ⚠️ try/catch non-bloquant : une erreur d'affiliation ne doit
+        //    Calcul basé sur la MARGE nette Texerra (50% de la marge
+        //    = ~33% du chiffre d'affaires).
+        //    try/catch non-bloquant : une erreur d'affiliation ne doit
         //    JAMAIS casser la commande client.
         try {
           const numericPrice = parseFloat(String(order.price ?? "0"));
+          const numericMargin =
+            typeof order.marginNum === "number"
+              ? order.marginNum
+              : order.marginNum !== undefined && order.marginNum !== null
+              ? parseFloat(String(order.marginNum))
+              : null;
+
           if (order.userId && Number.isFinite(numericPrice) && numericPrice > 0) {
             await createCommissionForOrder(
               orderId,
               order.userId,
-              numericPrice
+              numericPrice,
+              Number.isFinite(numericMargin) ? (numericMargin as number) : null
             );
           }
         } catch (commissionErr) {
