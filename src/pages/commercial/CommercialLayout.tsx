@@ -26,6 +26,10 @@ const NAV_ITEMS = [
   { to: "/commercial/profile", label: "Mon profil", icon: UserCircle },
 ];
 
+// ➕ Logo officiel hébergé sur GitHub (remplace le bloc texte T)
+const LOGO_URL =
+  "https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png";
+
 export default function CommercialLayout({ children }: Props) {
   const [location, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -51,16 +55,16 @@ export default function CommercialLayout({ children }: Props) {
       <aside className="hidden md:flex md:flex-col w-64 bg-white border-r border-gray-200 fixed h-full z-30">
         <div className="p-6 border-b border-gray-100">
           <Link href="/commercial" className="flex items-center gap-2 cursor-pointer">
-            <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-white font-bold">
-              T
-            </div>
-            <div>
-              <div className="font-bold text-gray-900 leading-none">Texerra</div>
-              <div className="text-[10px] text-orange-500 font-semibold uppercase tracking-wide">
-                Espace commercial
-              </div>
-            </div>
+            {/* ➕ LOGO RÉEL */}
+            <img
+              src={LOGO_URL}
+              alt="Texerra SMS"
+              className="h-9 w-auto object-contain"
+            />
           </Link>
+          <div className="text-[10px] text-orange-500 font-semibold uppercase tracking-wide mt-2">
+            Espace commercial
+          </div>
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -96,11 +100,13 @@ export default function CommercialLayout({ children }: Props) {
 
       {/* ─── MOBILE HEADER ─── */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 h-14">
-        <Link href="/commercial" className="flex items-center gap-2 cursor-pointer">
-          <div className="w-7 h-7 rounded-md bg-orange-500 flex items-center justify-center text-white font-bold text-sm">
-            T
-          </div>
-          <span className="font-bold text-gray-900 text-sm">Texerra</span>
+        <Link href="/commercial" className="flex items-center cursor-pointer">
+          {/* ➕ LOGO RÉEL (mobile) */}
+          <img
+            src={LOGO_URL}
+            alt="Texerra SMS"
+            className="h-7 w-auto object-contain"
+          />
         </Link>
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -160,4 +166,4 @@ export default function CommercialLayout({ children }: Props) {
       </main>
     </div>
   );
-                  }
+    }
