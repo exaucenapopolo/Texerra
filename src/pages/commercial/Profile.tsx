@@ -1,7 +1,20 @@
 // Fichier : src/pages/commercial/Profile.tsx
 
 import { useEffect, useState } from "react";
-import { User, Mail, Percent, Hash, AlertCircle, Shield } from "lucide-react";
+import {
+  User,
+  Mail,
+  Percent,
+  Hash,
+  AlertCircle,
+  Shield,
+  TrendingUp,
+  Users,
+  Briefcase,
+  Ban,
+  Info,
+  UserPlus,
+} from "lucide-react";
 import { getMe, type MeResponse } from "../../lib/affiliate-api";
 
 export default function CommercialProfile() {
@@ -34,14 +47,17 @@ export default function CommercialProfile() {
   const { commercial } = data;
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Mon profil commercial</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          Mon profil commercial
+        </h1>
         <p className="text-gray-500 mt-1">
-          Informations de ton compte commercial
+          Informations et fonctionnement de ton espace
         </p>
       </div>
 
+      {/* ─── INFOS COMPTE ─── */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
         <InfoRow
           icon={<User className="w-4 h-4" />}
@@ -81,33 +97,201 @@ export default function CommercialProfile() {
         />
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 text-sm text-blue-900">
-        <div className="font-semibold mb-1">💡 Comment fonctionne le système ?</div>
-        <ul className="space-y-1 list-disc pl-5">
-          <li>Partage ton lien personnel pour attribuer automatiquement les nouveaux clients.</li>
-          <li>Chaque commande éligible d'un client attribué génère {commercial.commissionRate}% de commission.</li>
-          <li>Les commissions deviennent disponibles au retrait une fois la commande terminée.</li>
-          <li>Fais une demande de retrait depuis l'onglet « Mes retraits ».</li>
-        </ul>
-      </div>
+      {/* ─── COMMENT ÇA MARCHE ─── */}
+      <Section
+        icon={<Info className="w-5 h-5" />}
+        title="Comment ça fonctionne ?"
+        color="blue"
+      >
+        <p>
+          Tu es un <strong>partenaire indépendant</strong> de Texerra SMS. Tu
+          n'as pas de salaire fixe : tu gagnes un pourcentage sur chaque vente
+          que tu génères. Plus tu apportes de clients actifs, plus tu gagnes.
+        </p>
+        <ol className="list-decimal pl-5 space-y-2 mt-3">
+          <li>
+            Tu partages ton <strong>lien personnel</strong> (
+            <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">
+              ?ref={commercial.affiliateCode}
+            </span>
+            ) sur les réseaux, WhatsApp, Telegram, etc.
+          </li>
+          <li>
+            Quand quelqu'un clique sur ton lien et <strong>crée un compte</strong>,
+            il t'est automatiquement attribué.
+          </li>
+          <li>
+            À chaque <strong>commande éligible</strong> de ce client, tu gagnes{" "}
+            {commercial.commissionRate}% de la marge.
+          </li>
+          <li>
+            Ta commission devient <strong>disponible</strong> dès que la commande
+            est terminée, puis tu peux demander un <strong>retrait</strong>.
+          </li>
+        </ol>
+      </Section>
 
-      <div className="bg-white border border-gray-200 rounded-2xl p-5">
-        <div className="font-semibold text-gray-800 mb-2 text-sm">
-          Besoin de modifier tes informations de paiement ?
+      {/* ─── COMPRENDRE LE TAUX ─── */}
+      <Section
+        icon={<TrendingUp className="w-5 h-5" />}
+        title="Comment est calculé ton pourcentage ?"
+        color="orange"
+      >
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 my-2">
+          <div className="text-sm text-orange-900">
+            <strong>⚠️ Important à comprendre :</strong> ton taux de{" "}
+            {commercial.commissionRate}% s'applique sur la{" "}
+            <strong>marge nette</strong> que Texerra réalise sur chaque vente —
+            pas sur le chiffre d'affaires brut.
+          </div>
         </div>
-        <div className="text-sm text-gray-500">
-          Contacte l'administrateur à{" "}
+
+        <p className="mt-3">
+          <strong>Exemple concret</strong> : sur une vente à 1,00 €, si Texerra
+          gagne 0,60 € de marge nette (après coûts fournisseur, frais bancaires,
+          etc.), ta commission sera de{" "}
+          <strong>
+            {((commercial.commissionRate / 100) * 0.6).toFixed(2)} €
+          </strong>{" "}
+          et non de{" "}
+          <strong>{(commercial.commissionRate / 100).toFixed(2)} €</strong>.
+        </p>
+
+        <p className="mt-3 text-sm text-gray-500">
+          💡 <strong>Ce que tu vois dans ton dashboard</strong> reflète toujours
+          ta commission réelle déjà calculée. Tu n'as rien à faire toi-même. Si
+          tu vois un taux de 33% affiché, cela dépend de la marge effective de
+          la vente — c'est normal et transparent.
+        </p>
+      </Section>
+
+      {/* ─── COMMISSIONNAGE INDÉPENDANT ─── */}
+      <Section
+        icon={<Briefcase className="w-5 h-5" />}
+        title="Ton statut : indépendant"
+        color="green"
+      >
+        <ul className="space-y-2">
+          <li className="flex items-start gap-2">
+            <span className="text-green-600 mt-1">✓</span>
+            <span>
+              Tu travailles de manière <strong>indépendante</strong> — pas de
+              horaires imposés, pas de quota minimum.
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-green-600 mt-1">✓</span>
+            <span>
+              Tes gains dépendent <strong>uniquement</strong> de ton activité.
+              Si tu ne vends rien, tu ne gagnes rien. Si tu vends beaucoup, tu
+              gagnes beaucoup.
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-green-600 mt-1">✓</span>
+            <span>
+              Tu peux demander un <strong>retrait à tout moment</strong>, dès que
+              ton solde disponible atteint le minimum requis.
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-green-600 mt-1">✓</span>
+            <span>
+              Tu représentes une <strong>entreprise sérieuse</strong>. Ton image
+              doit refléter cette qualité.
+            </span>
+          </li>
+        </ul>
+      </Section>
+
+      {/* ─── RÈGLES DE CONDUITE ─── */}
+      <Section
+        icon={<Ban className="w-5 h-5" />}
+        title="Règles à respecter absolument"
+        color="red"
+      >
+        <p className="text-sm text-gray-600 mb-3">
+          En tant que commercial Texerra, tu utilises l'image de marque d'une
+          entreprise sérieuse. Toute violation grave peut entraîner la
+          <strong> fermeture immédiate de ton compte</strong> et l'annulation de
+          tes commissions en cours.
+        </p>
+
+        <div className="space-y-3">
+          <Rule>
+            <strong>🚫 Ne mens jamais à un client</strong> — sur les prix, les
+            services, les délais de livraison ou les fonctionnalités.
+          </Rule>
+          <Rule>
+            <strong>🚫 Ne modifie jamais les prix officiels</strong> — ni à la
+            hausse ni à la baisse. Les tarifs Texerra sont fixes et publics.
+          </Rule>
+          <Rule>
+            <strong>🚫 Ne promets pas de services inexistants</strong> pour
+            convaincre un prospect.
+          </Rule>
+          <Rule>
+            <strong>🚫 N'utilise pas de méthodes frauduleuses</strong> :
+            faux témoignages, usurpation d'identité, spam massif, etc.
+          </Rule>
+          <Rule>
+            <strong>🚫 Ne t'inscris pas toi-même via ton propre lien</strong>{" "}
+            (auto-parrainage interdit, détecté automatiquement).
+          </Rule>
+          <Rule>
+            <strong>✅ Sois honnête et transparent</strong> — tu construis une
+            réputation de long terme.
+          </Rule>
+        </div>
+      </Section>
+
+      {/* ─── PARRAINAGE DE COMMERCIAUX ─── */}
+      <Section
+        icon={<UserPlus className="w-5 h-5" />}
+        title="Recruter d'autres commerciaux"
+        color="purple"
+      >
+        <p>
+          Tu peux <strong>amener d'autres commerciaux</strong> dans le programme.
+          Si un commercial que tu as recruté réalise des ventes, tu touches un{" "}
+          <strong>pourcentage additionnel</strong> sur ses commissions — en plus
+          de tes propres gains.
+        </p>
+        <div className="mt-3 bg-purple-50 border border-purple-200 rounded-xl p-4 text-sm text-purple-900">
+          📧 Pour mettre en place ce parrainage de commerciaux, contacte
+          directement l'équipe à{" "}
           <a
-            href="mailto:support@texerra.site"
-            className="text-orange-500 hover:underline"
+            href="mailto:texerra.sms@gmail.com"
+            className="font-semibold underline"
           >
-            support@texerra.site
+            texerra.sms@gmail.com
+          </a>{" "}
+          avec l'objet <strong>"Parrainage commercial"</strong>.
+        </div>
+      </Section>
+
+      {/* ─── BESOIN D'AIDE ─── */}
+      <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 text-sm">
+        <div className="font-semibold text-gray-800 mb-1">
+          Besoin d'aide ou d'informations ?
+        </div>
+        <div className="text-gray-600">
+          Contacte l'équipe à{" "}
+          <a
+            href="mailto:texerra.sms@gmail.com"
+            className="text-orange-500 hover:underline font-medium"
+          >
+            texerra.sms@gmail.com
           </a>
         </div>
       </div>
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────
+ * SOUS-COMPOSANTS
+ * ───────────────────────────────────────────── */
 
 function InfoRow({
   icon,
@@ -136,3 +320,40 @@ function InfoRow({
     </div>
   );
 }
+
+function Section({
+  icon,
+  title,
+  color,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  color: "blue" | "orange" | "green" | "red" | "purple";
+  children: React.ReactNode;
+}) {
+  const colors: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-600",
+    orange: "bg-orange-50 text-orange-600",
+    green: "bg-green-50 text-green-600",
+    red: "bg-red-50 text-red-600",
+    purple: "bg-purple-50 text-purple-600",
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-6">
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`p-2 rounded-lg ${colors[color]}`}>{icon}</div>
+        <h2 className="font-bold text-gray-900 text-lg">{title}</h2>
+      </div>
+      <div className="text-gray-700 text-sm leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+function Rule({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg text-sm">
+      {children}
+    </div>
+  );
+          }
