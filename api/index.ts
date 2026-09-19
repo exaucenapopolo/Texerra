@@ -23,7 +23,40 @@ import affiliateRouter from "../handlers/affiliate.js";
 
 const app = express();
 
-app.use(cors());
+/* ═══════════════════════════════════════════════════════════════
+ * CORS — Configuration avec credentials pour permettre les cookies
+ * ═══════════════════════════════════════════════════════════════
+ *  Pourquoi `credentials: true` est indispensable :
+ *  - Le système d'affiliation pose un cookie HttpOnly `tx_ref` lors
+ *    de la visite avec ?ref=CODE.
+ *  - Sans cette option, le navigateur REFUSE d'envoyer le cookie
+ *    sur les requêtes suivantes (/claim, /me, etc.).
+ *  - Résultat : le commercial ne voit jamais ses clients attribués.
+ * ═══════════════════════════════════════════════════════════════ */
+
+const ALLOWED_ORIGINS = [
+  "https://www.texerra.site",
+  "https://texerra.site",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Requêtes same-origin (pas d'Origin header) → autoriser
+      if (!origin) return callback(null, true);
+      // Origines autorisées explicites
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      // Vercel preview deployments (ex: texerra-xxx.vercel.app)
+      if (origin.endsWith(".vercel.app")) return callback(null, true);
+      // Rejeter tout le reste
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
 app.use(express.json());
 
 app.get("/", (_req: Request, res: Response) => {
