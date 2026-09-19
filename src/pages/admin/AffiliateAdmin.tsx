@@ -681,4 +681,85 @@ function WithdrawalAdminRow({
                 loading={processing === "approved"}
                 color="blue"
               >
-                <Check className="w-4 h
+                <Check className="w-4 h-4" />
+                Approuver
+              </ActionBtn>
+            )}
+            {canMarkPaid && (
+              <ActionBtn
+                onClick={() => handleAction("paid")}
+                loading={processing === "paid"}
+                color="green"
+              >
+                <Check className="w-4 h-4" />
+                Marquer payé
+              </ActionBtn>
+            )}
+            {canReject && (
+              <ActionBtn
+                onClick={() => handleAction("rejected")}
+                loading={processing === "rejected"}
+                color="red"
+              >
+                <X className="w-4 h-4" />
+                Refuser
+              </ActionBtn>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: WithdrawalRow["status"] }) {
+  const map: Record<string, string> = {
+    pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    approved: "bg-blue-50 text-blue-700 border-blue-200",
+    paid: "bg-green-50 text-green-700 border-green-200",
+    rejected: "bg-red-50 text-red-700 border-red-200",
+    cancelled: "bg-gray-100 text-gray-600 border-gray-200",
+  };
+  const labels: Record<string, string> = {
+    pending: "En attente",
+    approved: "Approuvée",
+    paid: "Payée",
+    rejected: "Refusée",
+    cancelled: "Annulée",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${map[status]}`}
+    >
+      <Clock className="w-3 h-3" />
+      {labels[status]}
+    </span>
+  );
+}
+
+function ActionBtn({
+  onClick,
+  loading,
+  color,
+  children,
+}: {
+  onClick: () => void;
+  loading: boolean;
+  color: "blue" | "green" | "red";
+  children: React.ReactNode;
+}) {
+  const colors = {
+    blue: "bg-blue-500 hover:bg-blue-600",
+    green: "bg-green-500 hover:bg-green-600",
+    red: "bg-red-500 hover:bg-red-600",
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className={`flex items-center gap-1.5 ${colors[color]} disabled:opacity-50 text-white text-sm font-medium px-3 py-2 rounded-lg`}
+    >
+      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : children}
+    </button>
+  );
+}
