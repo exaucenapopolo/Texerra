@@ -5,6 +5,12 @@
  * Monté sur /api/affiliate dans api/index.ts.
  *
  * Aucune Function Vercel supplémentaire n'est créée.
+ *
+ * ➕ CORRECTION : Auto-liaison Firebase UID ↔ commercial par email.
+ *    - Un admin crée un commercial avec son email.
+ *    - Au premier login du commercial, requireCommercial détecte
+ *      qu'aucun enregistrement n'est lié à ce firebaseUid, cherche
+ *      par email et lie automatiquement les deux.
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
@@ -43,23 +49,94 @@ import {
 
 const router = Router();
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * MIDDLEWARES
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 /**
- * Middleware : exige un commercial authentifié.
- * Charge la fiche commercial dans req.commercial.
+ * ➕ CORRECTION MAJEURE : Middleware exigeant un commercial.
+ *
+ * Étapes :
+ *  1. Vérifie l'authentification Firebase.
+ *  2. Cherche un commercial lié au firebaseUid.
+ *  3. Si introuvable → cherche par email (auto-liaison).
+ *  4. Si trouvé par email ET firebaseUid null → lie automatiquement.
+ *  5. Si toujours introuvable → 403.
  */
 function requireCommercial(req: Request, res: Response, next: NextFunction) {
   requireAuth(req, res, async () => {
     try {
       const userId = (req as any).userId as string;
-      const commercial = await getCommercialByUid(userId);
+
+      // ─── Étape 1 : Recherche par firebaseUid (cas nominal) ───
+      let commercial: Commercial | null = await getCommercialByUid(userId);
+
+      // ─── Étape 2 : Auto-liaison par email ───
+      if (!commercial) {
+        // Récupérer l'email depuis le document utilisateur
+        const userDoc = await firestoreDb.collection("users").doc(userId).get();
+        const userEmail = (userDoc.data()?.email as string | undefined)?.toLowerCase();
+
+        if (userEmail) {
+          // Chercher un commercial actif avec le même email et sans firebaseUid
+          const snap = await firestoreDb
+            .collection("commercials")
+            .where("email", "==", userEmail)
+            .limit(1)
+            .get();
+
+          if (!snap.empty) {
+            const doc = snap.docs[0];
+            const data = doc.data();
+
+            // Lier seulement si le commercial n'a pas déjà un firebaseUid
+            if (!data.firebaseUid) {
+              await doc.ref.update({
+                firebaseUid: userId,
+                updatedAt: new Date().toISOString(),
+              });
+
+              console.log(
+                `[affiliate] ✅ Auto-linked commercial ${doc.id} (${userEmail}) to Firebase UID ${userId}`
+              );
+
+              // Journaliser cette auto-liaison pour audit
+              await auditLog({
+                actorId: userId,
+                actorRole: "system",
+                action: "auto_link_commercial",
+                entityType: "commercials",
+                entityId: doc.id,
+                metadataSafe: { email: userEmail, firebaseUid: userId },
+              });
+
+              commercial = {
+                ...(data as Commercial),
+                id: doc.id,
+                firebaseUid: userId,
+              };
+            } else if (data.firebaseUid === userId) {
+              // Déjà lié (cas rare : race condition)
+              commercial = {
+                ...(data as Commercial),
+                id: doc.id,
+              };
+            } else {
+              // Le commercial est déjà lié à un AUTRE firebaseUid
+              console.warn(
+                `[affiliate] ⚠️ Commercial ${doc.id} already linked to another UID (${data.firebaseUid}), refusing link to ${userId}`
+              );
+            }
+          }
+        }
+      }
+
+      // ─── Étape 3 : Vérification finale ───
       if (!commercial) {
         res.status(403).json({ error: "Accès commercial requis" });
         return;
       }
+
       (req as any).commercial = commercial;
       next();
     } catch (err) {
@@ -95,9 +172,9 @@ function requireAffiliateAdmin(
   });
 }
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * ROUTE PUBLIQUE : VISIT
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 router.get("/visit", async (req: Request, res: Response) => {
   try {
@@ -131,9 +208,9 @@ router.get("/visit", async (req: Request, res: Response) => {
   }
 });
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * ROUTE CLIENT : CLAIM
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 router.post("/claim", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -159,9 +236,9 @@ router.post("/claim", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * ROUTES COMMERCIAL
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 /** GET /me — Profil + KPIs */
 router.get(
@@ -444,9 +521,9 @@ router.post(
   }
 );
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * ROUTES ADMIN
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 /** GET /admin/commercials — Liste */
 router.get(
@@ -470,6 +547,7 @@ router.get(
           commissionRate: d.commissionRate,
           status: d.status,
           createdAt: d.createdAt,
+          firebaseUid: d.firebaseUid ?? null,
         };
       });
 
@@ -501,6 +579,17 @@ router.post(
         return;
       }
 
+      // Vérifier qu'un commercial avec cet email n'existe pas déjà
+      const existingEmail = await firestoreDb
+        .collection("commercials")
+        .where("email", "==", email)
+        .limit(1)
+        .get();
+      if (!existingEmail.empty) {
+        res.status(409).json({ error: "Un commercial avec cet email existe déjà" });
+        return;
+      }
+
       // Générer un code unique
       const baseCode =
         name
@@ -529,10 +618,26 @@ router.post(
         }
       }
 
+      // ➕ Vérifier si un utilisateur Firebase existe déjà avec cet email
+      //    pour lier immédiatement (évite d'attendre le premier login).
+      let initialFirebaseUid: string | null = null;
+      try {
+        const userSnap = await firestoreDb
+          .collection("users")
+          .where("email", "==", email)
+          .limit(1)
+          .get();
+        if (!userSnap.empty) {
+          initialFirebaseUid = userSnap.docs[0].id;
+        }
+      } catch (err) {
+        console.warn("[affiliate/admin/commercials POST] email lookup failed:", err);
+      }
+
       const commercialRef = firestoreDb.collection("commercials").doc();
       const commercial = {
         id: commercialRef.id,
-        firebaseUid: null,
+        firebaseUid: initialFirebaseUid,
         name,
         email,
         affiliateCode,
@@ -550,7 +655,13 @@ router.post(
         action: "create_commercial",
         entityType: "commercials",
         entityId: commercialRef.id,
-        metadataSafe: { name, email, affiliateCode, commissionRate },
+        metadataSafe: {
+          name,
+          email,
+          affiliateCode,
+          commissionRate,
+          linkedImmediately: !!initialFirebaseUid,
+        },
       });
 
       res.status(201).json({ ok: true, commercial });
@@ -765,9 +876,9 @@ router.get(
   }
 );
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * EXPORTS UTILITAIRES (pour handlers/orders.ts)
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 export { createCommissionForOrder, reverseCommission };
 
