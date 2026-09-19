@@ -13,6 +13,8 @@ import {
 import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
 import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer.js";
 import { requireAuth } from "../lib/requireAuth.js";
+// ➕ NOUVEAU : service de commission (idempotent, non bloquant)
+import { createCommissionForOrder } from "../lib/affiliate-commission.js";
 
 const router = Router();
 
@@ -319,6 +321,25 @@ router.get("/:id", requireAuth, async (req, res) => {
         });
 
         finishOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
+
+        // ➕ NOUVEAU : création de la commission d'affiliation (idempotente)
+        //    ⚠️ try/catch non-bloquant : une erreur d'affiliation ne doit
+        //    JAMAIS casser la commande client.
+        try {
+          const numericPrice = parseFloat(String(order.price ?? "0"));
+          if (order.userId && Number.isFinite(numericPrice) && numericPrice > 0) {
+            await createCommissionForOrder(
+              orderId,
+              order.userId,
+              numericPrice
+            );
+          }
+        } catch (commissionErr) {
+          console.error(
+            "[orders] Erreur création commission (non bloquant) :",
+            commissionErr
+          );
+        }
 
         const updatedDoc = await orderRef.get();
         const updatedData = updatedDoc.data()!;
