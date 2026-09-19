@@ -22,6 +22,16 @@ import Confidentialite from "./pages/confidentialite";
 import Cookies from "./pages/cookies";
 import UtilisationAcceptable from "./pages/utilisation-acceptable";
 
+// ➕ NOUVEAU : système d'affiliation / commerciaux
+import { useAffiliateCapture } from "./hooks/useAffiliateCapture";
+import CommercialLayout from "./pages/commercial/CommercialLayout";
+import CommercialDashboard from "./pages/commercial/Dashboard";
+import CommercialClients from "./pages/commercial/Clients";
+import CommercialCommissions from "./pages/commercial/Commissions";
+import CommercialWithdrawals from "./pages/commercial/Withdrawals";
+import CommercialProfile from "./pages/commercial/Profile";
+import AffiliateAdmin from "./pages/admin/AffiliateAdmin";
+
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 /**
@@ -722,9 +732,43 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   return <Component />;
 }
 
+/* ────────────────────────────────────────────────────────────────── */
+/* ➕ NOUVEAU : CommercialRoute                                       */
+/* Protection défensive : exige une authentification Firebase.        */
+/* ⚠️ La vraie vérification (rôle commercial) est côté serveur.       */
+/* Si l'utilisateur n'est pas commercial, l'API renvoie 403 et        */
+/* le dashboard affiche un message d'erreur explicite.                */
+/* ────────────────────────────────────────────────────────────────── */
+function CommercialRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Redirect to="/sign-in" />;
+  return (
+    <CommercialLayout>
+      <Component />
+    </CommercialLayout>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* ➕ NOUVEAU : AffiliateAdminRoute                                   */
+/* Réservé à l'administrateur (redirection frontend).                 */
+/* ⚠️ La vraie protection est côté serveur (requireAffiliateAdmin).   */
+/* ────────────────────────────────────────────────────────────────── */
+function AffiliateAdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Redirect to="/sign-in" />;
+  if (user.email !== ADMIN_EMAIL) return <Redirect to="/dashboard" />;
+  return <Component />;
+}
+
 function AppRoutes() {
   const [, setLocation] = useLocation();
   void setLocation;
+
+  // ➕ NOUVEAU : capture le ?ref= et déclenche le claim après auth
+  useAffiliateCapture();
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -772,6 +816,36 @@ function AppRoutes() {
           <Route path="/admin">
             <AdminRoute component={AdminPage} />
           </Route>
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ➕ NOUVEAU : ROUTES ESPACE COMMERCIAL                  */}
+          {/* ⚠️ L'ordre est important : les sous-routes doivent     */}
+          {/*    être déclarées AVANT /commercial (wouter matche     */}
+          {/*    par préfixe le plus long en premier).               */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          <Route path="/commercial">
+            <CommercialRoute component={CommercialDashboard} />
+          </Route>
+          <Route path="/commercial/clients">
+            <CommercialRoute component={CommercialClients} />
+          </Route>
+          <Route path="/commercial/commissions">
+            <CommercialRoute component={CommercialCommissions} />
+          </Route>
+          <Route path="/commercial/withdrawals">
+            <CommercialRoute component={CommercialWithdrawals} />
+          </Route>
+          <Route path="/commercial/profile">
+            <CommercialRoute component={CommercialProfile} />
+          </Route>
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ➕ NOUVEAU : ROUTE ADMIN AFFILIATION                   */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          <Route path="/admin/affiliate">
+            <AffiliateAdminRoute component={AffiliateAdmin} />
+          </Route>
+
           <Route>
             <Layout><NotFound /></Layout>
           </Route>
