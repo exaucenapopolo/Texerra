@@ -1,17 +1,31 @@
 // Fichier : src/pages/commercial/Commissions.tsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Coins,
-  ChevronLeft,
-  ChevronRight,
   AlertCircle,
+  FileDown,
+  Mail,
+  RefreshCw,
 } from "lucide-react";
 import {
   getCommissions,
+  getClients,
+  getMe,
   type CommissionsResponse,
   type CommissionRow,
+  type ClientRow,
+  type MeResponse,
 } from "../../lib/affiliate-api";
+import {
+  DATE_PRESETS,
+  getDateRange,
+  isInRange,
+  downloadReportPdf,
+  openReportEmail,
+  type DatePreset,
+  type ReportPayload,
+} from "../../lib/affiliate-report";
 
 const STATUS_LABELS: Record<
   CommissionRow["status"],
@@ -33,29 +47,111 @@ const STATUS_LABELS: Record<
 
 export default function CommercialCommissions() {
   const [data, setData] = useState<CommissionsResponse | null>(null);
-  const [page, setPage] = useState(1);
+  const [allClients, setAllClients] = useState<ClientRow[]>([]);
+  const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const [preset, setPreset] = useState<DatePreset>("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+
+  const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const load = async () => {
     setLoading(true);
     setError(null);
-    getCommissions(page, 20)
-      .then((res) => {
-        if (!cancelled) setData(res);
-      })
-      .catch((err) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : "Erreur inconnue");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
+    try {
+      const [c, cl, m] = await Promise.all([
+        getCommissions(1, 100),
+        getClients(1, 100),
+        getMe(),
+      ]);
+      setData(c);
+      setAllClients(cl.clients);
+      setMe(m);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const range = useMemo(
+    () => getDateRange(preset, customStart, customEnd),
+    [preset, customStart, customEnd]
+  );
+
+  const filteredCommissions = useMemo(
+    () =>
+      (data?.commissions ?? []).filter((c) =>
+        isInRange(c.createdAt, range)
+      ),
+    [data, range]
+  );
+
+  const filteredClients = useMemo(
+    () =>
+      allClients.filter((c) => isInRange(c.attributedAt, range)),
+    [allClients, range]
+  );
+
+  const buildPayload = (): ReportPayload | null => {
+    if (!me || !data) return null;
+
+    const totalSales = filteredCommissions.reduce(
+      (s, c) => s + (c.status === "reversed" ? 0 : c.orderAmount),
+      0
+    );
+    const totalCommissions = filteredCommissions.reduce(
+      (s, c) => s + (c.status === "reversed" ? 0 : c.commissionAmount),
+      0
+    );
+
+    return {
+      commercial: {
+        name: me.commercial.name,
+        email: me.commercial.email,
+        affiliateCode: me.commercial.affiliateCode,
+        commissionRate: me.commercial.commissionRate,
+      },
+      period: range.label,
+      country,
+      city,
+      kpis: {
+        clientsCount: filteredClients.length,
+        totalSales,
+        totalCommissions,
+        available: me.kpis.available,
+        totalPaid: me.kpis.totalPaid,
+      },
+      clients: filteredClients,
+      commissions: filteredCommissions,
     };
-  }, [page]);
+  };
+
+  const handleDownload = () => {
+    const payload = buildPayload();
+    if (!payload) return;
+    setExporting(true);
+    try {
+      downloadReportPdf(payload);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSendEmail = () => {
+    const payload = buildPayload();
+    if (!payload) return;
+    openReportEmail(payload);
+  };
 
   const formatEur = (n: number) =>
     new Intl.NumberFormat("fr-FR", {
@@ -74,10 +170,113 @@ export default function CommercialCommissions() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Mes commissions</h1>
-        <p className="text-gray-500 mt-1">
-          Historique complet de tes gains
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Mes commissions</h1>
+          <p className="text-gray-500 mt-1">Historique complet de tes gains</p>
+        </div>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-orange-600"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Actualiser
+        </button>
+      </div>
+
+      {/* ─── FILTRE DE DATE ─── */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
+        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          Période du rapport
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPreset(p.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                preset === p.value
+                  ? "bg-orange-500 text-white"
+                  : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {preset === "custom" && (
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Du</label>
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Au</label>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">
+              Pays (pour le rapport)
+            </label>
+            <input
+              type="text"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              placeholder="Ex : Cameroun"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">
+              Ville (pour le rapport)
+            </label>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Ex : Douala"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 flex-wrap pt-1">
+          <button
+            onClick={handleDownload}
+            disabled={exporting}
+            className="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            Télécharger le rapport PDF
+          </button>
+          <button
+            onClick={handleSendEmail}
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+          >
+            <Mail className="w-4 h-4" />
+            Envoyer à la direction
+          </button>
+        </div>
+        <p className="text-xs text-gray-400">
+          Le rapport inclut les <strong>{filteredCommissions.length}</strong>{" "}
+          commissions et <strong>{filteredClients.length}</strong> clients de la
+          période sélectionnée.
         </p>
       </div>
 
@@ -88,8 +287,8 @@ export default function CommercialCommissions() {
         </div>
       )}
 
+      {/* ─── TABLEAU COMMISSIONS ─── */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        {/* DESKTOP */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -122,22 +321,21 @@ export default function CommercialCommissions() {
                   </td>
                 </tr>
               )}
-              {!loading && data?.commissions.length === 0 && (
+              {!loading && filteredCommissions.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <Coins className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                     <div className="text-gray-500 font-medium">
-                      Aucune commission pour le moment
+                      Aucune commission pour cette période
                     </div>
                     <div className="text-sm text-gray-400 mt-1">
-                      Les commissions apparaîtront dès qu'un client attribué
-                      effectuera une commande éligible
+                      Change la période ou attends une nouvelle commande
                     </div>
                   </td>
                 </tr>
               )}
               {!loading &&
-                data?.commissions.map((c) => (
+                filteredCommissions.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 font-mono text-xs text-gray-600">
                       #{c.orderId.slice(0, 8)}
@@ -174,16 +372,16 @@ export default function CommercialCommissions() {
           {loading && (
             <div className="p-8 text-center text-gray-400">Chargement...</div>
           )}
-          {!loading && data?.commissions.length === 0 && (
+          {!loading && filteredCommissions.length === 0 && (
             <div className="p-8 text-center">
               <Coins className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <div className="text-gray-500 font-medium">
-                Aucune commission pour le moment
+                Aucune commission pour cette période
               </div>
             </div>
           )}
           {!loading &&
-            data?.commissions.map((c) => (
+            filteredCommissions.map((c) => (
               <div key={c.id} className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-mono text-xs text-gray-500">
@@ -219,32 +417,7 @@ export default function CommercialCommissions() {
               </div>
             ))}
         </div>
-
-        {/* PAGINATION */}
-        {data && data.pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <div className="text-xs text-gray-500">
-              Page {data.pagination.page} / {data.pagination.totalPages}
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page >= data.pagination.totalPages}
-                className="p-1.5 rounded-md border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
-}
+                      }
