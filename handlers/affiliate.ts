@@ -11,6 +11,8 @@
  *    - Au premier login du commercial, requireCommercial détecte
  *      qu'aucun enregistrement n'est lié à ce firebaseUid, cherche
  *      par email et lie automatiquement les deux.
+ *
+ * ➕ AJOUT : Route /admin/leaderboard pour le classement des commerciaux.
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
@@ -713,6 +715,149 @@ router.patch(
       res.status(200).json({ ok: true });
     } catch (err) {
       console.error("[affiliate/admin/commercials/rate] error:", err);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  }
+);
+
+/** GET /admin/leaderboard?period=today|week|month|year|all — Classement */
+router.get(
+  "/admin/leaderboard",
+  requireAffiliateAdmin,
+  async (req: Request, res: Response) => {
+    try {
+      const period = sanitizeString(req.query.period, 20) || "all";
+
+      // Calculer la date de début selon la période
+      const now = new Date();
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+      let start: Date | null = null;
+
+      switch (period) {
+        case "today":
+          start = todayStart;
+          break;
+        case "week": {
+          const day = todayStart.getDay();
+          const diff = day === 0 ? 6 : day - 1; // lundi = 1er jour
+          start = new Date(todayStart);
+          start.setDate(start.getDate() - diff);
+          break;
+        }
+        case "month":
+          start = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+          break;
+        case "year":
+          start = new Date(todayStart.getFullYear(), 0, 1);
+          break;
+        case "all":
+        default:
+          start = null;
+      }
+
+      const startIso = start?.toISOString();
+
+      // Récupérer toutes les données en parallèle
+      const [
+        commercialsSnap,
+        commissionsSnap,
+        attributionsSnap,
+        balancesSnap,
+      ] = await Promise.all([
+        firestoreDb.collection("commercials").get(),
+        firestoreDb.collection("affiliate_commissions").get(),
+        firestoreDb.collection("affiliate_attributions").get(),
+        firestoreDb.collection("commercial_balances").get(),
+      ]);
+
+      // Mapper les balances par commercialId
+      const balancesMap = new Map<
+        string,
+        { earned: number; reserved: number; paidOut: number }
+      >();
+      for (const doc of balancesSnap.docs) {
+        const d = doc.data();
+        balancesMap.set(doc.id, {
+          earned: Number(d.earned ?? 0),
+          reserved: Number(d.reserved ?? 0),
+          paidOut: Number(d.paidOut ?? 0),
+        });
+      }
+
+      // Agréger par commercial
+      const rows = commercialsSnap.docs.map((c) => {
+        const cd = c.data();
+        const commercialId = c.id;
+
+        // Filtrer les commissions de ce commercial sur la période
+        const comms = commissionsSnap.docs.filter((x) => {
+          const xd = x.data();
+          if (xd.commercialId !== commercialId) return false;
+          if (xd.status === "reversed") return false;
+          if (startIso && (!xd.createdAt || xd.createdAt < startIso)) return false;
+          return true;
+        });
+
+        const totalSales = comms.reduce(
+          (s, x) => s + Number(x.data().orderAmount ?? 0),
+          0
+        );
+        const totalCommissions = comms.reduce(
+          (s, x) => s + Number(x.data().commissionAmount ?? 0),
+          0
+        );
+
+        // Clients attribués sur la période
+        const clientsCount = attributionsSnap.docs.filter((a) => {
+          const ad = a.data();
+          if (ad.commercialId !== commercialId) return false;
+          if (startIso && (!ad.createdAt || ad.createdAt < startIso)) return false;
+          return true;
+        }).length;
+
+        const balance = balancesMap.get(commercialId) ?? {
+          earned: 0,
+          reserved: 0,
+          paidOut: 0,
+        };
+        const available = Math.max(
+          0,
+          balance.earned - balance.reserved - balance.paidOut
+        );
+
+        return {
+          commercialId,
+          name: cd.name ?? "Inconnu",
+          email: cd.email ?? "",
+          affiliateCode: cd.affiliateCode ?? "",
+          commissionRate: Number(cd.commissionRate ?? 50),
+          status: cd.status ?? "active",
+          clientsCount,
+          salesCount: comms.length,
+          totalSales: Number(totalSales.toFixed(2)),
+          totalCommissions: Number(totalCommissions.toFixed(2)),
+          available: Number(available.toFixed(2)),
+          paidOut: Number(balance.paidOut.toFixed(2)),
+        };
+      });
+
+      // Trier par commissions décroissantes
+      rows.sort((a, b) => b.totalCommissions - a.totalCommissions);
+
+      // Ajouter le rang
+      const leaderboard = rows.map((r, i) => ({ ...r, rank: i + 1 }));
+
+      res.status(200).json({
+        period,
+        leaderboard,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("[affiliate/admin/leaderboard] error:", err);
       res.status(500).json({ error: "Erreur serveur" });
     }
   }
