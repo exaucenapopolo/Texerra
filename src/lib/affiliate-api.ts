@@ -124,8 +124,7 @@ async function apiCall<T>(
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const errorMsg =
-      (data as any)?.error ?? `Erreur ${res.status}`;
+    const errorMsg = (data as any)?.error ?? `Erreur ${res.status}`;
     throw new Error(errorMsg);
   }
 
@@ -249,4 +248,36 @@ export function adminProcessWithdrawal(
 
 export function adminGetStats(): Promise<{ kpis: AdminStats }> {
   return apiCall("/admin/stats");
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * ADMIN — LEADERBOARD (NOUVEAU)
+ * ═══════════════════════════════════════════════════════════ */
+
+export interface LeaderboardRow {
+  commercialId: string;
+  name: string;
+  email: string;
+  affiliateCode: string;
+  commissionRate: number;
+  status: string;
+  clientsCount: number;
+  salesCount: number;
+  totalSales: number;
+  totalCommissions: number;
+  available: number;
+  paidOut: number;
+  rank: number;
+}
+
+export interface LeaderboardResponse {
+  period: string;
+  generatedAt: string;
+  leaderboard: LeaderboardRow[];
+}
+
+export function adminGetLeaderboard(
+  period: "today" | "week" | "month" | "year" | "all" = "all"
+): Promise<LeaderboardResponse> {
+  return apiCall(`/admin/leaderboard?period=${period}`);
   }
