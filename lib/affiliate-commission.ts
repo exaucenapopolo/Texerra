@@ -2,6 +2,19 @@
 
 /**
  * Service de calcul et de gestion des commissions.
+ *
+ * ➕ LOGIQUE CORRIGÉE :
+ *   La commission = TAUX% × MARGE nette de Texerra
+ *   Ce qui équivaut à ~33% du chiffre d'affaires
+ *   (car la marge représente environ 66,67% du CA avec le coefficient ×3)
+ *
+ * Exemple :
+ *   - Client paie 1,00 € (CA)
+ *   - Coût fournisseur : 0,33 €
+ *   - Marge Texerra : 0,67 €
+ *   - Commission (50% marge) : 0,335 € ≈ 0,33 €
+ *   - Ce qui revient à 33,5% du CA
+ *
  * Idempotent : une commande = une seule commission (clé = orderId).
  * Le compteur "commercial_balances" est mis à jour dans la même transaction.
  */
@@ -14,9 +27,18 @@ export interface Commission {
   commercialId: string;
   customerId: string;
   orderId: string;
+  /** Chiffre d'affaires (prix payé par le client) */
   orderAmount: number;
+  /** Marge nette Texerra (peut être null si données indisponibles) */
+  orderMargin: number | null;
+  /** Taux appliqué sur la marge (ex: 50) */
   commissionRate: number;
+  /** Commission versée au commercial */
   commissionAmount: number;
+  /** Équivalent en % du CA (pour affichage) */
+  commissionCaEquivalent: number;
+  /** Indique si la marge a été estimée (données manquantes) */
+  marginEstimated: boolean;
   status: "available" | "paid" | "reversed";
   createdAt: string;
   reversedAt?: string;
@@ -30,20 +52,29 @@ export interface CreateCommissionResult {
 }
 
 const DEFAULT_COMMISSION_RATE = 50;
+/** Ratio de marge par défaut (2/3 = 66,67% du CA, correspond à un coefficient ×3) */
+const DEFAULT_MARGIN_RATIO = 2 / 3;
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * 1. CRÉATION IDEMPOTENTE
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 /**
  * Crée une commission pour une commande éligible.
+ *
+ * @param orderId         ID unique de la commande
+ * @param customerId      UID Firebase du client
+ * @param orderAmount     Chiffre d'affaires de la commande (prix payé)
+ * @param orderMargin     Marge nette Texerra (optionnel — estimée si null)
+ *
  * Idempotent : si une commission existe déjà pour cet orderId, retourne une erreur.
  * Atomique : transaction Firestore (commission + compteur balance).
  */
 export async function createCommissionForOrder(
   orderId: string,
   customerId: string,
-  orderAmount: number
+  orderAmount: number,
+  orderMargin: number | null = null
 ): Promise<CreateCommissionResult> {
   if (!orderId || !customerId) {
     return { success: false, reason: "invalid_params" };
@@ -75,9 +106,37 @@ export async function createCommissionForOrder(
   const rate = Number(
     commercialData?.commissionRate ?? DEFAULT_COMMISSION_RATE
   );
-  const commissionAmount = Number(((orderAmount * rate) / 100).toFixed(4));
 
-  // 3. Transaction idempotente
+  // 3. Calcul de la commission (basé sur la MARGE)
+  let marginUsed: number;
+  let marginEstimated = false;
+
+  if (
+    orderMargin !== null &&
+    orderMargin !== undefined &&
+    Number.isFinite(orderMargin) &&
+    orderMargin > 0
+  ) {
+    // Cas nominal : on a la vraie marge
+    marginUsed = orderMargin;
+  } else {
+    // Fallback : estimer la marge à partir du CA
+    // (cas rare où le fournisseur n'a pas fourni les données de coût)
+    marginUsed = Number((orderAmount * DEFAULT_MARGIN_RATIO).toFixed(4));
+    marginEstimated = true;
+    console.warn(
+      `[commission] ⚠️ Marge absente pour la commande ${orderId}, estimation à partir du CA (${marginUsed})`
+    );
+  }
+
+  // Commission = taux% × marge
+  const commissionAmount = Number(((marginUsed * rate) / 100).toFixed(4));
+  // Équivalent en % du CA (pour transparence)
+  const commissionCaEquivalent = Number(
+    ((commissionAmount / orderAmount) * 100).toFixed(2)
+  );
+
+  // 4. Transaction idempotente
   const commissionRef = firestoreDb
     .collection("affiliate_commissions")
     .doc(orderId);
@@ -101,9 +160,12 @@ export async function createCommissionForOrder(
       commercialId: attribution.commercialId,
       customerId,
       orderId,
-      orderAmount,
+      orderAmount: Number(orderAmount.toFixed(4)),
+      orderMargin: marginEstimated ? null : Number(marginUsed.toFixed(4)),
       commissionRate: rate,
       commissionAmount,
+      commissionCaEquivalent,
+      marginEstimated,
       status: "available",
       createdAt: new Date().toISOString(),
     };
@@ -125,13 +187,12 @@ export async function createCommissionForOrder(
   });
 }
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * 2. REVERSAL
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 /**
  * Inverse une commission (remboursement / annulation).
- * Refuse si déjà reversed, paid, ou si le solde a déjà été dépensé.
  */
 export async function reverseCommission(
   orderId: string,
@@ -190,9 +251,9 @@ export async function reverseCommission(
   });
 }
 
-/* ─────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
  * 3. LECTURE
- * ───────────────────────────────────────────── */
+ * ═══════════════════════════════════════════════════════════ */
 
 export async function getCommissionByOrder(
   orderId: string
