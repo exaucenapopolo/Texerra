@@ -78,7 +78,7 @@ export default function CommercialProfile() {
         <InfoRow
           icon={<Percent className="w-4 h-4" />}
           label="Taux de commission"
-          value={`${commercial.commissionRate}%`}
+          value={`${commercial.commissionRate}% de la marge nette`}
         />
         <InfoRow
           icon={<Shield className="w-4 h-4" />}
@@ -122,7 +122,7 @@ export default function CommercialProfile() {
           </li>
           <li>
             À chaque <strong>commande éligible</strong> de ce client, tu gagnes{" "}
-            {commercial.commissionRate}% de la marge.
+            {commercial.commissionRate}% de la marge nette Texerra.
           </li>
           <li>
             Ta commission devient <strong>disponible</strong> dès que la commande
@@ -139,29 +139,65 @@ export default function CommercialProfile() {
       >
         <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 my-2">
           <div className="text-sm text-orange-900">
-            <strong>⚠️ Important à comprendre :</strong> ton taux de{" "}
+            <strong>⚠️ À bien comprendre :</strong> ton taux de{" "}
             {commercial.commissionRate}% s'applique sur la{" "}
-            <strong>marge nette</strong> que Texerra réalise sur chaque vente —
-            pas sur le chiffre d'affaires brut.
+            <strong>marge nette</strong> de Texerra sur chaque vente, ce qui
+            équivaut à environ <strong>33% du chiffre d'affaires</strong> de
+            cette vente.
           </div>
         </div>
 
-        <p className="mt-3">
-          <strong>Exemple concret</strong> : sur une vente à 1,00 €, si Texerra
-          gagne 0,60 € de marge nette (après coûts fournisseur, frais bancaires,
-          etc.), ta commission sera de{" "}
-          <strong>
-            {((commercial.commissionRate / 100) * 0.6).toFixed(2)} €
-          </strong>{" "}
-          et non de{" "}
-          <strong>{(commercial.commissionRate / 100).toFixed(2)} €</strong>.
+        <p className="mt-3 font-medium text-gray-900">
+          📊 Exemple concret :
         </p>
+        <div className="mt-2 bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Prix payé par le client</span>
+            <span className="font-semibold text-gray-900">1,00 €</span>
+          </div>
+          <div className="flex justify-between text-gray-500">
+            <span>− Coûts fournisseur et frais</span>
+            <span>−0,33 €</span>
+          </div>
+          <div className="flex justify-between border-t border-gray-200 pt-2">
+            <span className="text-gray-700">= Marge nette Texerra</span>
+            <span className="font-semibold text-gray-900">0,67 €</span>
+          </div>
+          <div className="flex justify-between text-orange-600">
+            <span>× {commercial.commissionRate}%</span>
+            <span className="font-bold">
+              {(
+                (0.67 * commercial.commissionRate) /
+                100
+              ).toFixed(2)}{" "}
+              €
+            </span>
+          </div>
+          <div className="flex justify-between border-t-2 border-orange-200 pt-2 mt-2">
+            <span className="font-semibold text-gray-900">
+              Ta commission
+            </span>
+            <span className="font-bold text-orange-600 text-lg">
+              {(
+                (0.67 * commercial.commissionRate) /
+                100
+              ).toFixed(2)}{" "}
+              €
+            </span>
+          </div>
+        </div>
 
-        <p className="mt-3 text-sm text-gray-500">
-          💡 <strong>Ce que tu vois dans ton dashboard</strong> reflète toujours
-          ta commission réelle déjà calculée. Tu n'as rien à faire toi-même. Si
-          tu vois un taux de 33% affiché, cela dépend de la marge effective de
-          la vente — c'est normal et transparent.
+        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
+          💡 <strong>En résumé :</strong> que l'on parle de{" "}
+          <strong>{commercial.commissionRate}% de la marge</strong> OU de{" "}
+          <strong>~33% du chiffre d'affaires</strong>, c'est EXACTEMENT la même
+          chose. Ce sont juste deux façons de décrire le même montant.
+        </div>
+
+        <p className="mt-4 text-sm text-gray-600">
+          ✅ <strong>Tu n'as rien à calculer toi-même.</strong> Ton dashboard
+          affiche toujours le montant exact de ta commission, calculé
+          automatiquement par le système.
         </p>
       </Section>
 
@@ -356,4 +392,4 @@ function Rule({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
-          }
+      }
