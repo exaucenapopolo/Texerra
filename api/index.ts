@@ -15,6 +15,11 @@ import statsRouter from "../handlers/stats.js";
 import contactRouter from "../handlers/contact.js";
 // ➕ NOUVEAU : routeur administrateur
 import adminRouter from "../handlers/admin.js";
+// ➕ NOUVEAU : routeur affiliation (commerciaux / commissions / retraits)
+//    ⚠️ Ce fichier est un ROUTEUR EXPRESS, pas une Function Vercel.
+//    Il est importé par ce point d'entrée unique, donc aucune Function
+//    supplémentaire n'est créée sur Vercel.
+import affiliateRouter from "../handlers/affiliate.js";
 
 const app = express();
 
@@ -34,6 +39,24 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/topups", topupsRouter);
 app.use("/api/stats", statsRouter);
 app.use("/api/contact", contactRouter);
+
+// ➕ NOUVEAU : système d'affiliation / commerciaux / commissions / retraits
+//    Toutes les routes sont exposées sous /api/affiliate/*
+//    Ex : GET  /api/affiliate/visit?ref=TX-DAVID
+//         POST /api/affiliate/claim
+//         GET  /api/affiliate/me
+//         GET  /api/affiliate/clients
+//         GET  /api/affiliate/commissions
+//         GET  /api/affiliate/withdrawals
+//         POST /api/affiliate/withdrawals
+//         GET  /api/affiliate/admin/commercials
+//         POST /api/affiliate/admin/commercials
+//         PATCH /api/affiliate/admin/commercials/:id/rate
+//         GET  /api/affiliate/admin/withdrawals
+//         PATCH /api/affiliate/admin/withdrawals/:id
+//         GET  /api/affiliate/admin/stats
+app.use("/api/affiliate", affiliateRouter);
+
 // ➕ NOUVEAU : routes admin (protégées par requireAdmin dans le handler)
 app.use("/api/admin", adminRouter);
 
