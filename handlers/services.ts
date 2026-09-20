@@ -1,27 +1,14 @@
+// handlers/services.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getCachedPrices, computeSellingPrice, countryIdFromCode } from "../lib/priceCache.js";
-import { SERVICE_CATALOG } from "../lib/grizzlysms.js";
-
-/**
- * Priority order for popular/well-known services — lower index = shown first.
- * Services not listed fall into secondary buckets (has icon → no icon).
- */
-const POPULAR_RANK: Record<string, number> = {};
-[
-  "wa", "wb", "ig", "fb", "tg", "sc", "tk", "tw", "go", "yt",
-  "ap", "am", "pp", "dc", "ms", "sp", "ln", "bn", "vk", "wc",
-  "vi", "td", "nf", "ub", "ri", "si", "ma", "yx", "ok",
-].forEach((code, i) => { POPULAR_RANK[code] = i; });
+import { getServiceMeta } from "../lib/serviceRegistry.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Configuration des en-têtes CORS
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   const countryCode = req.query.countryCode as string | undefined;
 
@@ -29,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prices = await getCachedPrices();
     const countryId = countryCode ? countryIdFromCode(countryCode) : null;
 
-    // Discover ALL service codes — limited to the specific country if requested
+    // Découverte de tous les codes services — limitée au pays si demandé
     const allCodes = new Set<string>();
     if (countryId !== null) {
       const countryData = prices[String(countryId)];
@@ -40,70 +27,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const mapped = Array.from(allCodes).map((code) => {
-      const catalog = SERVICE_CATALOG[code];
-      const name = catalog?.fr ?? code.toUpperCase().replace(/_/g, " ");
-      const icon = catalog?.iconSlug ?? null;
-      const popular = catalog?.popular ?? false;
+    const mapped = Array.from(allCodes)
+      .map((code) => {
+        const meta = getServiceMeta(code);
 
-      let priceEur: number | null = null;
-      let available = false;
-      let stock: number | null = null;
-
-      if (countryId !== null) {
-        // Country-specific: use actual GrizzlySMS cost (USD) + stock for this country
-        const entry = prices[String(countryId)]?.[code];
-        if (entry && entry.count > 0) {
-          priceEur = computeSellingPrice(entry.cost);
-          available = true;
-          stock = entry.count;
+        // Règle : si le code n'est pas dans le registre, on ne l'affiche PAS.
+        if (!meta || !meta.enabled) {
+          // Optionnel : logger le code non mappé côté serveur
+          console.warn(`[services] Code non mappé ignoré : ${code}`);
+          return null;
         }
-      } else {
-        // Global listing: find cheapest country cost, sum total stock
-        let minCost: number | null = null;
-        let totalStock = 0;
-        for (const countryData of Object.values(prices)) {
-          const entry = countryData[code];
-          if (!entry || entry.count === 0) continue;
-          available = true;
-          totalStock += entry.count;
-          if (minCost === null || entry.cost < minCost) minCost = entry.cost;
-        }
-        if (available && minCost !== null) {
-          priceEur = computeSellingPrice(minCost);
-          stock = totalStock;
-        }
-      }
 
-      return { code, name, icon, priceFrom: priceEur, popular, available, stock };
-    });
+        const name = meta.displayName;
+        const icon = meta.iconKey;
 
-    // Sort order:
-    // 1. Available + popular rank (known services in defined order)
-    // 2. Available + has icon (other catalog services with logo)
-    // 3. Available + no icon (unknown services)
-    // 4. Unavailable
+        let priceEur: number | null = null;
+        let available = false;
+        let stock: number | null = null;
+
+        if (countryId !== null) {
+          const entry = prices[String(countryId)]?.[code];
+          if (entry && entry.count > 0) {
+            priceEur = computeSellingPrice(entry.cost);
+            available = true;
+            stock = entry.count;
+          }
+        } else {
+          let minCost: number | null = null;
+          let totalStock = 0;
+          for (const countryData of Object.values(prices)) {
+            const entry = countryData[code];
+            if (!entry || entry.count === 0) continue;
+            available = true;
+            totalStock += entry.count;
+            if (minCost === null || entry.cost < minCost) minCost = entry.cost;
+          }
+          if (available && minCost !== null) {
+            priceEur = computeSellingPrice(minCost);
+            stock = totalStock;
+          }
+        }
+
+        return {
+          code,                    // compatibilité : code = providerCode
+          serviceId: meta.serviceId,
+          providerCode: meta.providerCode,
+          name,
+          officialName: meta.officialName,
+          icon,
+          iconType: meta.iconType,
+          category: meta.category,
+          popularRank: meta.popularRank,
+          popular: meta.popularRank !== null,
+          priceFrom: priceEur,
+          available,
+          stock,
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null);
+
+    // Tri : disponibles d'abord, puis popularRank, puis alphabétique
     const sorted = mapped.sort((a, b) => {
       const aAvail = a.available ? 0 : 1;
       const bAvail = b.available ? 0 : 1;
       if (aAvail !== bAvail) return aAvail - bAvail;
 
-      const aRank = POPULAR_RANK[a.code] ?? Infinity;
-      const bRank = POPULAR_RANK[b.code] ?? Infinity;
-      if (aRank !== Infinity && bRank !== Infinity) return aRank - bRank;
-      if (aRank !== Infinity) return -1;
-      if (bRank !== Infinity) return 1;
-
-      const aHasIcon = a.icon ? 0 : 1;
-      const bHasIcon = b.icon ? 0 : 1;
-      if (aHasIcon !== bHasIcon) return aHasIcon - bHasIcon;
+      const aRank = a.popularRank ?? 9999;
+      const bRank = b.popularRank ?? 9999;
+      if (aRank !== bRank) return aRank - bRank;
 
       return a.name.localeCompare(b.name, "fr");
     });
 
-    return res.status(200).json(sorted);
-  } catch (err) {
-    console.error("Failed to fetch services from GrizzlySMS", err);
-    return res.status(502).json({ error: "Impossible de récupérer les services" });
+    return res.status(200).json({ services: sorted });
+  } catch (err: any) {
+    console.error("[services] error", err);
+    return res.status(500).json({ error: "Internal error" });
   }
-}
+            }
