@@ -1,4 +1,3 @@
-// handlers/services.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getCachedPrices, computeSellingPrice, countryIdFromCode } from "../lib/priceCache.js";
 import { getServiceMeta } from "../lib/serviceRegistry.js";
@@ -33,7 +32,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Règle : si le code n'est pas dans le registre, on ne l'affiche PAS.
         if (!meta || !meta.enabled) {
-          // Optionnel : logger le code non mappé côté serveur
           console.warn(`[services] Code non mappé ignoré : ${code}`);
           return null;
         }
@@ -99,9 +97,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return a.name.localeCompare(b.name, "fr");
     });
 
-    return res.status(200).json({ services: sorted });
+    // ✅ Retour d'un TABLEAU direct (contrat respecté par order.tsx)
+    return res.status(200).json(sorted);
   } catch (err: any) {
     console.error("[services] error", err);
     return res.status(500).json({ error: "Internal error" });
   }
-            }
+    }
