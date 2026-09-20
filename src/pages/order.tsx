@@ -3,24 +3,27 @@ import { useMeta } from "../lib/use-meta";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe2, Smartphone, CheckCircle2, Copy, RefreshCw, ArrowLeft,
-  Loader2, Wallet, ArrowRight, Search, AlertCircle, X,
+  Loader2, Wallet, ArrowRight, Search, AlertCircle, X, Sparkles,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth-context";
-import { svcIconUrl } from "../lib/serviceIcons";
+import { svcIconUrl, svcPlaceholderColor } from "../lib/serviceIcons";
 
 const STORAGE_KEY = "texerra_active_order";
 
-// Types TypeScript locaux pour un typage strict et sécurisé
 interface Service {
   code: string;
   name: string;
   icon?: string | null;
+  iconType?: string;
+  verified?: boolean;
   available?: boolean;
   priceFrom?: number | null;
   stock?: number | null;
   servicePrice?: number | null;
+  popularRank?: number | null;
+  category?: string;
 }
 
 interface Country {
@@ -45,8 +48,6 @@ interface UserProfile {
   balance: number;
 }
 
-// ⚠️ L'accolade en trop qui se trouvait ici a été supprimée.
-
 function normalize(str: string): string {
   return str
     .toLowerCase()
@@ -65,14 +66,12 @@ const steps = [
   { id: 3, label: "Numéro", icon: CheckCircle2 },
 ];
 
-type SelectedService = { code: string; name: string; priceFrom?: number | null; icon?: string | null };
+type SelectedService = { code: string; name: string; priceFrom?: number | null; icon?: string | null; iconType?: string };
 type SelectedCountry = { code: string; name: string; flag: string; dialCode?: string | null };
 
-// Modification 1 : Ajout du paramètre "token" et des headers d'authentification
 async function fetchApi<T>(url: string, token?: string): Promise<T> {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-
   const res = await fetch(url, { headers });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -81,11 +80,9 @@ async function fetchApi<T>(url: string, token?: string): Promise<T> {
   return res.json();
 }
 
-// Modification 2 : Ajout du paramètre "token" pour les requêtes POST
 async function postApi<T, B>(url: string, body: B, token?: string): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-
   const res = await fetch(url, {
     method: "POST",
     headers,
@@ -96,6 +93,52 @@ async function postApi<T, B>(url: string, body: B, token?: string): Promise<T> {
     throw { status: res.status, data: errorData };
   }
   return res.json();
+}
+
+/** Affiche l'icône d'un service avec fallback intelligent */
+function ServiceIcon({ service, size = "md" }: { service: { name: string; icon?: string | null; iconType?: string; verified?: boolean }; size?: "sm" | "md" | "lg" }) {
+  const [imgError, setImgError] = useState(false);
+  const iconUrl = svcIconUrl(service.icon);
+  const color = svcPlaceholderColor(service.icon);
+
+  const sizeClasses = {
+    sm: "w-7 h-7",
+    md: "w-9 h-9",
+    lg: "w-10 h-10",
+  };
+
+  const textSizes = {
+    sm: "text-sm",
+    md: "text-base",
+    lg: "text-lg",
+  };
+
+  if (iconUrl && !imgError) {
+    return (
+      <motion.img
+        src={iconUrl}
+        alt={service.name}
+        className={`${sizeClasses[size]} object-contain`}
+        onError={() => setImgError(true)}
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+      />
+    );
+  }
+
+  // Fallback : initiales colorées
+  return (
+    <motion.div
+      className={`${sizeClasses[size]} rounded-xl flex items-center justify-center font-extrabold text-white`}
+      style={{ backgroundColor: color }}
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+    >
+      <span className={textSizes[size]}>{service.name[0]?.toUpperCase()}</span>
+    </motion.div>
+  );
 }
 
 export default function Order() {
@@ -111,7 +154,6 @@ export default function Order() {
   const { user: firebaseUser } = useAuth();
   const isSignedIn = !!firebaseUser;
 
-  // Modification 3 : Fonction utilitaire pour récupérer le jeton d'authentification de l'utilisateur
   const getToken = async () => (firebaseUser ? await firebaseUser.getIdToken() : undefined);
 
   const [step, setStep] = useState(1);
@@ -144,8 +186,8 @@ export default function Order() {
   }, []);
 
   useEffect(() => {
-    if (step === 1) setTimeout(() => serviceSearchRef.current?.focus(), 120);
-    if (step === 2) setTimeout(() => countrySearchRef.current?.focus(), 120);
+    if (step === 1) setTimeout(() => serviceSearchRef.current?.focus(), 300);
+    if (step === 2) setTimeout(() => countrySearchRef.current?.focus(), 300);
   }, [step]);
 
   const resetOrder = () => {
@@ -159,7 +201,6 @@ export default function Order() {
     setCountrySearch("");
   };
 
-  // Modification 4 : Intégration de getToken() dans chaque appel API
   const { data: me } = useQuery<UserProfile>({
     queryKey: ["/api/me", isSignedIn],
     queryFn: async () => fetchApi<UserProfile>("/api/me", await getToken()),
@@ -186,7 +227,6 @@ export default function Order() {
     staleTime: 30_000,
   });
 
-  // Modification 5 : Sécurisation de la création de commande
   const createOrder = useMutation({
     mutationFn: async (data: { serviceCode: string; countryCode: string }) =>
       postApi<OrderResponse, { serviceCode: string; countryCode: string }>("/api/orders", data, await getToken()),
@@ -209,7 +249,6 @@ export default function Order() {
     },
   });
 
-  // Modification 6 : Sécurisation du suivi de commande
   const { data: order } = useQuery<OrderResponse>({
     queryKey: ["/api/orders", orderId],
     queryFn: async () => fetchApi<OrderResponse>(`/api/orders/${orderId}`, await getToken()),
@@ -240,7 +279,7 @@ export default function Order() {
     return q ? list.filter(s => matchesSearch(s.name, q)) : list;
   }, [allServices, serviceSearch]);
 
-  const { filteredCountries, countryGroups, alphabet } = useMemo(() => {
+  const { countryGroups, alphabet } = useMemo(() => {
     const list = (countries ?? [])
       .filter(c => c.available)
       .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
@@ -255,7 +294,7 @@ export default function Order() {
       if (letter !== cur) { cur = letter; groups.push({ letter, items: [] }); }
       groups[groups.length - 1].items.push(c);
     }
-    return { filteredCountries: filtered, countryGroups: groups, alphabet: groups.map(g => g.letter) };
+    return { countryGroups: groups, alphabet: groups.map(g => g.letter) };
   }, [countries, countrySearch]);
 
   const serviceInCountry = useMemo(() => {
@@ -297,39 +336,80 @@ export default function Order() {
 
   return (
     <div className="min-h-[80vh] max-w-3xl mx-auto px-4 sm:px-6 py-10">
-      <div className="mb-8">
+      {/* Header animé */}
+      <motion.div
+        className="mb-8"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+      >
         <h1 className="text-2xl sm:text-3xl font-extrabold mb-1.5 text-foreground">Commander un numéro</h1>
         <p className="text-muted-foreground text-sm">Recevez votre code SMS en quelques secondes</p>
-      </div>
+      </motion.div>
 
-      <div className="flex items-center gap-2 mb-8">
+      {/* Barre de progression animée */}
+      <motion.div
+        className="flex items-center gap-2 mb-8"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
         {steps.map((s, i) => (
           <div key={s.id} className="flex items-center gap-2">
-            <div className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all ${
-              step === s.id
-                ? "bg-primary text-primary-foreground shadow-[0_4px_14px_hsl(24_90%_52%/0.28)]"
-                : step > s.id
-                ? "bg-primary/12 text-primary"
-                : "bg-secondary text-muted-foreground"
-            }`}>
+            <motion.div
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all ${
+                step === s.id
+                  ? "bg-primary text-primary-foreground shadow-[0_4px_14px_hsl(24_90%_52%/0.28)]"
+                  : step > s.id
+                  ? "bg-primary/12 text-primary"
+                  : "bg-secondary text-muted-foreground"
+              }`}
+              animate={step === s.id ? { scale: [1, 1.05, 1] } : {}}
+              transition={{ duration: 0.3 }}
+            >
               {step > s.id ? <CheckCircle2 className="w-4 h-4" /> : <s.icon className="w-4 h-4" />}
               <span className="hidden sm:inline">{s.label}</span>
-            </div>
+            </motion.div>
             {i < steps.length - 1 && (
-              <div className={`h-px w-5 sm:w-10 transition-colors ${step > s.id ? "bg-primary/40" : "bg-border"}`} />
+              <div className={`h-px w-5 sm:w-10 transition-colors duration-500 ${step > s.id ? "bg-primary/40" : "bg-border"}`} />
             )}
           </div>
         ))}
-      </div>
+      </motion.div>
 
       <AnimatePresence mode="wait">
         {step === 1 && (
-          <motion.div key="step1" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
+          <motion.div
+            key="step1"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
             <div className="bg-white border border-border rounded-2xl p-5 sm:p-7 shadow-sm">
-              <h2 className="text-lg font-bold mb-1">Quel service voulez-vous vérifier ?</h2>
-              <p className="text-muted-foreground text-sm mb-5">Choisissez l'application pour laquelle vous avez besoin d'un numéro.</p>
+              <motion.h2
+                className="text-lg font-bold mb-1"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: 0.1 }}
+              >
+                Quel service voulez-vous vérifier ?
+              </motion.h2>
+              <motion.p
+                className="text-muted-foreground text-sm mb-5"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: 0.15 }}
+              >
+                Choisissez l'application pour laquelle vous avez besoin d'un numéro.
+              </motion.p>
 
-              <div className="relative mb-5">
+              <motion.div
+                className="relative mb-5"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.2 }}
+              >
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <input
                   ref={serviceSearchRef}
@@ -340,36 +420,52 @@ export default function Order() {
                   className="w-full pl-10 pr-9 py-2.5 bg-secondary border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all"
                 />
                 {serviceSearch && (
-                  <button
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     onClick={() => { setServiceSearch(""); serviceSearchRef.current?.focus(); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
-                  </button>
+                  </motion.button>
                 )}
-              </div>
+              </motion.div>
 
               {loadingServices ? (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                   {Array.from({ length: 15 }).map((_, i) => (
-                    <div key={i} className="h-24 bg-secondary animate-pulse rounded-xl" />
+                    <motion.div
+                      key={i}
+                      className="h-24 bg-secondary animate-pulse rounded-xl"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.03 }}
+                    />
                   ))}
                 </div>
               ) : filteredServices.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground text-sm">
+                <motion.div
+                  className="text-center py-10 text-muted-foreground text-sm"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                >
                   <Search className="w-8 h-8 mx-auto mb-3 opacity-30" />
                   Aucun service trouvé pour «&nbsp;{serviceSearch}&nbsp;»
                   <br />
                   <button onClick={() => setServiceSearch("")} className="mt-3 text-primary hover:underline text-xs font-medium">Effacer la recherche</button>
-                </div>
+                </motion.div>
               ) : (
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 max-h-[500px] overflow-y-auto pr-1">
-                  {filteredServices.map(service => {
-                    const iconUrl = svcIconUrl(service.icon);
+                  {filteredServices.map((service, index) => {
                     const unavail = !service.available;
                     return (
-                      <button
+                      <motion.button
                         key={service.code}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.2, delay: Math.min(index * 0.015, 0.4) }}
+                        whileHover={!unavail ? { scale: 1.04, y: -2 } : {}}
+                        whileTap={!unavail ? { scale: 0.97 } : {}}
                         onClick={() => {
                           if (unavail) return;
                           setSelectedService(service);
@@ -378,27 +474,38 @@ export default function Order() {
                           setStep(2);
                         }}
                         disabled={unavail}
-                        className={`group flex flex-col items-center justify-center gap-2.5 p-4 border rounded-xl transition-all text-center ${
+                        className={`group relative flex flex-col items-center justify-center gap-2.5 p-4 border rounded-xl transition-all text-center ${
                           unavail
                             ? "border-border bg-secondary/50 opacity-40 cursor-not-allowed"
-                            : "border-border bg-white hover:border-primary/50 hover:bg-primary/[0.03] hover:shadow-sm cursor-pointer"
+                            : "border-border bg-white hover:border-primary/50 hover:bg-primary/[0.03] hover:shadow-md cursor-pointer"
                         }`}
                       >
+                        {/* Badge "non vérifié" */}
+                        {!service.verified && (
+                          <motion.span
+                            className="absolute top-1 right-1 text-[9px] font-bold bg-amber-100 text-amber-700 px-1 rounded"
+                            initial={{ opacity: 0, scale: 0.5 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.3 + Math.min(index * 0.015, 0.4) }}
+                          >
+                            ?
+                          </motion.span>
+                        )}
                         <div className="w-10 h-10 flex items-center justify-center">
-                          {iconUrl ? (
-                            <img src={iconUrl} alt={service.name} className="w-9 h-9 object-contain"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          ) : (
-                            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-base font-extrabold text-primary">
-                              {service.name[0]?.toUpperCase()}
-                            </div>
-                          )}
+                          <ServiceIcon service={service} size="md" />
                         </div>
                         <span className="text-xs font-semibold text-foreground/80 group-hover:text-foreground transition-colors line-clamp-2 leading-tight w-full">{service.name}</span>
                         {service.priceFrom != null && !unavail && (
-                          <span className="text-xs font-bold text-primary">{service.priceFrom.toFixed(2)}€</span>
+                          <motion.span
+                            className="text-xs font-bold text-primary"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.1 }}
+                          >
+                            {service.priceFrom.toFixed(2)}€
+                          </motion.span>
                         )}
-                      </button>
+                      </motion.button>
                     );
                   })}
                 </div>
@@ -408,20 +515,25 @@ export default function Order() {
         )}
 
         {step === 2 && selectedService && (
-          <motion.div key="step2" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
+          <motion.div
+            key="step2"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
             <div className="bg-white border border-border rounded-2xl shadow-sm overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-4 border-b border-border bg-secondary/40">
-                <button onClick={() => { setStep(1); setSelectedCountry(null); }} className="p-1.5 rounded-lg hover:bg-border transition-colors text-muted-foreground hover:text-foreground">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { setStep(1); setSelectedCountry(null); }}
+                  className="p-1.5 rounded-lg hover:bg-border transition-colors text-muted-foreground hover:text-foreground"
+                >
                   <ArrowLeft className="w-4 h-4" />
-                </button>
+                </motion.button>
                 <div className="w-8 h-8 flex items-center justify-center shrink-0">
-                  {svcIconUrl(selectedService.icon) ? (
-                    <img src={svcIconUrl(selectedService.icon)!} alt={selectedService.name} className="w-7 h-7 object-contain" />
-                  ) : (
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-extrabold text-primary">
-                      {selectedService.name[0]?.toUpperCase()}
-                    </div>
-                  )}
+                  <ServiceIcon service={selectedService} size="sm" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-bold">{selectedService.name}</span>
@@ -429,32 +541,38 @@ export default function Order() {
                 </div>
               </div>
               <div className="p-5 sm:p-6">
-                <div className="flex gap-2 mb-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <input
-                      ref={countrySearchRef}
-                      type="text"
-                      placeholder="Rechercher un pays…"
-                      value={countrySearch}
-                      onChange={e => { setCountrySearch(e.target.value); setSelectedCountry(null); }}
-                      className="w-full pl-10 pr-9 py-2.5 bg-secondary border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all"
-                    />
-                    {countrySearch && (
-                      <button
-                        onClick={() => { setCountrySearch(""); countrySearchRef.current?.focus(); }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                <div className="relative flex-1 mb-4">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    ref={countrySearchRef}
+                    type="text"
+                    placeholder="Rechercher un pays…"
+                    value={countrySearch}
+                    onChange={e => { setCountrySearch(e.target.value); setSelectedCountry(null); }}
+                    className="w-full pl-10 pr-9 py-2.5 bg-secondary border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/10 transition-all"
+                  />
+                  {countrySearch && (
+                    <motion.button
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      onClick={() => { setCountrySearch(""); countrySearchRef.current?.focus(); }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </motion.button>
+                  )}
                 </div>
 
                 {loadingCountries ? (
                   <div className="space-y-2">
                     {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="h-14 bg-secondary animate-pulse rounded-xl" />
+                      <motion.div
+                        key={i}
+                        className="h-14 bg-secondary animate-pulse rounded-xl"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: i * 0.05 }}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -476,11 +594,16 @@ export default function Order() {
                               </div>
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {group.items.map(country => {
+                              {group.items.map((country, idx) => {
                                 const isSelected = selectedCountry?.code === country.code;
                                 return (
-                                  <button
+                                  <motion.button
                                     key={country.code}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.3) }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
                                     onClick={() => {
                                       setSelectedCountry({
                                         code: country.code,
@@ -516,8 +639,16 @@ export default function Order() {
                                         )}
                                       </div>
                                     </div>
-                                    {isSelected && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
-                                  </button>
+                                    {isSelected && (
+                                      <motion.div
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                                      >
+                                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                                      </motion.div>
+                                    )}
+                                  </motion.button>
                                 );
                               })}
                             </div>
@@ -543,199 +674,249 @@ export default function Order() {
                 )}
               </div>
 
-              {selectedCountry && (
-                <div key={selectedCountry.code} className="border-t border-border px-5 sm:px-6 py-5 bg-secondary/30">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Service</span>
-                      <div className="flex items-center gap-2 font-semibold">
-                        {svcIconUrl(selectedService.icon) && (
-                          <img src={svcIconUrl(selectedService.icon)!} alt="" className="w-4 h-4 object-contain" />
-                        )}
-                        {selectedService.name}
+              <AnimatePresence>
+                {selectedCountry && (
+                  <motion.div
+                    key={selectedCountry.code}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="border-t border-border px-5 sm:px-6 py-5 bg-secondary/30"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Service</span>
+                        <div className="flex items-center gap-2 font-semibold">
+                          <ServiceIcon service={selectedService} size="sm" />
+                          {selectedService.name}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Pays</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">
-                          {selectedCountry.flag} {selectedCountry.name}
-                          {selectedCountry.dialCode && (
-                            <span className="text-muted-foreground font-mono text-xs ml-1">({selectedCountry.dialCode})</span>
-                          )}
-                        </span>
-                        <button
-                          onClick={() => setSelectedCountry(null)}
-                          className="text-[10px] text-muted-foreground hover:text-primary underline"
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Pays</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">
+                            {selectedCountry.flag} {selectedCountry.name}
+                            {selectedCountry.dialCode && (
+                              <span className="text-muted-foreground font-mono text-xs ml-1">({selectedCountry.dialCode})</span>
+                            )}
+                          </span>
+                          <button
+                            onClick={() => setSelectedCountry(null)}
+                            className="text-[10px] text-muted-foreground hover:text-primary underline"
+                          >
+                            Changer
+                          </button>
+                        </div>
+                      </div>
+
+                      {comboAvailable === null ? (
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm py-1">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Vérification disponibilité…
+                        </div>
+                      ) : comboAvailable === false ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"
                         >
-                          Changer
-                        </button>
-                      </div>
-                    </div>
-
-                    {comboAvailable === null ? (
-                      <div className="flex items-center gap-2 text-muted-foreground text-sm py-1">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Vérification disponibilité…
-                      </div>
-                    ) : comboAvailable === false ? (
-                      <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <div><span className="font-semibold">{selectedService.name}</span> n'est pas disponible pour <span className="font-semibold">{selectedCountry.name}</span>. Choisissez un autre pays.</div>
-                      </div>
-                    ) : (
-                      <>
-                        {priceForOrder != null && (
-                          <div className="flex items-center justify-between border-t border-border pt-3">
-                            <span className="text-sm text-muted-foreground">Prix</span>
-                            <span className="text-xl font-extrabold gradient-text">{priceForOrder.toFixed(2)} €</span>
-                          </div>
-                        )}
-                        {serviceInCountry?.stock != null && (
+                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div><span className="font-semibold">{selectedService.name}</span> n'est pas disponible pour <span className="font-semibold">{selectedCountry.name}</span>. Choisissez un autre pays.</div>
+                        </motion.div>
+                      ) : (
+                        <>
+                          {priceForOrder != null && (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="flex items-center justify-between border-t border-border pt-3"
+                            >
+                              <span className="text-sm text-muted-foreground">Prix</span>
+                              <span className="text-xl font-extrabold gradient-text">{priceForOrder.toFixed(2)} €</span>
+                            </motion.div>
+                          )}
+                          {serviceInCountry?.stock != null && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Numéros disponibles</span>
+                              <span className={`font-bold text-xs px-2.5 py-1 rounded-lg ${
+                                serviceInCountry.stock >= 100 ? "bg-green-100 text-green-700" :
+                                serviceInCountry.stock >= 10  ? "bg-amber-100 text-amber-700" :
+                                                               "bg-red-100 text-red-700"
+                              }`}>
+                                {serviceInCountry.stock >= 100 ? `${serviceInCountry.stock}+` : serviceInCountry.stock} numéros
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Numéros disponibles</span>
-                            <span className={`font-bold text-xs px-2.5 py-1 rounded-lg ${
-                              serviceInCountry.stock >= 100 ? "bg-green-100 text-green-700" :
-                              serviceInCountry.stock >= 10  ? "bg-amber-100 text-amber-700" :
-                                                             "bg-red-100 text-red-700"
-                            }`}>
-                              {serviceInCountry.stock >= 100 ? `${serviceInCountry.stock}+` : serviceInCountry.stock} numéros
+                            <span className="text-muted-foreground flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" /> Votre solde</span>
+                            <span className={`font-bold ${hasBalance ? "text-green-600" : "text-destructive"}`}>
+                              {me?.balance.toFixed(2) ?? "—"} €
                             </span>
                           </div>
-                        )}
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" /> Votre solde</span>
-                          <span className={`font-bold ${hasBalance ? "text-green-600" : "text-destructive"}`}>
-                            {me?.balance.toFixed(2) ?? "—"} €
-                          </span>
-                        </div>
 
-                        {!isSignedIn ? (
-                          <div className="space-y-2 pt-1">
-                            <div className="flex items-center gap-2 bg-primary/8 border border-primary/20 text-primary px-4 py-3 rounded-xl text-sm">
-                              <AlertCircle className="w-4 h-4 shrink-0" />
-                              Connectez-vous pour finaliser votre commande.
+                          {!isSignedIn ? (
+                            <div className="space-y-2 pt-1">
+                              <div className="flex items-center gap-2 bg-primary/8 border border-primary/20 text-primary px-4 py-3 rounded-xl text-sm">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                Connectez-vous pour finaliser votre commande.
+                              </div>
+                              <Link href="/sign-in" className="flex items-center justify-center gap-2 w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all text-sm shadow-[0_4px_14px_hsl(24_90%_52%/0.28)]">
+                                Se connecter <ArrowRight className="w-4 h-4" />
+                              </Link>
                             </div>
-                            <Link href="/sign-in" className="flex items-center justify-center gap-2 w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all text-sm shadow-[0_4px_14px_hsl(24_90%_52%/0.28)]">
-                              Se connecter <ArrowRight className="w-4 h-4" />
-                            </Link>
-                          </div>
-                        ) : !hasBalance ? (
-                          <div className="space-y-2 pt-1">
-                            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-                              <AlertCircle className="w-4 h-4 shrink-0" />
-                              Solde insuffisant. Rechargez votre portefeuille.
+                          ) : !hasBalance ? (
+                            <div className="space-y-2 pt-1">
+                              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                Solde insuffisant. Rechargez votre portefeuille.
+                              </div>
+                              <Link href="/wallet" className="flex items-center justify-center gap-2 w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all text-sm shadow-[0_4px_14px_hsl(24_90%_52%/0.28)]">
+                                <Wallet className="w-4 h-4" /> Recharger mon solde <ArrowRight className="w-4 h-4" />
+                              </Link>
                             </div>
-                            <Link href="/wallet" className="flex items-center justify-center gap-2 w-full py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all text-sm shadow-[0_4px_14px_hsl(24_90%_52%/0.28)]">
-                              <Wallet className="w-4 h-4" /> Recharger mon solde <ArrowRight className="w-4 h-4" />
-                            </Link>
+                          ) : (
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={handlePlaceOrder}
+                              disabled={createOrder.isPending}
+                              className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 shadow-[0_4px_14px_hsl(24_90%_52%/0.28)] text-sm mt-1"
+                            >
+                              {createOrder.isPending ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Activation en cours…</>
+                              ) : (
+                                <>Confirmer la commande <ArrowRight className="w-4 h-4" /></>
+                              )}
+                            </motion.button>
+                          )}
+                        </>
+                      )}
+
+                      {orderError === "insufficient_balance" ? (
+                        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                          <AlertCircle className="w-4 h-4 shrink-0" />
+                          Solde insuffisant. <Link href="/wallet" className="underline font-semibold ml-1">Recharger</Link>
+                        </div>
+                      ) : orderError === "no_numbers" ? (
+                        <div className="bg-amber-950/40 border border-amber-700/50 text-amber-200 px-4 py-4 rounded-xl text-sm space-y-2">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                            <div>
+                              <p className="font-semibold text-amber-100">
+                                Stock épuisé — {selectedService?.name ?? "ce service"}{selectedCountry ? ` · ${selectedCountry.name}` : ""}
+                              </p>
+                              <p className="mt-1 text-amber-300/80 leading-relaxed">
+                                Aucun numéro disponible pour le moment. Notre stock se renouvelle régulièrement — revenez dans quelques heures ou essayez un autre pays.
+                              </p>
+                            </div>
                           </div>
-                        ) : (
                           <button
-                            onClick={handlePlaceOrder}
-                            disabled={createOrder.isPending}
-                            className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50 shadow-[0_4px_14px_hsl(24_90%_52%/0.28)] text-sm mt-1"
+                            type="button"
+                            onClick={() => { setSelectedCountry(null); setOrderError(""); }}
+                            className="ml-6 text-xs text-amber-300 underline underline-offset-2 hover:text-amber-100 transition-colors"
                           >
-                            {createOrder.isPending ? (
-                              <><Loader2 className="w-4 h-4 animate-spin" /> Activation en cours…</>
-                            ) : (
-                              <>Confirmer la commande <ArrowRight className="w-4 h-4" /></>
-                            )}
+                            Essayer un autre pays
                           </button>
-                        )}
-                      </>
-                    )}
-
-                    {orderError === "insufficient_balance" ? (
-                      <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        Solde insuffisant. <Link href="/wallet" className="underline font-semibold ml-1">Recharger</Link>
-                      </div>
-                    ) : orderError === "no_numbers" ? (
-                      <div className="bg-amber-950/40 border border-amber-700/50 text-amber-200 px-4 py-4 rounded-xl text-sm space-y-2">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                          <div>
-                            <p className="font-semibold text-amber-100">
-                              Stock épuisé — {selectedService?.name ?? "ce service"}{selectedCountry ? ` · ${selectedCountry.name}` : ""}
-                            </p>
-                            <p className="mt-1 text-amber-300/80 leading-relaxed">
-                              Aucun numéro disponible pour le moment. Notre stock se renouvelle régulièrement — revenez dans quelques heures ou essayez un autre pays.
-                            </p>
-                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedCountry(null); setOrderError(""); }}
-                          className="ml-6 text-xs text-amber-300 underline underline-offset-2 hover:text-amber-100 transition-colors"
-                        >
-                          Essayer un autre pays
-                        </button>
-                      </div>
-                    ) : orderError === "provider_error" || orderError === "unknown" ? (
-                      <div className="flex items-center gap-2 bg-red-950/40 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl text-sm">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                        Une erreur est survenue côté fournisseur. Veuillez réessayer.
-                      </div>
-                    ) : orderError ? (
-                      <div className="flex items-center gap-2 bg-red-950/40 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl text-sm">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                        {orderError}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              )}
+                      ) : orderError === "provider_error" || orderError === "unknown" ? (
+                        <div className="flex items-center gap-2 bg-red-950/40 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl text-sm">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                          Une erreur est survenue côté fournisseur. Veuillez réessayer.
+                        </div>
+                      ) : orderError ? (
+                        <div className="flex items-center gap-2 bg-red-950/40 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl text-sm">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                          {orderError}
+                        </div>
+                      ) : null}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         )}
 
         {step === 3 && (
-          <motion.div key="step3" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.28 }}>
+          <motion.div
+            key="step3"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
             <div className="bg-white border border-border rounded-2xl p-5 sm:p-8 shadow-sm">
               <div className="max-w-md mx-auto">
                 {!order ? (
-                  <div className="flex flex-col items-center gap-5 py-12">
-                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                  <motion.div
+                    className="flex flex-col items-center gap-5 py-12"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <motion.div
+                      className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center"
+                      animate={{ rotate: [0, 5, -5, 0] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                    >
                       <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                    </div>
+                    </motion.div>
                     <p className="text-muted-foreground font-medium">Activation du numéro en cours…</p>
-                  </div>
+                  </motion.div>
                 ) : order.status === "cancelled" || order.status === "expired" ? (
-                  <div className="flex flex-col items-center gap-4 py-10">
+                  <motion.div
+                    className="flex flex-col items-center gap-4 py-10"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                  >
                     <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center">
                       <AlertCircle className="w-8 h-8 text-red-600" />
                     </div>
                     <h3 className="text-xl font-bold">Commande {order.status === "cancelled" ? "annulée" : "expirée"}</h3>
                     <p className="text-muted-foreground text-sm text-center">Le montant a été remboursé sur votre solde.</p>
-                    <button onClick={resetOrder}
-                      className="px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-[0_4px_14px_hsl(24_90%_52%/0.25)] text-sm mt-2">
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={resetOrder}
+                      className="px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-[0_4px_14px_hsl(24_90%_52%/0.25)] text-sm mt-2"
+                    >
                       Nouvelle commande
-                    </button>
-                  </div>
+                    </motion.button>
+                  </motion.div>
                 ) : (
                   <div className="space-y-5">
-                    <div className="text-center">
-                      <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${
-                        order.smsCode
-                          ? "bg-green-100 text-green-700 border border-green-200"
-                          : "bg-primary/10 text-primary border border-primary/20"
-                      }`}>
+                    <motion.div
+                      className="text-center"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <motion.div
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${
+                          order.smsCode
+                            ? "bg-green-100 text-green-700 border border-green-200"
+                            : "bg-primary/10 text-primary border border-primary/20"
+                        }`}
+                        animate={order.smsCode ? { scale: [1, 1.05, 1] } : {}}
+                        transition={{ duration: 0.5 }}
+                      >
                         {order.smsCode
-                          ? <><CheckCircle2 className="w-4 h-4" /> Code SMS reçu !</>
+                          ? <><Sparkles className="w-4 h-4" /> Code SMS reçu !</>
                           : <><RefreshCw className="w-4 h-4 animate-spin" /> En attente du SMS…</>
                         }
-                      </div>
-                    </div>
+                      </motion.div>
+                    </motion.div>
 
                     {(selectedService || selectedCountry) && (
-                      <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                      <motion.div
+                        className="flex items-center justify-center gap-3 text-sm text-muted-foreground"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.2 }}
+                      >
                         {selectedService && (
                           <span className="flex items-center gap-1.5">
-                            {svcIconUrl(selectedService.icon) && (
-                              <img src={svcIconUrl(selectedService.icon)!} alt="" className="w-4 h-4 object-contain" />
-                            )}
+                            <ServiceIcon service={selectedService} size="sm" />
                             {selectedService.name}
                           </span>
                         )}
@@ -743,64 +924,102 @@ export default function Order() {
                         {selectedCountry && (
                           <span>{selectedCountry.flag} {selectedCountry.name}{selectedCountry.dialCode && <span className="ml-1 font-mono text-primary font-bold">{selectedCountry.dialCode}</span>}</span>
                         )}
-                      </div>
+                      </motion.div>
                     )}
 
                     {order.phoneNumber && (
-                      <div className="bg-secondary border border-border rounded-2xl p-5">
+                      <motion.div
+                        className="bg-secondary border border-border rounded-2xl p-5"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                      >
                         <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-semibold">Votre numéro virtuel</div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-2xl font-bold font-mono tracking-wider">{order.phoneNumber}</span>
-                          <button
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => copyText(order.phoneNumber!)}
                             className="flex items-center gap-2 px-4 py-2 bg-white border border-border rounded-xl text-sm font-semibold hover:border-primary/40 transition-colors"
                           >
                             {copied ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                             {copied ? "Copié !" : "Copier"}
-                          </button>
+                          </motion.button>
                         </div>
-                      </div>
+                      </motion.div>
                     )}
 
                     {!order.smsCode && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+                      <motion.div
+                        className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.4 }}
+                      >
                         <strong>Étape suivante :</strong> Saisissez ce numéro dans {selectedService?.name} pour recevoir le code de vérification.
-                      </div>
+                      </motion.div>
                     )}
 
                     {order.smsCode ? (
-                      <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
+                      <motion.div
+                        className="bg-green-50 border border-green-200 rounded-2xl p-5"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                      >
                         <div className="text-xs text-green-700 uppercase tracking-wider mb-3 font-semibold">Code de vérification</div>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-3xl font-black font-mono tracking-[0.15em] text-green-700">{order.smsCode}</span>
-                          <button
+                          <motion.span
+                            className="text-3xl font-black font-mono tracking-[0.15em] text-green-700"
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                          >
+                            {order.smsCode}
+                          </motion.span>
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => copyText(order.smsCode!)}
                             className="flex items-center gap-2 px-4 py-2 bg-white border border-green-200 rounded-xl text-sm font-semibold text-green-700 hover:bg-green-50 transition-colors"
                           >
                             {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                             {copied ? "Copié !" : "Copier"}
-                          </button>
+                          </motion.button>
                         </div>
                         {order.smsText && (
                           <p className="mt-3 text-xs text-muted-foreground bg-white/70 rounded-xl p-3 font-mono border border-green-100">{order.smsText}</p>
                         )}
-                      </div>
+                      </motion.div>
                     ) : (
-                      <div className="text-sm text-muted-foreground text-center py-3 flex items-center justify-center gap-2">
+                      <motion.div
+                        className="text-sm text-muted-foreground text-center py-3 flex items-center justify-center gap-2"
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
                         <RefreshCw className="w-4 h-4 animate-spin" />
                         Envoyez le code de vérification sur ce numéro…
-                      </div>
+                      </motion.div>
                     )}
 
                     <div className="flex gap-3 pt-1">
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={resetOrder}
                         className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold hover:bg-secondary transition-colors"
                       >
                         Nouvelle commande
-                      </button>
-                      <Link href="/dashboard" className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/15 transition-colors">
-                        Dashboard <ArrowRight className="w-4 h-4" />
+                      </motion.button>
+                      <Link href="/dashboard" className="flex-1">
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="w-full flex items-center justify-center gap-2 py-3 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/15 transition-colors"
+                        >
+                          Dashboard <ArrowRight className="w-4 h-4" />
+                        </motion.div>
                       </Link>
                     </div>
                   </div>
