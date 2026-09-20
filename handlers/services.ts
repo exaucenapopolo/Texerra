@@ -26,69 +26,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const mapped = Array.from(allCodes)
-      .map((code) => {
-        const meta = getServiceMeta(code);
+    const mapped = Array.from(allCodes).map((code) => {
+      const meta = getServiceMeta(code);
 
-        // Règle : si le code n'est pas dans le registre, on ne l'affiche PAS.
-        if (!meta || !meta.enabled) {
-          console.warn(`[services] Code non mappé ignoré : ${code}`);
-          return null;
+      // Service connu → nom et icône du registre
+      // Service inconnu → on garde le code formaté, mais on le marque comme non vérifié
+      const name = meta?.displayName ?? code.toUpperCase();
+      const icon = meta?.iconKey ?? null;
+      const verified = !!meta;
+
+      let priceEur: number | null = null;
+      let available = false;
+      let stock: number | null = null;
+
+      if (countryId !== null) {
+        const entry = prices[String(countryId)]?.[code];
+        if (entry && entry.count > 0) {
+          priceEur = computeSellingPrice(entry.cost);
+          available = true;
+          stock = entry.count;
         }
-
-        const name = meta.displayName;
-        const icon = meta.iconKey;
-
-        let priceEur: number | null = null;
-        let available = false;
-        let stock: number | null = null;
-
-        if (countryId !== null) {
-          const entry = prices[String(countryId)]?.[code];
-          if (entry && entry.count > 0) {
-            priceEur = computeSellingPrice(entry.cost);
-            available = true;
-            stock = entry.count;
-          }
-        } else {
-          let minCost: number | null = null;
-          let totalStock = 0;
-          for (const countryData of Object.values(prices)) {
-            const entry = countryData[code];
-            if (!entry || entry.count === 0) continue;
-            available = true;
-            totalStock += entry.count;
-            if (minCost === null || entry.cost < minCost) minCost = entry.cost;
-          }
-          if (available && minCost !== null) {
-            priceEur = computeSellingPrice(minCost);
-            stock = totalStock;
-          }
+      } else {
+        let minCost: number | null = null;
+        let totalStock = 0;
+        for (const countryData of Object.values(prices)) {
+          const entry = countryData[code];
+          if (!entry || entry.count === 0) continue;
+          available = true;
+          totalStock += entry.count;
+          if (minCost === null || entry.cost < minCost) minCost = entry.cost;
         }
+        if (available && minCost !== null) {
+          priceEur = computeSellingPrice(minCost);
+          stock = totalStock;
+        }
+      }
 
-        return {
-          code,                    // compatibilité : code = providerCode
-          serviceId: meta.serviceId,
-          providerCode: meta.providerCode,
-          name,
-          officialName: meta.officialName,
-          icon,
-          iconType: meta.iconType,
-          category: meta.category,
-          popularRank: meta.popularRank,
-          popular: meta.popularRank !== null,
-          priceFrom: priceEur,
-          available,
-          stock,
-        };
-      })
-      .filter((s): s is NonNullable<typeof s> => s !== null);
+      return {
+        code,
+        serviceId: meta?.serviceId ?? code,
+        providerCode: meta?.providerCode ?? code,
+        name,
+        officialName: meta?.officialName ?? code.toUpperCase(),
+        icon,
+        iconType: meta?.iconType ?? "none",
+        category: meta?.category ?? "services",
+        popularRank: meta?.popularRank ?? null,
+        popular: meta ? meta.popularRank !== null : false,
+        verified,                    // ← nouveau champ
+        priceFrom: priceEur,
+        available,
+        stock,
+      };
+    });
 
-    // Tri : disponibles d'abord, puis popularRank, puis alphabétique
+    // Tri : disponibles d'abord, puis vérifiés, puis popularRank, puis alphabétique
     const sorted = mapped.sort((a, b) => {
       const aAvail = a.available ? 0 : 1;
       const bAvail = b.available ? 0 : 1;
       if (aAvail !== bAvail) return aAvail - bAvail;
+
+      const aVer = a.verified ? 0 : 1;
+      const bVer = b.verified ? 0 : 1;
+      if (aVer !== bVer) return aVer - bVer;
 
       const aRank = a.popularRank ?? 9999;
       const bRank = b.popularRank ?? 9999;
@@ -103,4 +103,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error("[services] error", err);
     return res.status(500).json({ error: "Internal error" });
   }
-    }
+        }
