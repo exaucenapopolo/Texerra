@@ -45,7 +45,7 @@ interface UserProfile {
   balance: number;
 }
 
-}
+// ⚠️ L'accolade en trop qui se trouvait ici a été supprimée.
 
 function normalize(str: string): string {
   return str
@@ -428,7 +428,7 @@ export default function Order() {
                   <span className="text-xs text-muted-foreground ml-2">— choisissez un pays</span>
                 </div>
               </div>
-<div className="p-5 sm:p-6">
+              <div className="p-5 sm:p-6">
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -691,7 +691,7 @@ export default function Order() {
           </motion.div>
         )}
 
-         {step === 3 && (
+        {step === 3 && (
           <motion.div key="step3" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.28 }}>
             <div className="bg-white border border-border rounded-2xl p-5 sm:p-8 shadow-sm">
               <div className="max-w-md mx-auto">
@@ -812,4 +812,4 @@ export default function Order() {
       </AnimatePresence>
     </div>
   );
-                    }
+}
