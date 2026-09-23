@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useMeta } from "../lib/use-meta";
 import { auth } from "../lib/firebase";
 import {
@@ -18,6 +18,40 @@ import { getCurrency, formatLocalAmount } from "../lib/currencies";
 const MIN_AMOUNT = 1.65;
 const PRESET_AMOUNTS = [2, 5, 10, 20];
 const VIEW_STORAGE_KEY = "texerra:wallet:view";
+const COUNTRY_STORAGE_PREFIX = "texerra:wallet:country:";
+const PAYMENT_FEE_RATE = 0.015;
+
+const ALLOWED_COUNTRIES: { code: string; name: string; currency: string }[] = [
+  { code: "CM", name: "Cameroun", currency: "XAF" },
+  { code: "CG", name: "Congo-Brazzaville", currency: "XAF" },
+  { code: "CD", name: "République démocratique du Congo", currency: "CDF" },
+  { code: "SN", name: "Sénégal", currency: "XOF" },
+  { code: "CI", name: "Côte d'Ivoire", currency: "XOF" },
+  { code: "GA", name: "Gabon", currency: "XAF" },
+  { code: "NG", name: "Nigéria", currency: "NGN" },
+  { code: "TG", name: "Togo", currency: "XOF" },
+  { code: "BJ", name: "Bénin", currency: "XOF" },
+  { code: "ML", name: "Mali", currency: "XOF" },
+  { code: "NE", name: "Niger", currency: "XOF" },
+  { code: "GH", name: "Ghana", currency: "GHS" },
+  { code: "KE", name: "Kenya", currency: "KES" },
+  { code: "UG", name: "Ouganda", currency: "UGX" },
+  { code: "TZ", name: "Tanzanie", currency: "TZS" },
+  { code: "ZM", name: "Zambie", currency: "ZMW" },
+  { code: "RW", name: "Rwanda", currency: "RWF" },
+  { code: "BF", name: "Burkina Faso", currency: "XOF" },
+];
+
+const UNIQUE_CURRENCY_TO_COUNTRY: Record<string, string> = {
+  CDF: "CD",
+  NGN: "NG",
+  GHS: "GH",
+  KES: "KE",
+  UGX: "UG",
+  TZS: "TZ",
+  ZMW: "ZM",
+  RWF: "RW",
+};
 
 const BRAND = {
   primary: "#C55A34",
@@ -682,7 +716,7 @@ export default function WalletPage() {
   });
 
   const initiateTopupMutation = useMutation({
-    mutationFn: async (data: { amountEur: number; name: string; email: string; mobile: string }) => {
+    mutationFn: async (data: { amountEur: number; name: string; email: string; mobile: string; countryIso: string }) => {
       const token = await auth.currentUser?.getIdToken().catch(() => null);
       const res = await fetch("/api/topups", {
         method: "POST",
@@ -692,7 +726,10 @@ export default function WalletPage() {
         },
         body: JSON.stringify(data)
       });
-      if (!res.ok) throw new Error("Erreur initialisation paiement");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(err.error || "Erreur initialisation paiement");
+      }
       return res.json() as Promise<{ checkoutUrl: string; topupId: string }>;
     },
   });
@@ -715,6 +752,41 @@ export default function WalletPage() {
   useEffect(() => {
     localStorage.setItem(VIEW_STORAGE_KEY, view);
   }, [view]);
+
+  /* ── Pays de paiement : persistance + détection devise ── */
+  const userKey = user?.uid || user?.email || me?.email || "guest";
+  const countryStorageKey = `${COUNTRY_STORAGE_PREFIX}${userKey}`;
+  const [countryIso, setCountryIso] = useState<string>("");
+  const initializedForRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!userKey || userKey === "guest") return;
+    if (initializedForRef.current === userKey) return;
+
+    try {
+      const saved = localStorage.getItem(countryStorageKey);
+      if (saved && ALLOWED_COUNTRIES.some(c => c.code === saved)) {
+        setCountryIso(saved);
+        initializedForRef.current = userKey;
+        return;
+      }
+    } catch { /* localStorage indisponible */ }
+
+    if (!me) return;
+
+    const cur = (me.currency || "").toUpperCase();
+    if (cur && UNIQUE_CURRENCY_TO_COUNTRY[cur]) {
+      setCountryIso(UNIQUE_CURRENCY_TO_COUNTRY[cur]);
+    }
+    initializedForRef.current = userKey;
+  }, [userKey, countryStorageKey, me]);
+
+  const handleCountryChange = (iso: string) => {
+    setCountryIso(iso);
+    if (!iso) return;
+    if (!userKey || userKey === "guest") return;
+    try { localStorage.setItem(countryStorageKey, iso); } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -749,8 +821,11 @@ export default function WalletPage() {
 
   const amount = selectedAmount ?? (customAmount ? parseFloat(customAmount) : null);
 
-  const localCurrency = getCurrency(me?.currency ?? "EUR");
-  const showConversion = localCurrency && localCurrency.code !== "EUR" && amount && amount > 0;
+  const selectedCountry = ALLOWED_COUNTRIES.find(c => c.code === countryIso) ?? null;
+  const payCurrency = selectedCountry?.currency ?? null;
+
+  const localCurrency = payCurrency ? getCurrency(payCurrency) : null;
+  const showConversion = !!(localCurrency && localCurrency.code !== "EUR" && amount && amount > 0);
 
   const { data: topupStatus } = useQuery<{ status: string }>({
     queryKey: ["/api/topups", pendingTopupId, "status"],
@@ -783,9 +858,9 @@ export default function WalletPage() {
   }, [topupStatus?.status, queryClient]);
 
   const handleInitiate = () => {
-    if (!amount || amount < MIN_AMOUNT || !form.name || !form.email || !form.mobile) return;
+    if (!amount || amount < MIN_AMOUNT || !form.name || !form.email || !form.mobile || !countryIso) return;
     initiateTopupMutation.mutate(
-      { amountEur: amount, name: form.name, email: form.email, mobile: form.mobile },
+      { amountEur: amount, name: form.name, email: form.email, mobile: form.mobile, countryIso },
       {
         onSuccess: (data) => {
           if (data.checkoutUrl) {
@@ -1012,11 +1087,36 @@ export default function WalletPage() {
               </div>
             </motion.div>
 
+            {/* Sélecteur de pays */}
+            <div className="mb-5">
+              <label className="text-sm font-medium text-muted-foreground block mb-2">
+                Pays de paiement
+              </label>
+              <select
+                value={countryIso}
+                onChange={e => handleCountryChange(e.target.value)}
+                className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-sm text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                style={{ borderColor: countryIso ? `${BRAND.primary}66` : undefined }}
+              >
+                <option value="">— Sélectionnez votre pays —</option>
+                {ALLOWED_COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>
+                    {c.name} ({c.currency})
+                  </option>
+                ))}
+              </select>
+              {!countryIso && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Sélectionnez votre pays de paiement pour continuer.
+                </p>
+              )}
+            </div>
+
             {/* Tiles présélectionnées */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {PRESET_AMOUNTS.map((a, idx) => {
                 const isSelected = selectedAmount === a;
-                const localA = me?.currency && me.currency !== "EUR" ? formatLocalAmount(a, me.currency) : null;
+                const localA = payCurrency ? formatLocalAmount(a, payCurrency) : null;
                 return (
                   <motion.button
                     key={a}
@@ -1091,51 +1191,61 @@ export default function WalletPage() {
                 </div>
               )}
 
-              {localCurrency && localCurrency.code !== "EUR" && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
+              {payCurrency && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="text-xs text-muted-foreground mt-1.5"
                 >
-                  ≈ {formatLocalAmount(parseFloat(customAmount), localCurrency.code)}
+                  ≈ {formatLocalAmount(parseFloat(customAmount), payCurrency)}
                 </motion.p>
               )}
             </div>
 
-            {showConversion && (
+            {/* Récapitulatif de conversion + frais */}
+            {amount && amount >= MIN_AMOUNT && payCurrency && (
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mb-5 px-4 py-3 rounded-2xl flex items-center justify-between"
+                className="mb-5 px-4 py-3 rounded-2xl"
                 style={{ background: `${BRAND.primary}0f`, border: `1px solid ${BRAND.primary}26` }}
               >
-                <span className="text-xs text-muted-foreground">Équivalent approximatif</span>
-                <span className="text-sm font-bold" style={{ color: BRAND.primaryDark }}>
-                  ≈ {formatLocalAmount(amount!, localCurrency!.code)}
-                </span>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="text-muted-foreground">Montant converti</span>
+                  <span className="font-semibold text-foreground">≈ {formatLocalAmount(amount, payCurrency)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="text-muted-foreground">Frais de paiement</span>
+                  <span className="font-semibold text-foreground">1,5 %</span>
+                </div>
+                <div
+                  className="flex items-center justify-between text-sm pt-2 mt-1 border-t border-dashed"
+                  style={{ borderColor: `${BRAND.primary}44` }}
+                >
+                  <span className="font-bold text-foreground">Total à payer</span>
+                  <span className="font-bold" style={{ color: BRAND.primaryDark }}>
+                    ≈ {formatLocalAmount(amount * (1 + PAYMENT_FEE_RATE), payCurrency)}
+                  </span>
+                </div>
               </motion.div>
             )}
 
-            {(!me?.currency || me.currency === "EUR") && (
+            {!countryIso && (
               <p className="text-xs text-muted-foreground mb-5 text-center">
-                Configurez votre devise dans{" "}
-                <a href="/dashboard" className="font-medium hover:underline" style={{ color: BRAND.primary }}>
-                  votre profil
-                </a>{" "}
-                pour voir l'équivalent local.
+                Sélectionnez votre pays de paiement ci-dessus pour voir l'équivalent local.
               </p>
             )}
 
             <button
-              onClick={() => amount && amount >= MIN_AMOUNT && setStep("details")}
-              disabled={!amount || amount < MIN_AMOUNT}
+              onClick={() => amount && amount >= MIN_AMOUNT && countryIso && setStep("details")}
+              disabled={!amount || amount < MIN_AMOUNT || !countryIso}
               className="relative w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden group active:scale-[0.99]"
               style={{
                 background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                boxShadow: amount && amount >= MIN_AMOUNT ? `0 8px 24px ${BRAND.primary}44` : "none"
+                boxShadow: amount && amount >= MIN_AMOUNT && countryIso ? `0 8px 24px ${BRAND.primary}44` : "none"
               }}
             >
-              {amount && amount >= MIN_AMOUNT && (
+              {amount && amount >= MIN_AMOUNT && countryIso && (
                 <motion.span
                   className="absolute inset-0 -translate-x-full"
                   style={{
@@ -1174,15 +1284,18 @@ export default function WalletPage() {
               </button>
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-foreground">Vos coordonnées</h2>
-                <p className="text-xs text-muted-foreground">Pour la confirmation de votre paiement</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedCountry ? `Paiement depuis ${selectedCountry.name}` : "Pour la confirmation de votre paiement"}
+                </p>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-black" style={{ color: BRAND.primaryDark }}>
                   {amount?.toFixed(2)} €
                 </div>
-                {showConversion && (
+                {showConversion && localCurrency && (
                   <div className="text-xs text-muted-foreground">
-                    ≈ {formatLocalAmount(amount!, localCurrency!.code)}
+                    ≈ {formatLocalAmount(amount!, localCurrency.code)}
+                    <span className="opacity-70"> (+1,5 % frais)</span>
                   </div>
                 )}
               </div>
@@ -1232,7 +1345,7 @@ export default function WalletPage() {
 
             <button
               onClick={handleInitiate}
-              disabled={!form.name || !form.email || !form.mobile || initiateTopupMutation.isPending}
+              disabled={!form.name || !form.email || !form.mobile || !countryIso || initiateTopupMutation.isPending}
               className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
               style={{
                 background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
@@ -1246,7 +1359,9 @@ export default function WalletPage() {
               )}
             </button>
             {initiateTopupMutation.isError && (
-              <p className="text-destructive text-sm mt-3 text-center">Une erreur s'est produite. Réessayez.</p>
+              <p className="text-destructive text-sm mt-3 text-center">
+                {(initiateTopupMutation.error as Error)?.message || "Une erreur s'est produite. Réessayez."}
+              </p>
             )}
           </motion.div>
         )}
