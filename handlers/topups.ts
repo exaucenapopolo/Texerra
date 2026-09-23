@@ -24,29 +24,27 @@ function getServerUrl(): string {
   return "http://localhost:8080";
 }
 
+const PAYMENT_FEE_RATE = 1.015;
+
 const BUYER_CURRENCY: Record<string, { currency: string; eurRate: number }> = {
   CM: { currency: "XAF", eurRate: 655.96 },
-  CI: { currency: "XOF", eurRate: 655.96 },
-  SN: { currency: "XOF", eurRate: 655.96 },
-  BJ: { currency: "XOF", eurRate: 655.96 },
-  BF: { currency: "XOF", eurRate: 655.96 },
-  ML: { currency: "XOF", eurRate: 655.96 },
-  TG: { currency: "XOF", eurRate: 655.96 },
-  NE: { currency: "XOF", eurRate: 655.96 },
-  GN: { currency: "XOF", eurRate: 655.96 },
-  GA: { currency: "XAF", eurRate: 655.96 },
-  TD: { currency: "XAF", eurRate: 655.96 },
   CG: { currency: "XAF", eurRate: 655.96 },
   CD: { currency: "CDF", eurRate: 2800 },
+  SN: { currency: "XOF", eurRate: 655.96 },
+  CI: { currency: "XOF", eurRate: 655.96 },
+  GA: { currency: "XAF", eurRate: 655.96 },
   NG: { currency: "NGN", eurRate: 1750 },
+  TG: { currency: "XOF", eurRate: 655.96 },
+  BJ: { currency: "XOF", eurRate: 655.96 },
+  ML: { currency: "XOF", eurRate: 655.96 },
+  NE: { currency: "XOF", eurRate: 655.96 },
   GH: { currency: "GHS", eurRate: 16 },
   KE: { currency: "KES", eurRate: 140 },
-  TZ: { currency: "TZS", eurRate: 2700 },
   UG: { currency: "UGX", eurRate: 3900 },
+  TZ: { currency: "TZS", eurRate: 2700 },
+  ZM: { currency: "ZMW", eurRate: 27 },
   RW: { currency: "RWF", eurRate: 1350 },
-  MA: { currency: "MAD", eurRate: 10.8 },
-  EG: { currency: "EGP", eurRate: 52 },
-  ZA: { currency: "ZAR", eurRate: 20 },
+  BF: { currency: "XOF", eurRate: 655.96 },
 };
 
 function formatTopup(t: any) {
@@ -154,9 +152,21 @@ router.post("/", requireAuth, async (req, res) => {
     return;
   }
 
-  const isoUpper = (countryIso ?? "CM").toUpperCase();
-  const currencyInfo = BUYER_CURRENCY[isoUpper] ?? { currency: "XAF", eurRate: 655.96 };
-  const amountLocal = Math.ceil(amountEur * currencyInfo.eurRate);
+  const isoRaw = typeof countryIso === "string" ? countryIso.trim().toUpperCase() : "";
+  if (!isoRaw) {
+    res.status(400).json({ error: "Le pays de paiement est requis. Veuillez sélectionner un pays." });
+    return;
+  }
+
+  const currencyInfo = BUYER_CURRENCY[isoRaw];
+  if (!currencyInfo) {
+    res.status(400).json({ error: "Pays de paiement non supporté." });
+    return;
+  }
+
+  const isoUpper = isoRaw;
+  // Conversion EUR → devise locale avec le taux Texerra, puis ajout des 1,5 % de frais.
+  const amountLocal = Math.ceil(amountEur * currencyInfo.eurRate * PAYMENT_FEE_RATE);
 
   const topupId = crypto.randomUUID();
   const transactionId = `TEX-TOP-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
@@ -180,10 +190,11 @@ router.post("/", requireAuth, async (req, res) => {
       id: topupId,
       userId,
       amountEur: amountEur.toFixed(4),
-      // ➕ NOUVEAU : version numérique pour permettre les agrégations Firestore (sum)
-      // Les agrégations Firestore ignorent les strings, il faut un champ number.
-      // N'affecte pas les anciennes données : uniquement les nouvelles recharges.
       amountEurNum: amountEur,
+      amountLocal,
+      localCurrency: currencyInfo.currency,
+      countryIso: isoUpper,
+      feeRate: PAYMENT_FEE_RATE - 1,
       status: "pending",
       paymentUrl: checkoutUrl,
       externalId: transactionId,
