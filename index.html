@@ -8,23 +8,42 @@
     <title>Texerra</title>
     
     <!-- Description standard pour le navigateur -->
-    <meta name="description" content="Gérez vos commandes de numéros virtuels et consultez votre historique sur Texerra." />
+    <meta
+      name="description"
+      content="Gérez vos commandes de numéros virtuels et consultez votre historique sur Texerra."
+    />
     
     <!-- Le Favicon : C'est ce qui affiche le logo dans l'onglet du navigateur -->
-    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png"
+    />
 
     <!-- Balises Open Graph par défaut pour les partages (WhatsApp, Facebook, etc.) -->
     <meta property="og:title" content="Texerra — Tableau de bord" />
-    <meta property="og:description" content="Gérez vos commandes de numéros virtuels et consultez votre historique sur Texerra." />
-    <meta property="og:image" content="https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png" />
+    <meta
+      property="og:description"
+      content="Gérez vos commandes de numéros virtuels et consultez votre historique sur Texerra."
+    />
+    <meta
+      property="og:image"
+      content="https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png"
+    />
     <meta property="og:url" content="https://www.texerra.site/dashboard" />
     <meta property="og:type" content="website" />
 
     <!-- Balises pour Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Texerra — Tableau de bord" />
-    <meta name="twitter:description" content="Gérez vos commandes de numéros virtuels et consultez votre historique sur Texerra." />
-    <meta name="twitter:image" content="https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png" />
+    <meta
+      name="twitter:description"
+      content="Gérez vos commandes de numéros virtuels et consultez votre historique sur Texerra."
+    />
+    <meta
+      name="twitter:image"
+      content="https://raw.githubusercontent.com/exaucenapopolo/Texerra/refs/heads/main/public/logo-full.png"
+    />
 
     <!-- Meta Pixel Code -->
     <script>
@@ -36,27 +55,39 @@
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
+
       fbq('init', '2161538414787646');
       fbq('track', 'PageView');
     </script>
+    <!-- End Meta Pixel Code -->
+  </head>
+
+  <body>
+    <!-- Meta Pixel noscript fallback -->
     <noscript>
       <img
         height="1"
         width="1"
         style="display:none"
         src="https://www.facebook.com/tr?id=2161538414787646&ev=PageView&noscript=1"
+        alt=""
       />
     </noscript>
-    <!-- End Meta Pixel Code -->
-  </head>
-  <body>
+    <!-- End Meta Pixel noscript fallback -->
+
     <div id="root"></div>
     
     <!-- Pointe directement vers le fichier dans le dossier src -->
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- Début du code d'intégration HubSpot -->
-    <script type="text/javascript" id="hs-script-loader" async defer src="//js.hs-scripts.com/149331051.js"></script>
+    <script
+      type="text/javascript"
+      id="hs-script-loader"
+      async
+      defer
+      src="//js.hs-scripts.com/149331051.js"
+    ></script>
     <!-- Fin du code d'intégration HubSpot -->
   </body>
-</html>
+  </html>
