@@ -1,15 +1,26 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth-context";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
 } from "recharts";
 
 /* ────────────────────────────────────────────────────────────────── */
 /* Constantes                                                         */
 /* ────────────────────────────────────────────────────────────────── */
 
-const MARGIN_RATE = 0.65;
+/**
+ * Taux de secours utilisé uniquement pour les commandes qui n'ont
+ * réellement aucun champ de marge (marginNum / margin) en base.
+ */
+const MARGIN_RATE_FALLBACK = 0.65;
 const EUR_TO_XAF = 655.96;
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -116,27 +127,52 @@ const PHONE_PREFIX_MAP: Array<{ prefix: string; info: CountryInfo }> = [
 
 PHONE_PREFIX_MAP.sort((a, b) => b.prefix.length - a.prefix.length);
 
-function resolveCountry(phone: string | undefined, code: string | number | undefined): CountryInfo {
+const ISO_TO_COUNTRY = new Map<string, CountryInfo>();
+for (const e of PHONE_PREFIX_MAP) {
+  if (e.info.iso && !ISO_TO_COUNTRY.has(e.info.iso)) {
+    ISO_TO_COUNTRY.set(e.info.iso, e.info);
+  }
+}
+
+function resolveCountry(
+  phone: string | undefined,
+  code: string | number | undefined
+): CountryInfo {
   if (phone) {
     const clean = String(phone).replace(/\D/g, "");
     for (const entry of PHONE_PREFIX_MAP) {
       if (clean.startsWith(entry.prefix)) return entry.info;
     }
   }
-  if (typeof code === "string" && /^[A-Za-z]{2}$/.test(code)) {
-    const upper = code.toUpperCase();
-    for (const entry of PHONE_PREFIX_MAP) {
-      if (entry.info.iso === upper) return entry.info;
+  if (typeof code === "string") {
+    if (/^[A-Za-z]{2}$/.test(code)) {
+      const upper = code.toUpperCase();
+      const c = ISO_TO_COUNTRY.get(upper);
+      if (c) return c;
     }
   }
   return { name: `Code ${code ?? "?"}`, flag: "🌍", iso: "" };
+}
+
+function countryFromIso(iso?: string | null): CountryInfo | null {
+  if (!iso) return null;
+  return ISO_TO_COUNTRY.get(String(iso).toUpperCase()) ?? null;
 }
 
 /* ────────────────────────────────────────────────────────────────── */
 /* Utilitaires                                                        */
 /* ────────────────────────────────────────────────────────────────── */
 
-type Period = "today" | "yesterday" | "7d" | "30d" | "week" | "month" | "year" | "all" | "custom";
+type Period =
+  | "today"
+  | "yesterday"
+  | "7d"
+  | "30d"
+  | "week"
+  | "month"
+  | "year"
+  | "all"
+  | "custom";
 
 function getDateRange(period: Period, customStart?: string, customEnd?: string) {
   const now = new Date();
@@ -145,21 +181,38 @@ function getDateRange(period: Period, customStart?: string, customEnd?: string) 
   end.setHours(23, 59, 59, 999);
 
   switch (period) {
-    case "today": start.setHours(0, 0, 0, 0); break;
-    case "yesterday":
-      start.setDate(now.getDate() - 1); start.setHours(0, 0, 0, 0);
-      end.setDate(now.getDate() - 1); end.setHours(23, 59, 59, 999);
+    case "today":
+      start.setHours(0, 0, 0, 0);
       break;
-    case "7d": start.setDate(now.getDate() - 6); start.setHours(0, 0, 0, 0); break;
-    case "30d": start.setDate(now.getDate() - 29); start.setHours(0, 0, 0, 0); break;
+    case "yesterday":
+      start.setDate(now.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      end.setDate(now.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+      break;
+    case "7d":
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "30d":
+      start.setDate(now.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+      break;
     case "week": {
       const day = now.getDay() || 7;
       start.setDate(now.getDate() - day + 1);
       start.setHours(0, 0, 0, 0);
       break;
     }
-    case "month": start.setDate(1); start.setHours(0, 0, 0, 0); break;
-    case "year": start.setMonth(0, 1); start.setDate(1); start.setHours(0, 0, 0, 0); break;
+    case "month":
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "year":
+      start.setMonth(0, 1);
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
     case "all":
       start.setFullYear(2000, 0, 1);
       start.setHours(0, 0, 0, 0);
@@ -170,11 +223,16 @@ function getDateRange(period: Period, customStart?: string, customEnd?: string) 
       end.setHours(23, 59, 59, 999);
       break;
   }
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
 }
 
 async function apiFetch<T = any>(path: string, token: string): Promise<T> {
-  const res = await fetch(`/api/admin${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`/api/admin${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
     throw new Error(`API ${res.status}: ${msg || "Erreur inconnue"}`);
@@ -183,20 +241,38 @@ async function apiFetch<T = any>(path: string, token: string): Promise<T> {
 }
 
 async function downloadBlob(path: string, filename: string, token: string) {
-  const res = await fetch(`/api/admin${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(`/api/admin${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) throw new Error(`Export échoué (${res.status})`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-function openPdfPrint(title: string, summary: string[], columns: string[], rows: (string | number | null | undefined)[][]) {
+function openPdfPrint(
+  title: string,
+  summary: string[],
+  columns: string[],
+  rows: (string | number | null | undefined)[][]
+) {
   const w = window.open("", "_blank");
-  if (!w) { alert("Autorisez les pop-ups pour exporter en PDF."); return; }
-  const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  if (!w) {
+    alert("Autorisez les pop-ups pour exporter en PDF.");
+    return;
+  }
+  const esc = (s: unknown) =>
+    String(s ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)
+    );
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
 <style>
 *{box-sizing:border-box}
@@ -217,11 +293,15 @@ tr:nth-child(even) td{background:#fafafa}
 <p class="meta">TEXERRA SMS — Généré le ${new Date().toLocaleString("fr-FR")}</p>
 <table>
 <thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
-<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+<tbody>${rows
+    .map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`)
+    .join("")}</tbody>
 </table>
 <script>setTimeout(function(){window.print()},300);</script>
 </body></html>`;
-  w.document.open(); w.document.write(html); w.document.close();
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 function toCfa(eur: number): string {
@@ -237,54 +317,150 @@ function isWhatsAppService(serviceCode: string): boolean {
   return s === "wa" || s === "wb";
 }
 
+function firstName(name: string | undefined | null): string {
+  if (!name) return "cher client";
+  const trimmed = name.trim();
+  if (!trimmed) return "cher client";
+  return trimmed.split(/\s+/)[0];
+}
+
 /* ────────────────────────────────────────────────────────────────── */
-/* Messages personnalisés (WhatsApp / Email)                          */
+/* Modèles de messages WhatsApp / Email                               */
 /* ────────────────────────────────────────────────────────────────── */
 
-/** Ouvre WhatsApp avec un message personnalisé pour un utilisateur (sans info de commande). */
-function openUserWhatsApp(name: string | undefined, phone: string) {
-  const clean = cleanForWa(phone);
-  const displayName = name && name.trim() ? name.trim() : "cher client";
-  const message = encodeURIComponent(
-    `Bonjour ${displayName} 👋\n\n` +
-    `Nous espérons que vous allez bien et que tout se passe parfaitement avec votre numéro sur TEXERRA SMS.\n\n` +
-    `Si vous avez la moindre question ou si vous souhaitez acheter un nouveau numéro, n'hésitez surtout pas à nous répondre ici — nous serons ravis de vous aider.\n\n` +
-    `Toute l'équipe TEXERRA SMS reste à votre entière disposition. À très bientôt ! 🙏`
-  );
-  window.open(`https://wa.me/${clean}?text=${message}`, "_blank", "noopener,noreferrer");
-}
+type MessageTemplate = {
+  id: string;
+  label: string;
+  preview: string;
+  whatsappBody: (name: string) => string;
+  emailSubject: (name: string) => string;
+  emailBody: (name: string) => string;
+};
 
-/** Ouvre le client email avec un message pré-rempli personnalisé. */
-function openUserEmail(name: string | undefined, email: string) {
-  const displayName = name && name.trim() ? name.trim() : "cher client";
-  const subject = encodeURIComponent("TEXERRA SMS — Comment se passe votre expérience ?");
-  const body = encodeURIComponent(
-    `Bonjour ${displayName},\n\n` +
-    `Nous espérons que vous allez bien et que tout se passe parfaitement avec votre numéro sur TEXERRA SMS.\n\n` +
-    `Si vous avez la moindre question ou si vous souhaitez acheter un nouveau numéro, n'hésitez pas à nous répondre directement à cet email — nous serons ravis de vous aider.\n\n` +
-    `Toute l'équipe TEXERRA SMS reste à votre entière disposition.\n\n` +
-    `À très bientôt,\n` +
-    `L'équipe TEXERRA SMS`
-  );
-  window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
-}
-
-/** Ouvre WhatsApp avec un message personnalisé pour une commande (avec date + pays d'achat). */
-function openOrderWhatsApp(phone: string, countryName: string, date: string) {
-  const clean = cleanForWa(phone);
-  const formattedDate = new Date(date).toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-  const message = encodeURIComponent(
-    `Bonjour 👋\n\n` +
-    `Merci beaucoup d'avoir choisi TEXERRA SMS et d'avoir acheté votre numéro ${countryName} avec nous le ${formattedDate} !\n\n` +
-    `Nous espérons que tout se passe parfaitement avec ce numéro. Si vous avez la moindre question ou si vous souhaitez acheter un nouveau numéro, n'hésitez surtout pas à nous répondre ici.\n\n` +
-    `Toute l'équipe TEXERRA SMS reste à votre entière disposition. À très bientôt ! 🙏`
-  );
-  window.open(`https://wa.me/${clean}?text=${message}`, "_blank", "noopener,noreferrer");
-}
+const MESSAGE_TEMPLATES: MessageTemplate[] = [
+  {
+    id: "relance",
+    label: "Relance client",
+    preview: "Ça fait un moment que nous n'avons pas eu de vos nouvelles…",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Ça fait un moment que nous n'avons pas eu de vos nouvelles sur TEXERRA SMS. Nous espérons que tout va bien !\n\n` +
+      `Si vous avez besoin d'un nouveau numéro ou si vous avez la moindre question, n'hésitez pas à nous écrire — nous sommes là pour vous aider. 🙏`,
+    emailSubject: () => `TEXERRA SMS — On prend de vos nouvelles`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Ça fait un moment que nous n'avons pas eu de vos nouvelles. Nous espérons que tout va bien !\n\n` +
+      `Si vous avez besoin d'un nouveau numéro ou si vous avez la moindre question, n'hésitez pas à nous répondre.\n\n` +
+      `À très bientôt,\nL'équipe TEXERRA SMS`,
+  },
+  {
+    id: "retour",
+    label: "Invitation à revenir",
+    preview: "Revenez découvrir les nouveaux numéros disponibles sur TEXERRA…",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Nous avons le plaisir de vous informer que de nouveaux numéros sont disponibles sur TEXERRA SMS à des prix très avantageux.\n\n` +
+      `Si vous souhaitez tester à nouveau nos services, nous serions ravis de vous accompagner. Répondez simplement à ce message ! 🚀`,
+    emailSubject: () => `TEXERRA SMS — De nouveaux numéros vous attendent`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Nous avons le plaisir de vous informer que de nouveaux numéros sont disponibles sur TEXERRA SMS à des prix très avantageux.\n\n` +
+      `Si vous souhaitez tester à nouveau nos services, nous serions ravis de vous accompagner.\n\n` +
+      `Bien cordialement,\nL'équipe TEXERRA SMS`,
+  },
+  {
+    id: "encouragement",
+    label: "Encouragement",
+    preview: "Merci pour votre confiance, continuez ainsi !",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Nous tenions à vous remercier sincèrement pour votre confiance et votre fidélité envers TEXERRA SMS. 🙏\n\n` +
+      `Vous êtes un utilisateur précieux pour nous et nous sommes ravis de vous compter parmi nos clients. Continuez comme ça ! 💪`,
+    emailSubject: () => `Merci pour votre confiance, ${name} !`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Nous tenions à vous remercier sincèrement pour votre confiance et votre fidélité envers TEXERRA SMS.\n\n` +
+      `Vous êtes un utilisateur précieux pour nous et nous sommes ravis de vous compter parmi nos clients.\n\n` +
+      `Bien à vous,\nL'équipe TEXERRA SMS`,
+  },
+  {
+    id: "support",
+    label: "Support / problème",
+    preview: "Rencontrez-vous le moindre souci avec votre numéro ?",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Nous espérons que tout se passe bien avec votre numéro sur TEXERRA SMS.\n\n` +
+      `Si vous rencontrez le moindre souci ou si vous avez une question, n'hésitez pas à nous le dire — nous ferons notre maximum pour vous aider rapidement. 🙏`,
+    emailSubject: () => `TEXERRA SMS — Besoin d'aide ?`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Nous espérons que tout se passe bien avec votre numéro sur TEXERRA SMS.\n\n` +
+      `Si vous rencontrez le moindre souci ou si vous avez une question, n'hésitez pas à nous répondre — nous ferons notre maximum pour vous aider rapidement.\n\n` +
+      `Cordialement,\nL'équipe TEXERRA SMS`,
+  },
+  {
+    id: "satisfaction",
+    label: "Vérification de satisfaction",
+    preview: "Comment se passe votre expérience sur TEXERRA SMS ?",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Nous serions très heureux d'avoir votre avis : comment se passe votre expérience sur TEXERRA SMS ?\n\n` +
+      `Votre retour nous aide à nous améliorer et à mieux vous servir. Merci d'avance ! 🙏`,
+    emailSubject: () => `Votre avis compte pour nous — TEXERRA SMS`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Nous serions très heureux d'avoir votre avis : comment se passe votre expérience sur TEXERRA SMS ?\n\n` +
+      `Votre retour nous aide à nous améliorer et à mieux vous servir.\n\n` +
+      `Merci d'avance,\nL'équipe TEXERRA SMS`,
+  },
+  {
+    id: "commercial",
+    label: "Proposition commercial / affiliation",
+    preview: "Gagnez 50 % de la marge en recommandant TEXERRA SMS…",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Nous avons remarqué que vous utilisez régulièrement TEXERRA SMS et nous vous en remercions sincèrement 🙏\n\n` +
+      `Nous avons une proposition à vous faire : vous pouvez désormais recommander ou revendre nos services et percevoir une commission correspondant à 50 % de la marge générée sur chaque commande.\n\n` +
+      `Si cela vous intéresse, répondez simplement à ce message et nous vous expliquerons tout en détail. 🚀`,
+    emailSubject: () => `TEXERRA SMS — Gagnez 50 % de la marge en nous recommandant`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Nous avons remarqué que vous utilisez régulièrement TEXERRA SMS et nous vous en remercions sincèrement.\n\n` +
+      `Nous avons une proposition à vous faire : vous pouvez désormais recommander ou revendre nos services et percevoir une commission correspondant à 50 % de la marge générée sur chaque commande.\n\n` +
+      `Si cela vous intéresse, répondez simplement à cet e-mail et nous vous expliquerons tout en détail.\n\n` +
+      `Bien cordialement,\nL'équipe TEXERRA SMS`,
+  },
+  {
+    id: "fidelisation",
+    label: "Fidélisation",
+    preview: "Merci pour votre fidélité, nous tenons à vous…",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Vous faites partie de nos clients les plus fidèles et nous tenons à vous remercier chaleureusement 🙏\n\n` +
+      `Sachez que nous sommes toujours disponibles pour vous accompagner. À très bientôt sur TEXERRA SMS !`,
+    emailSubject: () => `Merci pour votre fidélité — TEXERRA SMS`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Vous faites partie de nos clients les plus fidèles et nous tenons à vous remercier chaleureusement.\n\n` +
+      `Sachez que nous sommes toujours disponibles pour vous accompagner.\n\n` +
+      `Chaleureusement,\nL'équipe TEXERRA SMS`,
+  },
+  {
+    id: "remerciement",
+    label: "Remerciement",
+    preview: "Un grand merci pour votre confiance.",
+    whatsappBody: (name) =>
+      `Bonjour ${name} 👋\n\n` +
+      `Un grand merci pour votre confiance et pour avoir choisi TEXERRA SMS. 🙏\n\n` +
+      `Nous restons à votre entière disposition si vous avez la moindre question. À très bientôt !`,
+    emailSubject: () => `Un grand merci de la part de TEXERRA SMS`,
+    emailBody: (name) =>
+      `Bonjour ${name},\n\n` +
+      `Un grand merci pour votre confiance et pour avoir choisi TEXERRA SMS.\n\n` +
+      `Nous restons à votre entière disposition si vous avez la moindre question.\n\n` +
+      `À très bientôt,\nL'équipe TEXERRA SMS`,
+  },
+];
 
 const STORAGE_KEY = "texerra:admin:period";
 
@@ -313,6 +489,10 @@ export default function AdminPage() {
 
   const [userPage, setUserPage] = useState(1);
   const [userPageSize, setUserPageSize] = useState(20);
+  const [userSearch, setUserSearch] = useState("");
+  const [userSearchDebounced, setUserSearchDebounced] = useState("");
+  const [userFilter, setUserFilter] = useState("all");
+  const [userSort, setUserSort] = useState("recent");
 
   const [firebaseToken, setFirebaseToken] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
@@ -320,16 +500,51 @@ export default function AdminPage() {
   const [migrationResult, setMigrationResult] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Modèle de message : picker
+  const [messagePickerOpen, setMessagePickerOpen] = useState(false);
+  const [messageTarget, setMessageTarget] = useState<{
+    name: string;
+    channel: "whatsapp" | "email";
+    phone?: string;
+    email?: string;
+  } | null>(null);
+
+  // Référence vers la section Utilisateurs (pour "Voir utilisateur")
+  const usersSectionRef = useRef<HTMLDivElement>(null);
+
   const { start, end } = getDateRange(period, customStart, customEnd);
 
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, period); }, [period]);
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, period);
+  }, [period]);
 
   useEffect(() => {
-    if (!user) { setFirebaseToken(null); return; }
+    if (!user) {
+      setFirebaseToken(null);
+      return;
+    }
     let cancelled = false;
-    user.getIdToken().then((t: string) => { if (!cancelled) setFirebaseToken(t); }).catch(() => { if (!cancelled) setFirebaseToken(null); });
-    return () => { cancelled = true; };
+    user
+      .getIdToken()
+      .then((t: string) => {
+        if (!cancelled) setFirebaseToken(t);
+      })
+      .catch(() => {
+        if (!cancelled) setFirebaseToken(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
+
+  // Debounce de la recherche utilisateur (350 ms)
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setUserSearchDebounced(userSearch.trim());
+      setUserPage(1);
+    }, 350);
+    return () => clearTimeout(id);
+  }, [userSearch]);
 
   useEffect(() => {
     if (!toast) return;
@@ -340,27 +555,53 @@ export default function AdminPage() {
   const statsQuery = useQuery({
     queryKey: ["admin-stats", start, end],
     queryFn: () => apiFetch(`/stats?start=${start}&end=${end}`, firebaseToken!),
-    enabled: !!firebaseToken, staleTime: 60_000,
+    enabled: !!firebaseToken,
+    staleTime: 60_000,
   });
   const chartQuery = useQuery({
     queryKey: ["admin-chart", start, end],
     queryFn: () => apiFetch(`/chart?start=${start}&end=${end}`, firebaseToken!),
-    enabled: !!firebaseToken, staleTime: 60_000,
+    enabled: !!firebaseToken,
+    staleTime: 60_000,
   });
   const ordersQuery = useQuery({
     queryKey: ["admin-orders", start, end, orderStatus, orderPage, orderPageSize],
-    queryFn: () => apiFetch(`/orders?start=${start}&end=${end}&status=${orderStatus}&page=${orderPage}&pageSize=${orderPageSize}`, firebaseToken!),
-    enabled: !!firebaseToken, staleTime: 30_000,
+    queryFn: () =>
+      apiFetch(
+        `/orders?start=${start}&end=${end}&status=${orderStatus}&page=${orderPage}&pageSize=${orderPageSize}`,
+        firebaseToken!
+      ),
+    enabled: !!firebaseToken,
+    staleTime: 30_000,
   });
   const topupsQuery = useQuery({
     queryKey: ["admin-topups", start, end, topupStatus, topupPage, topupPageSize],
-    queryFn: () => apiFetch(`/topups?start=${start}&end=${end}&status=${topupStatus}&page=${topupPage}&pageSize=${topupPageSize}`, firebaseToken!),
-    enabled: !!firebaseToken, staleTime: 30_000,
+    queryFn: () =>
+      apiFetch(
+        `/topups?start=${start}&end=${end}&status=${topupStatus}&page=${topupPage}&pageSize=${topupPageSize}`,
+        firebaseToken!
+      ),
+    enabled: !!firebaseToken,
+    staleTime: 30_000,
   });
   const usersQuery = useQuery({
-    queryKey: ["admin-users", userPage, userPageSize],
-    queryFn: () => apiFetch(`/users?page=${userPage}&pageSize=${userPageSize}`, firebaseToken!),
-    enabled: !!firebaseToken, staleTime: 30_000,
+    queryKey: [
+      "admin-users",
+      userPage,
+      userPageSize,
+      userSearchDebounced,
+      userFilter,
+      userSort,
+    ],
+    queryFn: () =>
+      apiFetch(
+        `/users?page=${userPage}&pageSize=${userPageSize}&search=${encodeURIComponent(
+          userSearchDebounced
+        )}&filter=${userFilter}&sort=${userSort}`,
+        firebaseToken!
+      ),
+    enabled: !!firebaseToken,
+    staleTime: 30_000,
   });
 
   if (authLoading || !firebaseToken) {
@@ -388,33 +629,125 @@ export default function AdminPage() {
     }
   }
 
+  function viewUser(userId: string) {
+    if (!userId) return;
+    setUserSearch(userId);
+    setUserFilter("all");
+    setUserSort("recent");
+    setUserPage(1);
+    setTimeout(() => {
+      usersSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
+  function openMessagePicker(
+    name: string,
+    channel: "whatsapp" | "email",
+    phone?: string,
+    email?: string
+  ) {
+    setMessageTarget({ name: name || "Client", channel, phone, email });
+    setMessagePickerOpen(true);
+  }
+
+  function handleTemplateSelect(template: MessageTemplate) {
+    if (!messageTarget) return;
+    const displayName = messageTarget.name?.trim()
+      ? messageTarget.name.trim()
+      : "cher client";
+    const fn = firstName(displayName);
+
+    if (messageTarget.channel === "whatsapp") {
+      if (!messageTarget.phone) {
+        setToast("Pas de téléphone disponible");
+        return;
+      }
+      const clean = cleanForWa(messageTarget.phone);
+      const text = encodeURIComponent(template.whatsappBody(fn));
+      window.open(`https://wa.me/${clean}?text=${text}`, "_blank", "noopener,noreferrer");
+    } else {
+      if (!messageTarget.email) {
+        setToast("Pas d'email disponible");
+        return;
+      }
+      const subject = encodeURIComponent(template.emailSubject(fn));
+      const body = encodeURIComponent(template.emailBody(displayName));
+      window.location.href = `mailto:${messageTarget.email}?subject=${subject}&body=${body}`;
+    }
+    setMessagePickerOpen(false);
+    setMessageTarget(null);
+  }
+
   async function handleOrdersCsv() {
-    try { setExporting("orders-csv");
-      await downloadBlob(`/orders/export?format=csv&start=${start}&end=${end}&status=${orderStatus}`, `commandes-${start}_${end}.csv`, firebaseToken!);
-    } catch (e) { alert((e as Error).message); } finally { setExporting(null); }
+    try {
+      setExporting("orders-csv");
+      await downloadBlob(
+        `/orders/export?format=csv&start=${start}&end=${end}&status=${orderStatus}`,
+        `commandes-${start}_${end}.csv`,
+        firebaseToken!
+      );
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handleOrdersPdf() {
-    try { setExporting("orders-pdf");
-      const data = await apiFetch(`/orders/export?format=json&start=${start}&end=${end}&status=${orderStatus}`, firebaseToken!);
+    try {
+      setExporting("orders-pdf");
+      const data = await apiFetch(
+        `/orders/export?format=json&start=${start}&end=${end}&status=${orderStatus}`,
+        firebaseToken!
+      );
       const orders = data.orders as any[];
       const completed = orders.filter((o) => o.status === "completed");
       const totalRevenue = completed.reduce((s, o) => s + (o.price || 0), 0);
-      const totalMargin = totalRevenue * MARGIN_RATE;
+      const totalMargin = completed.reduce(
+        (s, o) =>
+          s +
+          (typeof o.margin === "number" && Number.isFinite(o.margin)
+            ? o.margin
+            : (o.price || 0) * MARGIN_RATE_FALLBACK),
+        0
+      );
       openPdfPrint(
         `Commandes — ${start} → ${end}`,
         [
           `Total : <b>${orders.length}</b> commandes`,
           `Réussies : <b>${completed.length}</b>`,
           `Revenus : <b>${totalRevenue.toFixed(2)} €</b> (≈ <b>${toCfa(totalRevenue)}</b>)`,
-          `Marge (${(MARGIN_RATE * 100).toFixed(0)} %) : <b>${totalMargin.toFixed(2)} €</b> (≈ <b>${toCfa(totalMargin)}</b>)`,
+          `Marge réelle : <b>${totalMargin.toFixed(2)} €</b> (≈ <b>${toCfa(totalMargin)}</b>)`,
         ],
-        ["Date", "Pays", "Service", "Numéro", "Statut", "Prix (€)", "Prix (FCFA)", "Marge (€)", "Marge (FCFA)"],
+        [
+          "Date",
+          "Utilisateur",
+          "Email",
+          "Pays",
+          "Service",
+          "Numéro",
+          "Statut",
+          "Prix (€)",
+          "Prix (FCFA)",
+          "Marge (€)",
+          "Marge (FCFA)",
+        ],
         orders.map((o) => {
-          const margin = o.status === "completed" ? o.price * MARGIN_RATE : null;
+          const isCompleted = o.status === "completed";
+          const margin =
+            isCompleted && typeof o.margin === "number" && Number.isFinite(o.margin)
+              ? o.margin
+              : isCompleted
+              ? (o.price || 0) * MARGIN_RATE_FALLBACK
+              : null;
           return [
             new Date(o.createdAt).toLocaleString("fr-FR"),
-            o.countryCode, o.serviceCode, o.phoneNumber, o.status,
+            o.userName || o.user?.name || "—",
+            o.userEmail || o.user?.email || "—",
+            o.countryCode,
+            o.serviceCode,
+            o.phoneNumber,
+            o.status,
             o.price?.toFixed(2) ?? "",
             toCfa(o.price ?? 0),
             margin != null ? margin.toFixed(2) : "—",
@@ -422,18 +755,35 @@ export default function AdminPage() {
           ];
         })
       );
-    } catch (e) { alert((e as Error).message); } finally { setExporting(null); }
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handleTopupsCsv() {
-    try { setExporting("topups-csv");
-      await downloadBlob(`/topups/export?format=csv&start=${start}&end=${end}&status=${topupStatus}`, `depots-${start}_${end}.csv`, firebaseToken!);
-    } catch (e) { alert((e as Error).message); } finally { setExporting(null); }
+    try {
+      setExporting("topups-csv");
+      await downloadBlob(
+        `/topups/export?format=csv&start=${start}&end=${end}&status=${topupStatus}`,
+        `depots-${start}_${end}.csv`,
+        firebaseToken!
+      );
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handleTopupsPdf() {
-    try { setExporting("topups-pdf");
-      const data = await apiFetch(`/topups/export?format=json&start=${start}&end=${end}&status=${topupStatus}`, firebaseToken!);
+    try {
+      setExporting("topups-pdf");
+      const data = await apiFetch(
+        `/topups/export?format=json&start=${start}&end=${end}&status=${topupStatus}`,
+        firebaseToken!
+      );
       const topups = data.topups as any[];
       const completed = topups.filter((t) => t.status === "completed");
       const totalAmount = completed.reduce((s, t) => s + (t.amountEur || 0), 0);
@@ -444,32 +794,50 @@ export default function AdminPage() {
           `Réussis : <b>${completed.length}</b>`,
           `Montant encaissé : <b>${totalAmount.toFixed(2)} €</b> (≈ <b>${toCfa(totalAmount)}</b>)`,
         ],
-        ["Date", "Montant (€)", "Montant (FCFA)", "Statut", "Référence"],
+        ["Date", "Utilisateur", "Email", "Montant (€)", "Montant (FCFA)", "Pays", "Statut", "Référence"],
         topups.map((t) => [
           new Date(t.createdAt).toLocaleString("fr-FR"),
+          t.userName || t.user?.name || "—",
+          t.userEmail || t.user?.email || "—",
           t.amountEur?.toFixed(2) ?? "",
           toCfa(t.amountEur ?? 0),
+          t.countryIso ?? "—",
           t.status,
           t.externalId ?? "—",
         ])
       );
-    } catch (e) { alert((e as Error).message); } finally { setExporting(null); }
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handleUsersCsv() {
-    try { setExporting("users-csv");
+    try {
+      setExporting("users-csv");
       await downloadBlob(`/users/export?format=csv`, `utilisateurs-texerra.csv`, firebaseToken!);
-    } catch (e) { alert((e as Error).message); } finally { setExporting(null); }
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handleUsersVcf() {
-    try { setExporting("users-vcf");
+    try {
+      setExporting("users-vcf");
       await downloadBlob(`/users/export?format=vcf`, `contacts-texerra.vcf`, firebaseToken!);
-    } catch (e) { alert((e as Error).message); } finally { setExporting(null); }
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handleUsersPdf() {
-    try { setExporting("users-pdf");
+    try {
+      setExporting("users-pdf");
       const data = await apiFetch(`/users/export?format=json`, firebaseToken!);
       const users = data.users as any[];
       openPdfPrint(
@@ -478,26 +846,42 @@ export default function AdminPage() {
         ["Inscription", "Nom", "Email", "Téléphone", "Solde (€)", "Solde (FCFA)"],
         users.map((u) => [
           new Date(u.createdAt).toLocaleString("fr-FR"),
-          u.name || "—", u.email || "—", u.phone || "—",
+          u.name || "—",
+          u.email || "—",
+          u.phone || "—",
           u.balance?.toFixed(2) ?? "0.00",
           toCfa(u.balance ?? 0),
         ])
       );
-    } catch (e) { alert((e as Error).message); } finally { setExporting(null); }
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setExporting(null);
+    }
   }
 
   async function handleMigrate() {
-    if (!confirm("Migrer les anciennes données ?\n\nCette opération est idempotente et sûre.")) return;
+    if (!confirm("Migrer les anciennes données ?\n\nCette opération est idempotente et sûre."))
+      return;
     try {
-      setMigrating(true); setMigrationResult(null);
-      const res = await fetch("/api/admin/migrate", { method: "POST", headers: { Authorization: `Bearer ${firebaseToken}` } });
+      setMigrating(true);
+      setMigrationResult(null);
+      const res = await fetch("/api/admin/migrate", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${firebaseToken}` },
+      });
       if (!res.ok) throw new Error(`Migration échouée (${res.status})`);
       const data = await res.json();
-      setMigrationResult(data.message || `✓ ${data.ordersMigrated} commandes et ${data.topupsMigrated} dépôts mis à jour.`);
+      setMigrationResult(
+        data.message ||
+          `✓ ${data.ordersMigrated} commandes et ${data.topupsMigrated} dépôts mis à jour.`
+      );
       qc.invalidateQueries();
     } catch (e) {
       setMigrationResult(`✗ ${(e as Error).message}`);
-    } finally { setMigrating(false); }
+    } finally {
+      setMigrating(false);
+    }
   }
 
   const busy = (k: string) => exporting === k;
@@ -508,21 +892,37 @@ export default function AdminPage() {
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Tableau de bord administrateur</h1>
-            <p className="text-sm text-muted-foreground mt-1">Période : <span className="font-medium text-foreground">{start}</span> → <span className="font-medium text-foreground">{end}</span></p>
+            <h1 className="text-2xl md:text-3xl font-bold">
+              Tableau de bord administrateur
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Période : <span className="font-medium text-foreground">{start}</span> →{" "}
+              <span className="font-medium text-foreground">{end}</span>
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {([
-              ["today", "Aujourd'hui"], ["yesterday", "Hier"], ["7d", "7 jours"],
-              ["30d", "30 jours"], ["week", "Cette semaine"], ["month", "Ce mois"],
-              ["year", "Cette année"], ["all", "Tout"], ["custom", "Personnalisé"],
-            ] as [Period, string][]).map(([p, label]) => (
-              <button key={p} onClick={() => setPeriod(p)}
+            {(
+              [
+                ["today", "Aujourd'hui"],
+                ["yesterday", "Hier"],
+                ["7d", "7 jours"],
+                ["30d", "30 jours"],
+                ["week", "Cette semaine"],
+                ["month", "Ce mois"],
+                ["year", "Cette année"],
+                ["all", "Tout"],
+                ["custom", "Personnalisé"],
+              ] as [Period, string][]
+            ).map(([p, label]) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
                 className={`px-3 py-1.5 rounded-lg border text-sm transition-all ${
                   period === p
                     ? "bg-primary text-primary-foreground border-primary shadow-sm"
                     : "bg-white border-border hover:border-primary/40 hover:shadow-sm"
-                }`}>
+                }`}
+              >
                 {label}
               </button>
             ))}
@@ -531,24 +931,45 @@ export default function AdminPage() {
 
         {/* Migration */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          <button onClick={handleMigrate} disabled={migrating}
-            className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition-colors">
+          <button
+            onClick={handleMigrate}
+            disabled={migrating}
+            className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+          >
             {migrating ? "Migration en cours…" : "🔧 Migrer les anciennes données"}
           </button>
-          {migrationResult && <span className="text-muted-foreground">{migrationResult}</span>}
+          {migrationResult && (
+            <span className="text-muted-foreground">{migrationResult}</span>
+          )}
         </div>
 
         {/* Période personnalisée */}
         {period === "custom" && (
           <div className="flex flex-wrap items-center gap-3 bg-white border rounded-xl p-3 shadow-sm">
             <label className="text-sm font-medium">Du</label>
-            <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary/60" />
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary/60"
+            />
             <label className="text-sm font-medium">au</label>
-            <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary/60" />
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary/60"
+            />
           </div>
         )}
 
         {/* Cartes statistiques */}
+        {statsQuery.isError && (
+          <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-sm">
+            Erreur lors du chargement des statistiques :{" "}
+            {(statsQuery.error as Error)?.message ?? "inconnue"}
+          </div>
+        )}
         {stats && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             <StatCard
@@ -562,7 +983,7 @@ export default function AdminPage() {
               label="Dépôts réussis"
               value={`${stats.totalTopupAmount.toFixed(2)} €`}
               secondary={toCfa(stats.totalTopupAmount)}
-              sub={`${stats.totalTopups} validé${stats.totalTopups > 1 ? "s" : ""}`}
+              sub={`${stats.totalTopups} validé${stats.totalTopups > 1 ? "s" : ""} · tous pays`}
               icon="💰"
               color="emerald"
             />
@@ -577,7 +998,7 @@ export default function AdminPage() {
               label="Revenus"
               value={`${stats.revenue.toFixed(2)} €`}
               secondary={toCfa(stats.revenue)}
-              sub={`Marge estimée ${stats.marginPercent.toFixed(0)} %`}
+              sub={`Marge réelle ${stats.marginPercent.toFixed(1)} %`}
               icon="📈"
               color="purple"
             />
@@ -600,7 +1021,7 @@ export default function AdminPage() {
             <MiniStat label="Annulées" value={stats.cancelledOrders} />
             <MiniStat label="Expirées" value={stats.expiredOrders} />
             <MiniStat
-              label="Marge estimée"
+              label="Marge réelle"
               value={`${stats.margin.toFixed(2)} €`}
               sub={toCfa(stats.margin)}
               highlight
@@ -611,7 +1032,13 @@ export default function AdminPage() {
         {/* Graphique */}
         <div className="bg-white rounded-2xl border p-5 shadow-sm">
           <h2 className="text-lg font-semibold mb-4">Évolution sur la période</h2>
-          {chartData.length === 0 && !chartQuery.isLoading && (
+          {chartQuery.isError && (
+            <p className="text-sm text-red-600">
+              Erreur lors du chargement du graphique :{" "}
+              {(chartQuery.error as Error)?.message ?? "inconnue"}
+            </p>
+          )}
+          {!chartQuery.isError && chartData.length === 0 && !chartQuery.isLoading && (
             <p className="text-sm text-muted-foreground">Aucune donnée sur cette période.</p>
           )}
           {chartData.length > 0 && (
@@ -622,11 +1049,46 @@ export default function AdminPage() {
                 <YAxis fontSize={12} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={2} name="Revenus (€)" dot={false} />
-                <Line type="monotone" dataKey="topups" stroke="#10b981" strokeWidth={2} name="Dépôts (€)" dot={false} />
-                <Line type="monotone" dataKey="orders" stroke="#ea580c" strokeWidth={2} name="Commandes réussies" dot={false} />
-                <Line type="monotone" dataKey="margin" stroke="#2563eb" strokeWidth={2} name="Marge (€)" dot={false} />
-                <Line type="monotone" dataKey="users" stroke="#dc2626" strokeWidth={2} name="Inscriptions" dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#7c3aed"
+                  strokeWidth={2}
+                  name="Revenus (€)"
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="topups"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  name="Dépôts (€)"
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="orders"
+                  stroke="#ea580c"
+                  strokeWidth={2}
+                  name="Commandes réussies"
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="margin"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  name="Marge réelle (€)"
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="users"
+                  stroke="#dc2626"
+                  strokeWidth={2}
+                  name="Inscriptions"
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -636,22 +1098,41 @@ export default function AdminPage() {
         <Section
           title="Commandes"
           filters={[
-            ["all", "Toutes"], ["completed", "Réussies"], ["active", "En cours"],
-            ["pending_payment", "En attente"], ["cancelled", "Annulées"], ["expired", "Expirées"],
+            ["all", "Toutes"],
+            ["completed", "Réussies"],
+            ["active", "En cours"],
+            ["pending_payment", "En attente"],
+            ["cancelled", "Annulées"],
+            ["expired", "Expirées"],
           ]}
           activeFilter={orderStatus}
-          onFilterChange={(v) => { setOrderStatus(v); setOrderPage(1); }}
+          onFilterChange={(v) => {
+            setOrderStatus(v);
+            setOrderPage(1);
+          }}
           pageSize={orderPageSize}
-          onPageSizeChange={(s) => { setOrderPageSize(s); setOrderPage(1); }}
+          onPageSizeChange={(s) => {
+            setOrderPageSize(s);
+            setOrderPage(1);
+          }}
           actions={
             <>
-              <ExportBtn onClick={handleOrdersCsv} disabled={busy("orders-csv")}>{busy("orders-csv") ? "…" : "CSV"}</ExportBtn>
-              <ExportBtn onClick={handleOrdersPdf} disabled={busy("orders-pdf")}>{busy("orders-pdf") ? "…" : "PDF"}</ExportBtn>
+              <ExportBtn onClick={handleOrdersCsv} disabled={busy("orders-csv")}>
+                {busy("orders-csv") ? "…" : "CSV"}
+              </ExportBtn>
+              <ExportBtn onClick={handleOrdersPdf} disabled={busy("orders-pdf")}>
+                {busy("orders-pdf") ? "…" : "PDF"}
+              </ExportBtn>
             </>
           }
         >
           {ordersQuery.isLoading ? (
             <p className="text-sm text-muted-foreground p-3">Chargement…</p>
+          ) : ordersQuery.isError ? (
+            <div className="p-3 text-sm text-red-700 bg-red-50 border-t border-red-100">
+              Erreur lors de la récupération des commandes :{" "}
+              {(ordersQuery.error as Error)?.message ?? "inconnue"}
+            </div>
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -659,6 +1140,7 @@ export default function AdminPage() {
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="text-left p-2 font-medium">Date</th>
+                      <th className="text-left p-2 font-medium">Utilisateur</th>
                       <th className="text-left p-2 font-medium">Pays</th>
                       <th className="text-left p-2 font-medium">Service</th>
                       <th className="text-left p-2 font-medium">Numéro</th>
@@ -673,11 +1155,45 @@ export default function AdminPage() {
                     {ordersQuery.data?.orders?.map((o: any) => {
                       const country = resolveCountry(o.phoneNumber, o.countryCode);
                       const isCompleted = o.status === "completed";
-                      const displayMargin = isCompleted ? o.price * MARGIN_RATE : null;
+                      const realMargin =
+                        typeof o.margin === "number" && Number.isFinite(o.margin)
+                          ? o.margin
+                          : null;
+                      const displayMargin = isCompleted
+                        ? realMargin != null
+                          ? realMargin
+                          : o.price * MARGIN_RATE_FALLBACK
+                        : null;
                       const hasWa = isWhatsAppService(o.serviceCode);
+                      const userName = o.user?.name || "";
+                      const userEmail = o.user?.email || "";
+                      const userPhone = o.user?.phone || "";
                       return (
-                        <tr key={o.id} className="border-t hover:bg-secondary/30 transition-colors">
-                          <td className="p-2 whitespace-nowrap text-xs">{new Date(o.createdAt).toLocaleDateString("fr-FR")}</td>
+                        <tr
+                          key={o.id}
+                          className="border-t hover:bg-secondary/30 transition-colors"
+                        >
+                          <td className="p-2 whitespace-nowrap text-xs">
+                            {new Date(o.createdAt).toLocaleDateString("fr-FR")}
+                          </td>
+                          <td className="p-2 whitespace-nowrap">
+                            {o.user ? (
+                              <div className="flex flex-col">
+                                <span className="text-xs font-medium">
+                                  {userName || "—"}
+                                </span>
+                                {userEmail && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {userEmail}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {o.userId?.slice(0, 8) ?? "—"}
+                              </span>
+                            )}
+                          </td>
                           <td className="p-2 whitespace-nowrap">
                             <span className="flex items-center gap-1.5">
                               <span className="text-lg leading-none">{country.flag}</span>
@@ -685,12 +1201,20 @@ export default function AdminPage() {
                             </span>
                           </td>
                           <td className="p-2">
-                            <span className="inline-block text-xs font-mono bg-secondary px-1.5 py-0.5 rounded">{o.serviceCode}</span>
+                            <span className="inline-block text-xs font-mono bg-secondary px-1.5 py-0.5 rounded">
+                              {o.serviceCode}
+                            </span>
                           </td>
                           <td className="p-2 font-mono text-xs">{o.phoneNumber}</td>
-                          <td className="p-2 text-right whitespace-nowrap">{o.price.toFixed(2)} €</td>
-                          <td className="p-2 text-right whitespace-nowrap text-muted-foreground">{toCfa(o.price)}</td>
-                          <td className="p-2"><StatusBadge status={o.status} /></td>
+                          <td className="p-2 text-right whitespace-nowrap">
+                            {o.price.toFixed(2)} €
+                          </td>
+                          <td className="p-2 text-right whitespace-nowrap text-muted-foreground">
+                            {toCfa(o.price)}
+                          </td>
+                          <td className="p-2">
+                            <StatusBadge status={o.status} />
+                          </td>
                           <td className="p-2 text-right whitespace-nowrap text-muted-foreground">
                             {displayMargin != null ? `${displayMargin.toFixed(2)} €` : "—"}
                           </td>
@@ -698,15 +1222,53 @@ export default function AdminPage() {
                             <div className="flex items-center justify-center gap-1">
                               <ActionBtn
                                 title="Copier le numéro"
-                                onClick={() => copyToClipboard(o.phoneNumber, "Numéro copié !")}
+                                onClick={() =>
+                                  copyToClipboard(o.phoneNumber, "Numéro copié !")
+                                }
                               >
                                 <CopyIcon />
                               </ActionBtn>
-                              {hasWa && (
+                              {o.userId && (
                                 <ActionBtn
-                                  title="Écrire sur WhatsApp (message personnalisé)"
+                                  title="Voir l'utilisateur"
+                                  onClick={() => viewUser(o.userId)}
+                                >
+                                  <SearchIcon />
+                                </ActionBtn>
+                              )}
+                              {hasWa && o.phoneNumber && (
+                                <ActionBtn
+                                  title="Contacter sur WhatsApp"
                                   variant="whatsapp"
-                                  onClick={() => openOrderWhatsApp(o.phoneNumber, country.name, o.createdAt)}
+                                  onClick={() =>
+                                    openMessagePicker(
+                                      userName,
+                                      "whatsapp",
+                                      o.phoneNumber
+                                    )
+                                  }
+                                >
+                                  <WhatsAppIcon />
+                                </ActionBtn>
+                              )}
+                              {userEmail && (
+                                <ActionBtn
+                                  title="Contacter par email"
+                                  variant="mail"
+                                  onClick={() =>
+                                    openMessagePicker(userName, "email", undefined, userEmail)
+                                  }
+                                >
+                                  <SendMailIcon />
+                                </ActionBtn>
+                              )}
+                              {userPhone && (
+                                <ActionBtn
+                                  title="Écrire sur WhatsApp au client"
+                                  variant="whatsapp"
+                                  onClick={() =>
+                                    openMessagePicker(userName, "whatsapp", userPhone)
+                                  }
                                 >
                                   <WhatsAppIcon />
                                 </ActionBtn>
@@ -717,12 +1279,24 @@ export default function AdminPage() {
                       );
                     })}
                     {ordersQuery.data?.orders?.length === 0 && (
-                      <tr><td colSpan={9} className="p-4 text-center text-muted-foreground">Aucune commande sur cette période</td></tr>
+                      <tr>
+                        <td
+                          colSpan={10}
+                          className="p-4 text-center text-muted-foreground"
+                        >
+                          Aucune commande sur cette période
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-              <Pagination page={orderPage} total={ordersQuery.data?.total ?? 0} pageSize={orderPageSize} onChange={setOrderPage} />
+              <Pagination
+                page={orderPage}
+                total={ordersQuery.data?.total ?? 0}
+                pageSize={orderPageSize}
+                onChange={setOrderPage}
+              />
             </>
           )}
         </Section>
@@ -730,20 +1304,40 @@ export default function AdminPage() {
         {/* Dépôts */}
         <Section
           title="Dépôts / Recharges"
-          filters={[["all", "Tous"], ["completed", "Réussis"], ["pending", "En attente"], ["failed", "Échoués"]]}
+          filters={[
+            ["all", "Tous"],
+            ["completed", "Réussis"],
+            ["pending", "En attente"],
+            ["failed", "Échoués"],
+          ]}
           activeFilter={topupStatus}
-          onFilterChange={(v) => { setTopupStatus(v); setTopupPage(1); }}
+          onFilterChange={(v) => {
+            setTopupStatus(v);
+            setTopupPage(1);
+          }}
           pageSize={topupPageSize}
-          onPageSizeChange={(s) => { setTopupPageSize(s); setTopupPage(1); }}
+          onPageSizeChange={(s) => {
+            setTopupPageSize(s);
+            setTopupPage(1);
+          }}
           actions={
             <>
-              <ExportBtn onClick={handleTopupsCsv} disabled={busy("topups-csv")}>{busy("topups-csv") ? "…" : "CSV"}</ExportBtn>
-              <ExportBtn onClick={handleTopupsPdf} disabled={busy("topups-pdf")}>{busy("topups-pdf") ? "…" : "PDF"}</ExportBtn>
+              <ExportBtn onClick={handleTopupsCsv} disabled={busy("topups-csv")}>
+                {busy("topups-csv") ? "…" : "CSV"}
+              </ExportBtn>
+              <ExportBtn onClick={handleTopupsPdf} disabled={busy("topups-pdf")}>
+                {busy("topups-pdf") ? "…" : "PDF"}
+              </ExportBtn>
             </>
           }
         >
           {topupsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground p-3">Chargement…</p>
+          ) : topupsQuery.isError ? (
+            <div className="p-3 text-sm text-red-700 bg-red-50 border-t border-red-100">
+              Erreur lors de la récupération des dépôts :{" "}
+              {(topupsQuery.error as Error)?.message ?? "inconnue"}
+            </div>
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -751,125 +1345,412 @@ export default function AdminPage() {
                   <thead className="bg-secondary/50">
                     <tr>
                       <th className="text-left p-2 font-medium">Date</th>
+                      <th className="text-left p-2 font-medium">Utilisateur</th>
                       <th className="text-right p-2 font-medium">Montant (€)</th>
                       <th className="text-right p-2 font-medium">Montant (FCFA)</th>
+                      <th className="text-left p-2 font-medium">Pays</th>
                       <th className="text-left p-2 font-medium">Statut</th>
                       <th className="text-left p-2 font-medium">Référence</th>
+                      <th className="text-center p-2 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {topupsQuery.data?.topups?.map((t: any) => (
-                      <tr key={t.id} className="border-t hover:bg-secondary/30 transition-colors">
-                        <td className="p-2 whitespace-nowrap text-xs">{new Date(t.createdAt).toLocaleDateString("fr-FR")}</td>
-                        <td className="p-2 text-right font-medium">{t.amountEur.toFixed(2)} €</td>
-                        <td className="p-2 text-right text-muted-foreground">{toCfa(t.amountEur)}</td>
-                        <td className="p-2"><StatusBadge status={t.status} /></td>
-                        <td className="p-2 font-mono text-xs text-muted-foreground">{t.externalId ?? "—"}</td>
-                      </tr>
-                    ))}
+                    {topupsQuery.data?.topups?.map((t: any) => {
+                      const country = countryFromIso(t.countryIso);
+                      const userName = t.user?.name || "";
+                      const userEmail = t.user?.email || "";
+                      const userPhone = t.user?.phone || "";
+                      return (
+                        <tr
+                          key={t.id}
+                          className="border-t hover:bg-secondary/30 transition-colors"
+                        >
+                          <td className="p-2 whitespace-nowrap text-xs">
+                            {new Date(t.createdAt).toLocaleDateString("fr-FR")}
+                          </td>
+                          <td className="p-2 whitespace-nowrap">
+                            {t.user ? (
+                              <div className="flex flex-col">
+                                <span className="text-xs font-medium">
+                                  {userName || "—"}
+                                </span>
+                                {userEmail && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {userEmail}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {t.userId?.slice(0, 8) ?? "—"}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2 text-right font-medium">
+                            {t.amountEur.toFixed(2)} €
+                          </td>
+                          <td className="p-2 text-right text-muted-foreground">
+                            {toCfa(t.amountEur)}
+                          </td>
+                          <td className="p-2 whitespace-nowrap text-xs">
+                            {country ? (
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-lg leading-none">
+                                  {country.flag}
+                                </span>
+                                <span>{country.name}</span>
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {t.countryIso ?? "—"}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2">
+                            <StatusBadge status={t.status} />
+                          </td>
+                          <td className="p-2 font-mono text-xs text-muted-foreground">
+                            {t.externalId ?? "—"}
+                          </td>
+                          <td className="p-2">
+                            <div className="flex items-center justify-center gap-1">
+                              {t.userId && (
+                                <ActionBtn
+                                  title="Voir l'utilisateur"
+                                  onClick={() => viewUser(t.userId)}
+                                >
+                                  <SearchIcon />
+                                </ActionBtn>
+                              )}
+                              {userPhone && (
+                                <ActionBtn
+                                  title="Contacter sur WhatsApp"
+                                  variant="whatsapp"
+                                  onClick={() =>
+                                    openMessagePicker(userName, "whatsapp", userPhone)
+                                  }
+                                >
+                                  <WhatsAppIcon />
+                                </ActionBtn>
+                              )}
+                              {userEmail && (
+                                <ActionBtn
+                                  title="Contacter par email"
+                                  variant="mail"
+                                  onClick={() =>
+                                    openMessagePicker(userName, "email", undefined, userEmail)
+                                  }
+                                >
+                                  <SendMailIcon />
+                                </ActionBtn>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {topupsQuery.data?.topups?.length === 0 && (
-                      <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Aucun dépôt sur cette période</td></tr>
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="p-4 text-center text-muted-foreground"
+                        >
+                          Aucun dépôt sur cette période
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-              <Pagination page={topupPage} total={topupsQuery.data?.total ?? 0} pageSize={topupPageSize} onChange={setTopupPage} />
+              <Pagination
+                page={topupPage}
+                total={topupsQuery.data?.total ?? 0}
+                pageSize={topupPageSize}
+                onChange={setTopupPage}
+              />
             </>
           )}
         </Section>
 
         {/* Utilisateurs */}
-        <Section
-          title="Utilisateurs"
-          pageSize={userPageSize}
-          onPageSizeChange={(s) => { setUserPageSize(s); setUserPage(1); }}
-          actions={
-            <>
-              <ExportBtn onClick={handleUsersCsv} disabled={busy("users-csv")}>{busy("users-csv") ? "…" : "CSV"}</ExportBtn>
-              <ExportBtn onClick={handleUsersPdf} disabled={busy("users-pdf")}>{busy("users-pdf") ? "…" : "PDF"}</ExportBtn>
-              <ExportBtn onClick={handleUsersVcf} disabled={busy("users-vcf")} variant="primary">
-                {busy("users-vcf") ? "…" : "Contacts .vcf"}
-              </ExportBtn>
-            </>
-          }
-        >
-          {usersQuery.isLoading ? (
-            <p className="text-sm text-muted-foreground p-3">Chargement…</p>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-secondary/50">
-                    <tr>
-                      <th className="text-left p-2 font-medium">Inscription</th>
-                      <th className="text-left p-2 font-medium">Nom</th>
-                      <th className="text-left p-2 font-medium">E-mail</th>
-                      <th className="text-left p-2 font-medium">Téléphone</th>
-                      <th className="text-right p-2 font-medium">Solde (€)</th>
-                      <th className="text-right p-2 font-medium">Solde (FCFA)</th>
-                      <th className="text-center p-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usersQuery.data?.users?.map((u: any) => (
-                      <tr key={u.id} className="border-t hover:bg-secondary/30 transition-colors">
-                        <td className="p-2 whitespace-nowrap text-xs">{new Date(u.createdAt).toLocaleDateString("fr-FR")}</td>
-                        <td className="p-2">{u.name ?? "—"}</td>
-                        <td className="p-2 text-muted-foreground text-xs">{u.email ?? "—"}</td>
-                        <td className="p-2 font-mono text-xs">{u.phone ?? "—"}</td>
-                        <td className="p-2 text-right font-medium">{u.balance.toFixed(2)} €</td>
-                        <td className="p-2 text-right text-muted-foreground">{toCfa(u.balance)}</td>
-                        <td className="p-2">
-                          <div className="flex items-center justify-center gap-1">
-                            {u.phone && (
-                              <>
-                                <ActionBtn
-                                  title="Copier le téléphone"
-                                  onClick={() => copyToClipboard(u.phone, "Téléphone copié !")}
-                                >
-                                  <CopyIcon />
-                                </ActionBtn>
-                                <ActionBtn
-                                  title="Écrire sur WhatsApp (message personnalisé)"
-                                  variant="whatsapp"
-                                  onClick={() => openUserWhatsApp(u.name, u.phone)}
-                                >
-                                  <WhatsAppIcon />
-                                </ActionBtn>
-                              </>
-                            )}
-                            {u.email && (
-                              <>
-                                <ActionBtn
-                                  title="Copier l'email"
-                                  onClick={() => copyToClipboard(u.email, "Email copié !")}
-                                >
-                                  <MailIcon />
-                                </ActionBtn>
-                                <ActionBtn
-                                  title="Envoyer un email (message personnalisé)"
-                                  variant="mail"
-                                  onClick={() => openUserEmail(u.name, u.email)}
-                                >
-                                  <SendMailIcon />
-                                </ActionBtn>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {usersQuery.data?.users?.length === 0 && (
-                      <tr><td colSpan={7} className="p-4 text-center text-muted-foreground">Aucun utilisateur</td></tr>
-                    )}
-                  </tbody>
-                </table>
+        <div ref={usersSectionRef}>
+          <Section
+            title="Utilisateurs"
+            filters={[
+              ["all", "Tous"],
+              ["top", "Meilleurs utilisateurs"],
+              ["hasOrders", "Ayant déjà commandé"],
+              ["hasBalance", "Solde > 0"],
+              ["neverOrdered", "Jamais commandé"],
+            ]}
+            activeFilter={userFilter}
+            onFilterChange={(v) => {
+              setUserFilter(v);
+              setUserPage(1);
+            }}
+            pageSize={userPageSize}
+            onPageSizeChange={(s) => {
+              setUserPageSize(s);
+              setUserPage(1);
+            }}
+            actions={
+              <>
+                <ExportBtn onClick={handleUsersCsv} disabled={busy("users-csv")}>
+                  {busy("users-csv") ? "…" : "CSV"}
+                </ExportBtn>
+                <ExportBtn onClick={handleUsersPdf} disabled={busy("users-pdf")}>
+                  {busy("users-pdf") ? "…" : "PDF"}
+                </ExportBtn>
+                <ExportBtn
+                  onClick={handleUsersVcf}
+                  disabled={busy("users-vcf")}
+                  variant="primary"
+                >
+                  {busy("users-vcf") ? "…" : "Contacts .vcf"}
+                </ExportBtn>
+              </>
+            }
+            toolbar={
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Rechercher par nom, email, téléphone ou ID…"
+                  className="flex-1 min-w-[220px] border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary/60"
+                />
+                <select
+                  value={userSort}
+                  onChange={(e) => {
+                    setUserSort(e.target.value);
+                    setUserPage(1);
+                  }}
+                  className="border rounded-lg px-2 py-1.5 text-xs bg-white hover:border-primary/40 focus:outline-none focus:border-primary/60"
+                >
+                  <option value="recent">Plus récents</option>
+                  <option value="oldest">Plus anciens</option>
+                  <option value="balanceDesc">Solde décroissant</option>
+                  <option value="completedOrdersDesc">
+                    Plus de commandes réussies
+                  </option>
+                </select>
               </div>
-              <Pagination page={userPage} total={usersQuery.data?.total ?? 0} pageSize={userPageSize} onChange={setUserPage} />
-            </>
-          )}
-        </Section>
+            }
+          >
+            {usersQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground p-3">Chargement…</p>
+            ) : usersQuery.isError ? (
+              <div className="p-3 text-sm text-red-700 bg-red-50 border-t border-red-100">
+                Erreur lors de la récupération des utilisateurs :{" "}
+                {(usersQuery.error as Error)?.message ?? "inconnue"}
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50">
+                      <tr>
+                        <th className="text-left p-2 font-medium">Inscription</th>
+                        <th className="text-left p-2 font-medium">Nom</th>
+                        <th className="text-left p-2 font-medium">E-mail</th>
+                        <th className="text-left p-2 font-medium">Téléphone</th>
+                        <th className="text-right p-2 font-medium">Solde (€)</th>
+                        <th className="text-right p-2 font-medium">Solde (FCFA)</th>
+                        <th className="text-right p-2 font-medium">Commandes</th>
+                        <th className="text-center p-2 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usersQuery.data?.users?.map((u: any) => {
+                        const s = u.stats ?? {};
+                        return (
+                          <tr
+                            key={u.id}
+                            className="border-t hover:bg-secondary/30 transition-colors"
+                          >
+                            <td className="p-2 whitespace-nowrap text-xs">
+                              {new Date(u.createdAt).toLocaleDateString("fr-FR")}
+                            </td>
+                            <td className="p-2">{u.name || "—"}</td>
+                            <td className="p-2 text-muted-foreground text-xs">
+                              {u.email || "—"}
+                            </td>
+                            <td className="p-2 font-mono text-xs">{u.phone || "—"}</td>
+                            <td className="p-2 text-right font-medium">
+                              {u.balance.toFixed(2)} €
+                            </td>
+                            <td className="p-2 text-right text-muted-foreground">
+                              {toCfa(u.balance)}
+                            </td>
+                            <td className="p-2 text-right whitespace-nowrap">
+                              <span
+                                className="inline-flex items-center gap-1"
+                                title={`Total : ${s.totalOrders ?? 0} · En cours : ${
+                                  s.activeOrders ?? 0
+                                } · En attente : ${s.pendingOrders ?? 0} · Annulées : ${
+                                  s.cancelledOrders ?? 0
+                                } · Expirées : ${s.expiredOrders ?? 0}`}
+                              >
+                                <span className="inline-flex items-center justify-center text-[11px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  {s.completedOrders ?? 0}
+                                </span>
+                                <span className="text-[11px] text-muted-foreground">
+                                  / {s.totalOrders ?? 0}
+                                </span>
+                              </span>
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center justify-center gap-1">
+                                {u.name && (
+                                  <ActionBtn
+                                    title="Copier le nom"
+                                    onClick={() =>
+                                      copyToClipboard(u.name, "Nom copié !")
+                                    }
+                                  >
+                                    <CopyIcon />
+                                  </ActionBtn>
+                                )}
+                                {u.phone && (
+                                  <>
+                                    <ActionBtn
+                                      title="Copier le téléphone"
+                                      onClick={() =>
+                                        copyToClipboard(u.phone, "Téléphone copié !")
+                                      }
+                                    >
+                                      <PhoneIcon />
+                                    </ActionBtn>
+                                    <ActionBtn
+                                      title="Contacter sur WhatsApp"
+                                      variant="whatsapp"
+                                      onClick={() =>
+                                        openMessagePicker(
+                                          u.name || "",
+                                          "whatsapp",
+                                          u.phone
+                                        )
+                                      }
+                                    >
+                                      <WhatsAppIcon />
+                                    </ActionBtn>
+                                  </>
+                                )}
+                                {u.email && (
+                                  <>
+                                    <ActionBtn
+                                      title="Copier l'email"
+                                      onClick={() =>
+                                        copyToClipboard(u.email, "Email copié !")
+                                      }
+                                    >
+                                      <MailIcon />
+                                    </ActionBtn>
+                                    <ActionBtn
+                                      title="Contacter par email"
+                                      variant="mail"
+                                      onClick={() =>
+                                        openMessagePicker(
+                                          u.name || "",
+                                          "email",
+                                          undefined,
+                                          u.email
+                                        )
+                                      }
+                                    >
+                                      <SendMailIcon />
+                                    </ActionBtn>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {usersQuery.data?.users?.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="p-4 text-center text-muted-foreground"
+                          >
+                            Aucun utilisateur ne correspond à votre recherche
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination
+                  page={userPage}
+                  total={usersQuery.data?.total ?? 0}
+                  pageSize={userPageSize}
+                  onChange={setUserPage}
+                />
+              </>
+            )}
+          </Section>
+        </div>
       </div>
+
+      {/* Picker de modèle de message */}
+      {messagePickerOpen && messageTarget && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => {
+            setMessagePickerOpen(false);
+            setMessageTarget(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">
+                {messageTarget.channel === "whatsapp"
+                  ? "Message WhatsApp"
+                  : "Message email"}
+              </h3>
+              <button
+                onClick={() => {
+                  setMessagePickerOpen(false);
+                  setMessageTarget(null);
+                }}
+                className="text-muted-foreground hover:text-foreground text-xl leading-none"
+                aria-label="Fermer"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Destinataire :{" "}
+              <span className="font-medium text-foreground">
+                {messageTarget.name || "Client"}
+              </span>
+              {messageTarget.channel === "whatsapp" && messageTarget.phone && (
+                <> · {messageTarget.phone}</>
+              )}
+              {messageTarget.channel === "email" && messageTarget.email && (
+                <> · {messageTarget.email}</>
+              )}
+            </p>
+            <div className="space-y-1.5 overflow-y-auto flex-1 -mx-1 px-1">
+              {MESSAGE_TEMPLATES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => handleTemplateSelect(t)}
+                  className="w-full text-left px-3 py-2 rounded-lg border hover:bg-secondary/40 hover:border-primary/40 transition-colors"
+                >
+                  <p className="font-medium text-sm">{t.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                    {t.preview}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -886,11 +1767,15 @@ export default function AdminPage() {
 /* ────────────────────────────────────────────────────────────────── */
 
 function StatCard({
-  label, value, secondary, sub, icon, color = "blue",
+  label,
+  value,
+  secondary,
+  sub,
+  icon,
+  color = "blue",
 }: {
   label: string;
   value: string;
-  /** Ligne secondaire mise en avant (ex : conversion FCFA) */
   secondary?: string;
   sub?: string;
   icon?: string;
@@ -906,7 +1791,9 @@ function StatCard({
   return (
     <div className={`rounded-2xl border p-4 shadow-sm transition-all hover:shadow-md ${bg}`}>
       <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+          {label}
+        </p>
         {icon && <span className="text-xl">{icon}</span>}
       </div>
       <p className="text-2xl font-bold mt-2">{value}</p>
@@ -919,7 +1806,10 @@ function StatCard({
 }
 
 function MiniStat({
-  label, value, sub, highlight,
+  label,
+  value,
+  sub,
+  highlight,
 }: {
   label: string;
   value: string | number;
@@ -927,9 +1817,11 @@ function MiniStat({
   highlight?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border p-3 text-center shadow-sm transition-all hover:shadow-md ${
-      highlight ? "bg-blue-50 border-blue-200" : "bg-white"
-    }`}>
+    <div
+      className={`rounded-xl border p-3 text-center shadow-sm transition-all hover:shadow-md ${
+        highlight ? "bg-blue-50 border-blue-200" : "bg-white"
+      }`}
+    >
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-lg font-bold mt-1">{value}</p>
       {sub && <p className="text-xs font-medium text-foreground/70 mt-0.5">≈ {sub}</p>}
@@ -938,7 +1830,15 @@ function MiniStat({
 }
 
 function Section({
-  title, filters, activeFilter, onFilterChange, pageSize, onPageSizeChange, actions, children,
+  title,
+  filters,
+  activeFilter,
+  onFilterChange,
+  pageSize,
+  onPageSizeChange,
+  actions,
+  toolbar,
+  children,
 }: {
   title: string;
   filters?: [string, string][];
@@ -947,6 +1847,7 @@ function Section({
   pageSize?: number;
   onPageSizeChange?: (size: number) => void;
   actions?: React.ReactNode;
+  toolbar?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -957,12 +1858,15 @@ function Section({
           {filters && (
             <div className="flex flex-wrap gap-1">
               {filters.map(([v, label]) => (
-                <button key={v} onClick={() => onFilterChange?.(v)}
+                <button
+                  key={v}
+                  onClick={() => onFilterChange?.(v)}
                   className={`px-2.5 py-1 text-xs rounded-lg border transition-all ${
                     activeFilter === v
                       ? "bg-primary text-primary-foreground border-primary shadow-sm"
                       : "bg-white hover:border-primary/40"
-                  }`}>
+                  }`}
+                >
                   {label}
                 </button>
               ))}
@@ -977,7 +1881,9 @@ function Section({
                 className="border rounded-lg px-2 py-1 text-xs bg-white hover:border-primary/40 focus:outline-none focus:border-primary/60"
               >
                 {PAGE_SIZE_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
                 ))}
               </select>
               <span className="text-muted-foreground">par page</span>
@@ -986,13 +1892,17 @@ function Section({
           {actions && <div className="flex gap-1 ml-auto">{actions}</div>}
         </div>
       </div>
+      {toolbar && <div className="p-3 border-b bg-white">{toolbar}</div>}
       {children}
     </div>
   );
 }
 
 function ExportBtn({
-  onClick, disabled, variant, children,
+  onClick,
+  disabled,
+  variant,
+  children,
 }: {
   onClick: () => void;
   disabled?: boolean;
@@ -1000,26 +1910,33 @@ function ExportBtn({
   children: React.ReactNode;
 }) {
   return (
-    <button onClick={onClick} disabled={disabled}
+    <button
+      onClick={onClick}
+      disabled={disabled}
       className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-all disabled:opacity-50 ${
         variant === "primary"
           ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 shadow-sm"
           : "bg-white hover:border-primary/40 hover:shadow-sm"
-      }`}>
+      }`}
+    >
       {children}
     </button>
   );
 }
 
 function ActionBtn({
-  onClick, title, variant, children,
+  onClick,
+  title,
+  variant,
+  children,
 }: {
   onClick: () => void;
   title: string;
   variant?: "whatsapp" | "mail";
   children: React.ReactNode;
 }) {
-  const base = "inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-all";
+  const base =
+    "inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-all";
   const style =
     variant === "whatsapp"
       ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
@@ -1035,7 +1952,16 @@ function ActionBtn({
 
 function CopyIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
@@ -1044,7 +1970,16 @@ function CopyIcon() {
 
 function MailIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <path d="m22 7-10 5L2 7" />
     </svg>
@@ -1053,9 +1988,53 @@ function MailIcon() {
 
 function SendMailIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M22 2 11 13" />
       <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
     </svg>
   );
 }
@@ -1079,30 +2058,63 @@ function StatusBadge({ status }: { status: string }) {
     expired: "bg-gray-50 text-gray-700 border-gray-200",
   };
   const labels: Record<string, string> = {
-    active: "En cours", completed: "Réussie", pending: "En attente",
-    pending_payment: "En attente", cancelled: "Annulée", failed: "Échoué", expired: "Expirée",
+    active: "En cours",
+    completed: "Réussie",
+    pending: "En attente",
+    pending_payment: "En attente",
+    cancelled: "Annulée",
+    failed: "Échoué",
+    expired: "Expirée",
   };
   return (
-    <span className={`inline-block text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
+    <span
+      className={`inline-block text-xs px-2 py-0.5 rounded-full border font-medium ${
+        map[status] ?? "bg-gray-50 text-gray-700 border-gray-200"
+      }`}
+    >
       {labels[status] ?? status}
     </span>
   );
 }
 
-function Pagination({ page, total, pageSize, onChange }: { page: number; total: number; pageSize: number; onChange: (p: number) => void }) {
+function Pagination({
+  page,
+  total,
+  pageSize,
+  onChange,
+}: {
+  page: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+}) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
   return (
     <div className="flex items-center justify-between p-3 border-t text-sm bg-secondary/20">
       <span className="text-xs text-muted-foreground">
-        {total === 0 ? "Aucun résultat" : `${from}–${to} sur ${total} résultat${total > 1 ? "s" : ""}`}
+        {total === 0
+          ? "Aucun résultat"
+          : `${from}–${to} sur ${total} résultat${total > 1 ? "s" : ""}`}
         {totalPages > 1 && ` · page ${page} / ${totalPages}`}
       </span>
       {totalPages > 1 && (
         <div className="flex gap-2">
-          <button disabled={page <= 1} onClick={() => onChange(page - 1)} className="px-3 py-1 border rounded-lg disabled:opacity-40 hover:border-primary/40 transition-colors">←</button>
-          <button disabled={page >= totalPages} onClick={() => onChange(page + 1)} className="px-3 py-1 border rounded-lg disabled:opacity-40 hover:border-primary/40 transition-colors">→</button>
+          <button
+            disabled={page <= 1}
+            onClick={() => onChange(page - 1)}
+            className="px-3 py-1 border rounded-lg disabled:opacity-40 hover:border-primary/40 transition-colors"
+          >
+            ←
+          </button>
+          <button
+            disabled={page >= totalPages}
+            onClick={() => onChange(page + 1)}
+            className="px-3 py-1 border rounded-lg disabled:opacity-40 hover:border-primary/40 transition-colors"
+          >
+            →
+          </button>
         </div>
       )}
     </div>
