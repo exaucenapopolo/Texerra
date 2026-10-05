@@ -4,7 +4,8 @@ import { auth } from "../lib/firebase";
 import {
   Wallet, Plus, ArrowRight, ArrowLeft, CheckCircle2, Clock, Loader2, ExternalLink,
   User, Mail, Phone, RefreshCw, XCircle, History, AlertCircle, Sparkles, Receipt,
-  TrendingUp, Calendar, LayoutGrid, List, Coins, CreditCard, Smartphone
+  TrendingUp, Calendar, LayoutGrid, List, Coins, CreditCard, Smartphone, Shield,
+  Lock, Check, Zap, Globe
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -21,7 +22,8 @@ const VIEW_STORAGE_KEY = "texerra:wallet:view";
 const COUNTRY_STORAGE_PREFIX = "texerra:wallet:country:";
 const PAYMENT_METHOD_STORAGE_KEY = "texerra:wallet:payment-method";
 
-type PaymentMethod = "mobile_money" | "card";
+/* Méthode UI (le backend ne connaît que "mobile_money" | "card") */
+type UiPaymentMethod = "mobile_money" | "visa" | "mastercard" | "paypal";
 
 const ALLOWED_COUNTRIES: { code: string; name: string; currency: string }[] = [
   { code: "CM", name: "Cameroun", currency: "XAF" },
@@ -55,12 +57,49 @@ const UNIQUE_CURRENCY_TO_COUNTRY: Record<string, string> = {
   RWF: "RW",
 };
 
+/* ── Palette équilibrée : orange chaud (Mobile Money) + bleu froid (Cartes) ── */
 const BRAND = {
+  /* Orange — Mobile Money */
   primary: "#C55A34",
   primaryDark: "#A84A28",
   primaryLight: "#E8A47F",
   primarySoft: "#FBEEE7",
+
+  /* Bleu — Cartes & PayPal */
+  cool: "#2563EB",
+  coolDark: "#1D4ED8",
+  coolLight: "#93C5FD",
+  coolSoft: "#EFF6FF",
+
+  /* Teal — accents secondaires */
+  teal: "#0D9488",
+  tealSoft: "#CCFBF1",
+
+  /* Neutres */
+  ink: "#1F2937",
+  inkMuted: "#6B7280",
+  border: "#E7E2D9",
+  bg: "#FAF7F2",
+  bg2: "#F2EDE4",
 };
+
+/** Renvoie la palette active selon le moyen de paiement */
+function getAccent(method: UiPaymentMethod) {
+  if (method === "mobile_money") {
+    return {
+      main: BRAND.primary,
+      dark: BRAND.primaryDark,
+      light: BRAND.primaryLight,
+      soft: BRAND.primarySoft,
+    };
+  }
+  return {
+    main: BRAND.cool,
+    dark: BRAND.coolDark,
+    light: BRAND.coolLight,
+    soft: BRAND.coolSoft,
+  };
+}
 
 /* ────────────────────────────────────────────────────────────────── */
 /* Types                                                              */
@@ -84,6 +123,113 @@ interface UserProfile {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
+/* Logos SVG paiement                                                 */
+/* ────────────────────────────────────────────────────────────────── */
+
+/** Logo Mobile Money — ondes + téléphone, en orange */
+function MobileMoneyIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 44 44" className={className} fill="none" aria-hidden="true">
+      <rect width="44" height="44" rx="10" fill={BRAND.primarySoft} />
+      {/* Téléphone */}
+      <rect x="14" y="10" width="16" height="24" rx="3.2" stroke={BRAND.primary} strokeWidth="1.8" fill="#fff" />
+      <circle cx="22" cy="29" r="1.4" fill={BRAND.primary} />
+      <rect x="17" y="14" width="10" height="10" rx="1.6" fill={BRAND.primary} opacity="0.14" />
+      {/* Ondes */}
+      <path d="M26.5 8.5 q3.5 3.5 0 7" stroke={BRAND.primary} strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      <path d="M29.5 6.5 q5 5 0 11" stroke={BRAND.primary} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.55" />
+    </svg>
+  );
+}
+
+/** Logo VISA — texte italique bleu marine sur carte blanche */
+function VisaLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 96 60" className={className} fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="visaCardBg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#F5F7FB" />
+        </linearGradient>
+      </defs>
+      <rect x="0.5" y="0.5" width="95" height="59" rx="8" fill="url(#visaCardBg)" stroke="#E3E8EF" />
+      <text
+        x="48"
+        y="40"
+        textAnchor="middle"
+        fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+        fontWeight="900"
+        fontStyle="italic"
+        fontSize="22"
+        letterSpacing="1"
+        fill="#1A1F71"
+      >
+        VISA
+      </text>
+    </svg>
+  );
+}
+
+/** Logo Mastercard — deux cercles */
+function MastercardLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 96 60" className={className} fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="mcCardBg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#F5F7FB" />
+        </linearGradient>
+      </defs>
+      <rect x="0.5" y="0.5" width="95" height="59" rx="8" fill="url(#mcCardBg)" stroke="#E3E8EF" />
+      <circle cx="38" cy="30" r="13" fill="#EB001B" />
+      <circle cx="58" cy="30" r="13" fill="#F79E1B" />
+      <path
+        d="M48 20 a13 13 0 0 1 0 20 a13 13 0 0 1 0 -20"
+        fill="#FF5F00"
+      />
+    </svg>
+  );
+}
+
+/** Logo PayPal — deux "P" superposés bleu foncé / bleu clair */
+function PaypalLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 96 60" className={className} fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="ppCardBg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#F5F7FB" />
+        </linearGradient>
+      </defs>
+      <rect x="0.5" y="0.5" width="95" height="59" rx="8" fill="url(#ppCardBg)" stroke="#E3E8EF" />
+      {/* "P" bleu clair (derrière) */}
+      <path
+        d="M36 15 h13 c7 0 11 3.5 10 9.5 c-1 6.5 -6 10 -13 10 h-4.5 l-1.6 10 h-7.4 z"
+        fill="#009CDE"
+        opacity="0.9"
+      />
+      {/* "P" bleu foncé (devant) */}
+      <path
+        d="M42 12 h13 c7 0 11 3.5 10 9.5 c-1 6.5 -6 10 -13 10 h-4.5 l-1.6 10 h-7.4 z"
+        fill="#003087"
+      />
+      {/* "Pal" texte */}
+      <text
+        x="66"
+        y="40"
+        fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+        fontWeight="900"
+        fontStyle="italic"
+        fontSize="13"
+        fill="#003087"
+      >
+        Pal
+      </text>
+    </svg>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
 /* Slot temporel                                                      */
 /* ────────────────────────────────────────────────────────────────── */
 
@@ -99,29 +245,35 @@ function getTimeSlot(): TimeSlot {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Orbes animés d'arrière-plan                                        */
+/* Arrière-plan : orbes orange + bleu + teal pour équilibrer         */
 /* ────────────────────────────────────────────────────────────────── */
 
 function AnimatedBackground() {
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
       <motion.div
-        className="absolute -top-32 -left-24 w-[420px] h-[420px] rounded-full blur-3xl"
-        style={{ background: `radial-gradient(circle, ${BRAND.primary}33, transparent 70%)` }}
+        className="absolute -top-32 -left-24 w-[460px] h-[460px] rounded-full blur-3xl"
+        style={{ background: `radial-gradient(circle, ${BRAND.primary}26, transparent 70%)` }}
         animate={{ x: [0, 40, -20, 0], y: [0, 30, 60, 0], scale: [1, 1.08, 0.96, 1] }}
-        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
-        className="absolute top-1/3 -right-32 w-[380px] h-[380px] rounded-full blur-3xl"
-        style={{ background: `radial-gradient(circle, ${BRAND.primaryLight}44, transparent 70%)` }}
+        className="absolute top-1/4 -right-32 w-[420px] h-[420px] rounded-full blur-3xl"
+        style={{ background: `radial-gradient(circle, ${BRAND.cool}26, transparent 70%)` }}
         animate={{ x: [0, -30, 20, 0], y: [0, 40, -20, 0], scale: [1, 1.1, 0.95, 1] }}
-        transition={{ duration: 26, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+        transition={{ duration: 28, repeat: Infinity, ease: "easeInOut", delay: 2 }}
       />
       <motion.div
-        className="absolute bottom-0 left-1/4 w-[320px] h-[320px] rounded-full blur-3xl"
-        style={{ background: `radial-gradient(circle, #a855f733, transparent 70%)` }}
+        className="absolute bottom-0 left-1/4 w-[340px] h-[340px] rounded-full blur-3xl"
+        style={{ background: `radial-gradient(circle, ${BRAND.teal}22, transparent 70%)` }}
         animate={{ x: [0, 25, -15, 0], y: [0, -20, 20, 0] }}
-        transition={{ duration: 30, repeat: Infinity, ease: "easeInOut", delay: 4 }}
+        transition={{ duration: 32, repeat: Infinity, ease: "easeInOut", delay: 4 }}
+      />
+      <motion.div
+        className="absolute top-2/3 left-2 w-[280px] h-[280px] rounded-full blur-3xl"
+        style={{ background: `radial-gradient(circle, #a855f71c, transparent 70%)` }}
+        animate={{ x: [0, 30, -20, 0], y: [0, -20, 20, 0] }}
+        transition={{ duration: 34, repeat: Infinity, ease: "easeInOut", delay: 6 }}
       />
     </div>
   );
@@ -163,8 +315,8 @@ function AnimatedNumber({ value, decimals = 2, duration = 900 }: { value: number
 /* ────────────────────────────────────────────────────────────────── */
 
 function Confetti() {
-  const pieces = Array.from({ length: 26 });
-  const colors = [BRAND.primary, BRAND.primaryLight, "#FCD34D", "#86EFAC", "#93C5FD", "#F472B6"];
+  const pieces = Array.from({ length: 30 });
+  const colors = [BRAND.primary, BRAND.primaryLight, BRAND.cool, BRAND.coolLight, "#FCD34D", "#86EFAC", "#F472B6"];
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       {pieces.map((_, i) => {
@@ -191,7 +343,7 @@ function Confetti() {
 /* Barre d'étapes                                                     */
 /* ────────────────────────────────────────────────────────────────── */
 
-function StepBar({ step }: { step: "select" | "details" | "pending" | "success" | "failed" }) {
+function StepBar({ step, accent }: { step: "select" | "details" | "pending" | "success" | "failed"; accent: { main: string; dark: string; light: string; soft: string } }) {
   const steps = [
     { key: "select", label: "Montant" },
     { key: "details", label: "Coordonnées" },
@@ -217,9 +369,9 @@ function StepBar({ step }: { step: "select" | "details" | "pending" | "success" 
               <motion.div
                 initial={false}
                 animate={{
-                  backgroundColor: done || active ? BRAND.primary : "#E7E2D9",
+                  backgroundColor: done || active ? accent.main : BRAND.border,
                   scale: active ? 1.1 : 1,
-                  boxShadow: active ? `0 0 0 4px ${BRAND.primary}22` : "0 0 0 0px transparent",
+                  boxShadow: active ? `0 0 0 4px ${accent.main}22` : "0 0 0 0px transparent",
                 }}
                 transition={{ type: "spring", stiffness: 300, damping: 22 }}
                 className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold shrink-0"
@@ -236,10 +388,10 @@ function StepBar({ step }: { step: "select" | "details" | "pending" | "success" 
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div className="relative flex-1 mx-1 sm:mx-2 h-[2px] rounded-full bg-[#E7E2D9] overflow-hidden">
+              <div className="relative flex-1 mx-1 sm:mx-2 h-[2px] rounded-full overflow-hidden" style={{ background: BRAND.border }}>
                 <motion.div
                   className="absolute inset-y-0 left-0 rounded-full"
-                  style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
+                  style={{ background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }}
                   initial={false}
                   animate={{ width: done ? "100%" : "0%" }}
                   transition={{ duration: 0.5, ease: "easeOut" }}
@@ -250,6 +402,86 @@ function StepBar({ step }: { step: "select" | "details" | "pending" | "success" 
         );
       })}
     </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Bouton de marque (Visa / MC / PayPal)                              */
+/* ────────────────────────────────────────────────────────────────── */
+
+function PaymentBrandButton({
+  brand,
+  selected,
+  onSelect,
+  logo,
+  label,
+  index,
+}: {
+  brand: "visa" | "mastercard" | "paypal";
+  selected: boolean;
+  onSelect: () => void;
+  logo: React.ReactNode;
+  label: string;
+  index: number;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onSelect}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.06 + index * 0.06, type: "spring", stiffness: 260, damping: 22 }}
+      whileHover={{ y: -4 }}
+      whileTap={{ scale: 0.96 }}
+      className="relative p-2 rounded-2xl transition-colors overflow-hidden group"
+      style={{
+        background: selected ? BRAND.coolSoft : "#ffffff",
+        border: selected ? `2px solid ${BRAND.cool}` : `1px solid ${BRAND.border}`,
+        boxShadow: selected ? `0 10px 28px ${BRAND.cool}33` : "0 1px 2px rgba(15,23,42,0.04)",
+      }}
+      aria-pressed={selected}
+      aria-label={label}
+    >
+      {/* halo pulsé quand sélectionné */}
+      {selected && (
+        <motion.span
+          className="absolute inset-0 rounded-2xl pointer-events-none"
+          style={{ border: `2px solid ${BRAND.coolLight}` }}
+          animate={{ opacity: [0.85, 0, 0.85], scale: [1, 1.03, 1] }}
+          transition={{ duration: 2.2, repeat: Infinity }}
+        />
+      )}
+
+      <div className="relative flex items-center justify-center">
+        {logo}
+      </div>
+
+      {/* Badge check quand sélectionné */}
+      <AnimatePresence>
+        {selected && (
+          <motion.span
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-md"
+            style={{ background: BRAND.cool }}
+          >
+            <Check className="w-3 h-3 text-white" strokeWidth={3} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+
+      {/* Shimmer au survol */}
+      <motion.span
+        className="absolute inset-0 -translate-x-full pointer-events-none"
+        style={{
+          background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)",
+        }}
+        initial={{ translateX: "-120%" }}
+        whileHover={{ translateX: "120%" }}
+        transition={{ duration: 0.9, ease: "easeOut" }}
+      />
+    </motion.button>
   );
 }
 
@@ -592,7 +824,7 @@ function MoneyIllustration({ slot }: { slot: TimeSlot }) {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Item d'historique responsive                                       */
+/* Item d'historique                                                  */
 /* ────────────────────────────────────────────────────────────────── */
 
 function TopupHistoryItem({
@@ -658,7 +890,8 @@ function TopupHistoryItem({
   const amount = parseFloat(String(topup.amountEur));
   const localAmount = currency && currency !== "EUR" ? formatLocalAmount(amount, currency) : null;
 
-  const methodLabel = topup.method === "card" ? "Carte bancaire" : "Mobile Money";
+  const isCard = topup.method === "card";
+  const methodLabel = isCard ? "Carte / PayPal" : "Mobile Money";
   const providerLabel = topup.provider === "nelsiuspay" ? "NelsiusPay" : "AccountPe";
 
   if (view === "grid") {
@@ -692,7 +925,7 @@ function TopupHistoryItem({
         </div>
 
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          {topup.method === "card" ? <CreditCard className="w-3 h-3" /> : <Smartphone className="w-3 h-3" />}
+          {isCard ? <CreditCard className="w-3 h-3" style={{ color: BRAND.cool }} /> : <Smartphone className="w-3 h-3" style={{ color: BRAND.primary }} />}
           <span>{methodLabel}</span>
           <span className="opacity-40">·</span>
           <span className="opacity-70">{providerLabel}</span>
@@ -707,7 +940,11 @@ function TopupHistoryItem({
             onClick={handleVerify}
             disabled={checking}
             className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl text-white disabled:opacity-60 transition-all active:scale-95"
-            style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}
+            style={{
+              background: isCard
+                ? `linear-gradient(135deg, ${BRAND.cool}, ${BRAND.coolDark})`
+                : `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
+            }}
           >
             {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             {checking ? "Vérification…" : "Vérifier"}
@@ -753,7 +990,9 @@ function TopupHistoryItem({
               <span>{date} · {time}</span>
               <span className="opacity-40">·</span>
               <span className="inline-flex items-center gap-1">
-                {topup.method === "card" ? <CreditCard className="w-3 h-3" /> : <Smartphone className="w-3 h-3" />}
+                {isCard
+                  ? <CreditCard className="w-3 h-3" style={{ color: BRAND.cool }} />
+                  : <Smartphone className="w-3 h-3" style={{ color: BRAND.primary }} />}
                 {methodLabel}
               </span>
               <span className="opacity-40 hidden sm:inline">·</span>
@@ -775,7 +1014,11 @@ function TopupHistoryItem({
               onClick={handleVerify}
               disabled={checking}
               className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white disabled:opacity-60 transition-all active:scale-95 whitespace-nowrap"
-              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}
+              style={{
+                background: isCard
+                  ? `linear-gradient(135deg, ${BRAND.cool}, ${BRAND.coolDark})`
+                  : `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
+              }}
               title="Vérifier si ce paiement a été confirmé"
             >
               {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -815,7 +1058,7 @@ function TopupHistoryItem({
 export default function WalletPage() {
   useMeta({
     title: "Portefeuille — Rechargez votre solde Texerra",
-    description: "Rechargez votre solde Texerra avec Orange Money, MTN Mobile Money, Airtel Money, Wave ou carte bancaire Visa/Mastercard. Paiement rapide et sécurisé depuis toute l'Afrique.",
+    description: "Rechargez votre solde Texerra par Mobile Money (Orange, MTN, Wave, Airtel), carte Visa, Mastercard ou PayPal. Paiement rapide et sécurisé depuis toute l'Afrique.",
     canonical: "https://texerra.site/wallet",
     noindex: true,
   });
@@ -856,7 +1099,7 @@ export default function WalletPage() {
       email: string;
       mobile: string;
       countryIso: string;
-      paymentMethod: PaymentMethod;
+      paymentMethod: "mobile_money" | "card";
     }) => {
       const token = await auth.currentUser?.getIdToken().catch(() => null);
       const res = await fetch("/api/topups", {
@@ -884,15 +1127,23 @@ export default function WalletPage() {
   const [forceCheckMsg, setForceCheckMsg] = useState<{ type: "info" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", mobile: "" });
 
-  /* ── Moyen de paiement ── */
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => {
+  /* ── Méthode UI (migre anciennement "card" → "visa") ── */
+  const [paymentMethod, setPaymentMethod] = useState<UiPaymentMethod>(() => {
     const saved = localStorage.getItem(PAYMENT_METHOD_STORAGE_KEY);
-    return saved === "card" ? "card" : "mobile_money";
+    if (saved === "mobile_money" || saved === "visa" || saved === "mastercard" || saved === "paypal") {
+      return saved;
+    }
+    if (saved === "card") return "visa";
+    return "mobile_money";
   });
 
   useEffect(() => {
     localStorage.setItem(PAYMENT_METHOD_STORAGE_KEY, paymentMethod);
   }, [paymentMethod]);
+
+  /* Accent dynamique selon la méthode sélectionnée */
+  const accent = getAccent(paymentMethod);
+  const isCardMethod = paymentMethod !== "mobile_money";
 
   /* Vue liste / grille */
   const [view, setView] = useState<"list" | "grid">(() => {
@@ -904,7 +1155,7 @@ export default function WalletPage() {
     localStorage.setItem(VIEW_STORAGE_KEY, view);
   }, [view]);
 
-  /* ── Pays de paiement : persistance + détection devise ── */
+  /* ── Pays de paiement ── */
   const userKey = user?.uid || user?.email || me?.email || "guest";
   const countryStorageKey = `${COUNTRY_STORAGE_PREFIX}${userKey}`;
   const [countryIso, setCountryIso] = useState<string>("");
@@ -975,11 +1226,10 @@ export default function WalletPage() {
   const selectedCountry = ALLOWED_COUNTRIES.find(c => c.code === countryIso) ?? null;
   const payCurrency = selectedCountry?.currency ?? null;
 
-  /* ── Conversion affichée ── */
   const localCurrency = payCurrency ? getCurrency(payCurrency) : null;
   const showConversion = !!(localCurrency && localCurrency.code !== "EUR" && amount && amount > 0);
 
-  /* ── Pour carte bancaire, on affiche la conversion en XAF (taux Texerra) ── */
+  /* Pour carte/PayPal → conversion XAF via taux Texerra */
   const cardConversionXaf = amount && amount > 0 ? Math.round(amount * TEXERRA_FX.EUR_TO_XAF) : 0;
 
   const { data: topupStatus } = useQuery<{ status: string }>({
@@ -1014,9 +1264,7 @@ export default function WalletPage() {
 
   const handleInitiate = () => {
     if (!amount || amount < MIN_AMOUNT || !form.name || !form.email || !form.mobile) return;
-
-    // Pour Mobile Money, le pays est requis
-    if (paymentMethod === "mobile_money" && !countryIso) return;
+    if (!isCardMethod && !countryIso) return;
 
     initiateTopupMutation.mutate(
       {
@@ -1024,8 +1272,9 @@ export default function WalletPage() {
         name: form.name,
         email: form.email,
         mobile: form.mobile,
-        countryIso: paymentMethod === "mobile_money" ? countryIso : "",
-        paymentMethod,
+        countryIso: !isCardMethod ? countryIso : "",
+        /* ⬇︎ Mapping UI → backend : Visa / MC / PayPal → "card" */
+        paymentMethod: isCardMethod ? "card" : "mobile_money",
       },
       {
         onSuccess: (data) => {
@@ -1114,7 +1363,7 @@ export default function WalletPage() {
   return (
     <div
       className="relative min-h-screen w-full"
-      style={{ background: "linear-gradient(180deg, #FAF7F2 0%, #F2EDE4 100%)" }}
+      style={{ background: `linear-gradient(180deg, ${BRAND.bg} 0%, ${BRAND.bg2} 100%)` }}
     >
       <AnimatedBackground />
 
@@ -1126,13 +1375,14 @@ export default function WalletPage() {
           whileHover={{ x: -2 }}
           whileTap={{ scale: 0.97 }}
           onClick={handleBack}
-          className="inline-flex items-center gap-2 mb-6 px-4 py-2.5 rounded-2xl bg-white/80 backdrop-blur-sm border border-border/60 text-sm font-semibold text-foreground hover:border-primary/40 hover:shadow-md transition-all group"
+          className="inline-flex items-center gap-2 mb-6 px-4 py-2.5 rounded-2xl bg-white/80 backdrop-blur-sm text-sm font-semibold text-foreground transition-all group"
+          style={{ border: `1px solid ${BRAND.border}` }}
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
           Retour
         </motion.button>
 
-        {/* Header avec SVG à droite */}
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1149,7 +1399,7 @@ export default function WalletPage() {
           <MoneyIllustration slot={slot} />
         </motion.div>
 
-        {/* Carte solde */}
+        {/* Carte solde — gradient orange + bleu pour équilibrer */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1157,13 +1407,17 @@ export default function WalletPage() {
           whileHover={{ y: -2 }}
           className="relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-8 shadow-sm group"
           style={{
-            background: `linear-gradient(135deg, ${BRAND.primarySoft} 0%, #ffffff 60%, #FDF6F1 100%)`,
-            border: `1px solid ${BRAND.primary}26`
+            background: `linear-gradient(135deg, ${BRAND.primarySoft} 0%, #ffffff 45%, ${BRAND.coolSoft} 100%)`,
+            border: `1px solid ${BRAND.primary}1f`
           }}
         >
           <div
             className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-60 group-hover:opacity-90 transition-opacity"
-            style={{ background: `${BRAND.primary}22` }}
+            style={{ background: `${BRAND.cool}22` }}
+          />
+          <div
+            className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full blur-3xl pointer-events-none opacity-50 group-hover:opacity-80 transition-opacity"
+            style={{ background: `${BRAND.primary}1c` }}
           />
 
           <div className="relative flex items-start justify-between gap-4">
@@ -1171,7 +1425,7 @@ export default function WalletPage() {
               <div className="flex items-center gap-3 mb-3">
                 <motion.div
                   className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm relative"
-                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, color: "#ffffff" }}
+                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})`, color: "#ffffff" }}
                   animate={{ boxShadow: [
                     `0 0 0 0px ${BRAND.primary}55`,
                     `0 0 0 10px ${BRAND.primary}00`,
@@ -1210,9 +1464,8 @@ export default function WalletPage() {
         </motion.div>
 
         {/* Barre d'étapes */}
-        {step !== "success" && step !== "failed" && <StepBar step={step} />}
+        {step !== "success" && step !== "failed" && <StepBar step={step} accent={accent} />}
 
-        {/* Conteneur animé des étapes */}
         <div className="relative">
           <AnimatePresence mode="wait">
             {/* ── ÉTAPE : sélection du montant ── */}
@@ -1223,173 +1476,232 @@ export default function WalletPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.28, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-white border border-border/80 p-6 sm:p-8 mb-8 shadow-sm"
+                className="relative overflow-hidden rounded-3xl bg-white p-6 sm:p-8 mb-8 shadow-sm"
+                style={{ border: `1px solid ${BRAND.border}` }}
               >
-                <div
+                {/* Liseré supérieur dynamique */}
+                <motion.div
+                  key={`top-${paymentMethod}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
                   className="absolute top-0 left-0 h-1 w-full"
-                  style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
+                  style={{ background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }}
                 />
 
                 <div className="flex items-center gap-3 mb-6">
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
-                    style={{ background: BRAND.primarySoft, color: BRAND.primary }}
+                    style={{ background: accent.soft, color: accent.main }}
                   >
                     <Plus className="w-5 h-5" />
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-foreground">Recharger votre solde</h2>
-                    <p className="text-xs text-muted-foreground">Sélectionnez un montant et votre moyen de paiement</p>
+                    <p className="text-xs text-muted-foreground">Choisissez votre moyen de paiement puis votre montant</p>
                   </div>
                 </div>
 
-                {/* ── CHOIX DU MOYEN DE PAIEMENT ── */}
-                <div className="mb-5">
-                  <label className="text-sm font-medium text-muted-foreground block mb-2">
-                    Moyen de paiement
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <motion.button
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => setPaymentMethod("mobile_money")}
-                      className="relative py-4 px-3 rounded-2xl font-bold text-sm transition-all text-left overflow-hidden"
-                      style={
-                        paymentMethod === "mobile_money"
-                          ? {
-                              background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                              color: "#ffffff",
-                              boxShadow: `0 8px 24px ${BRAND.primary}44`,
-                              border: `1px solid ${BRAND.primaryDark}`
-                            }
-                          : {
-                              background: "#ffffff",
-                              border: "1px solid #E7E2D9",
-                              color: "#1f2937"
-                            }
-                      }
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                          style={{
-                            background: paymentMethod === "mobile_money" ? "rgba(255,255,255,0.2)" : BRAND.primarySoft,
-                            color: paymentMethod === "mobile_money" ? "#fff" : BRAND.primary
-                          }}
-                        >
-                          <Smartphone className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-sm">Mobile Money</div>
-                          <div className={`text-[10px] font-medium mt-0.5 ${paymentMethod === "mobile_money" ? "text-white/80" : "text-muted-foreground"}`}>
-                            Orange, MTN, Wave…
-                          </div>
-                        </div>
-                      </div>
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => setPaymentMethod("card")}
-                      className="relative py-4 px-3 rounded-2xl font-bold text-sm transition-all text-left overflow-hidden"
-                      style={
-                        paymentMethod === "card"
-                          ? {
-                              background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                              color: "#ffffff",
-                              boxShadow: `0 8px 24px ${BRAND.primary}44`,
-                              border: `1px solid ${BRAND.primaryDark}`
-                            }
-                          : {
-                              background: "#ffffff",
-                              border: "1px solid #E7E2D9",
-                              color: "#1f2937"
-                            }
-                      }
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                          style={{
-                            background: paymentMethod === "card" ? "rgba(255,255,255,0.2)" : BRAND.primarySoft,
-                            color: paymentMethod === "card" ? "#fff" : BRAND.primary
-                          }}
-                        >
-                          <CreditCard className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-sm">Carte Visa / Mastercard</div>
-                          <div className={`text-[10px] font-medium mt-0.5 ${paymentMethod === "card" ? "text-white/80" : "text-muted-foreground"}`}>
-                            Paiement sécurisé
-                          </div>
-                        </div>
-                      </div>
-                    </motion.button>
+                {/* ═════════════════════════════════════════════════
+                 * CHOIX DU MOYEN DE PAIEMENT
+                 * ═════════════════════════════════════════════════ */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-semibold text-foreground">
+                      Moyen de paiement
+                    </label>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: BRAND.tealSoft, color: BRAND.teal }}>
+                      <Lock className="w-3 h-3" /> 100 % sécurisé
+                    </span>
                   </div>
+
+                  {/* Mobile Money — pleine largeur */}
+                  <motion.button
+                    type="button"
+                    onClick={() => setPaymentMethod("mobile_money")}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="relative w-full p-4 rounded-2xl text-left overflow-hidden transition-colors mb-4"
+                    style={
+                      paymentMethod === "mobile_money"
+                        ? {
+                            background: `linear-gradient(135deg, ${BRAND.primary}0f, #ffffff 70%)`,
+                            border: `2px solid ${BRAND.primary}`,
+                            boxShadow: `0 10px 28px ${BRAND.primary}26`,
+                          }
+                        : {
+                            background: "#ffffff",
+                            border: `1px solid ${BRAND.border}`,
+                          }
+                    }
+                    aria-pressed={paymentMethod === "mobile_money"}
+                  >
+                    {paymentMethod === "mobile_money" && (
+                      <motion.span
+                        className="absolute inset-0 rounded-2xl pointer-events-none"
+                        style={{ border: `2px solid ${BRAND.primaryLight}` }}
+                        animate={{ opacity: [0.8, 0, 0.8], scale: [1, 1.015, 1] }}
+                        transition={{ duration: 2.2, repeat: Infinity }}
+                      />
+                    )}
+                    <div className="relative flex items-center gap-4">
+                      <MobileMoneyIcon className="w-11 h-11 rounded-xl shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-foreground text-[15px]">Mobile Money</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Orange Money · MTN MoMo · Wave · Airtel · Moov
+                        </div>
+                      </div>
+                      <AnimatePresence>
+                        {paymentMethod === "mobile_money" && (
+                          <motion.span
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            className="w-6 h-6 rounded-full flex items-center justify-center shadow-md shrink-0"
+                            style={{ background: BRAND.primary }}
+                          >
+                            <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.button>
+
+                  {/* Séparateur "ou" */}
+                  <div className="relative my-3">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-dashed" style={{ borderColor: BRAND.border }} />
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span
+                        className="px-3 text-[11px] text-muted-foreground font-semibold uppercase tracking-wider bg-white"
+                      >
+                        ou payez par
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Visa / Mastercard / PayPal */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <PaymentBrandButton
+                      brand="visa"
+                      selected={paymentMethod === "visa"}
+                      onSelect={() => setPaymentMethod("visa")}
+                      logo={<VisaLogo className="w-full h-auto max-h-12" />}
+                      label="Visa"
+                      index={0}
+                    />
+                    <PaymentBrandButton
+                      brand="mastercard"
+                      selected={paymentMethod === "mastercard"}
+                      onSelect={() => setPaymentMethod("mastercard")}
+                      logo={<MastercardLogo className="w-full h-auto max-h-12" />}
+                      label="Mastercard"
+                      index={1}
+                    />
+                    <PaymentBrandButton
+                      brand="paypal"
+                      selected={paymentMethod === "paypal"}
+                      onSelect={() => setPaymentMethod("paypal")}
+                      logo={<PaypalLogo className="w-full h-auto max-h-12" />}
+                      label="PayPal"
+                      index={2}
+                    />
+                  </div>
+
+                  {/* Badge sécurité pour les cartes */}
+                  <AnimatePresence>
+                    {isCardMethod && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="mt-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground"
+                      >
+                        <Shield className="w-3.5 h-3.5" style={{ color: BRAND.teal }} />
+                        <span>Paiement protégé — Vos coordonnées bancaires ne passent jamais par Texerra.</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
-                {/* Avertissement */}
+                {/* Avertissement méthode */}
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
+                  key={`tip-${paymentMethod}`}
                   className="mb-6 flex items-start gap-3 rounded-2xl px-4 py-3"
                   style={{
-                    background: `linear-gradient(135deg, ${BRAND.primarySoft}, #ffffff)`,
-                    border: `1px solid ${BRAND.primary}33`
+                    background: `linear-gradient(135deg, ${accent.soft}, #ffffff)`,
+                    border: `1px solid ${accent.main}33`
                   }}
                 >
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ background: BRAND.primary, color: "#ffffff" }}
+                    style={{ background: accent.main, color: "#ffffff" }}
                   >
                     <AlertCircle className="w-4 h-4" />
                   </div>
-                  <div className="text-xs leading-relaxed" style={{ color: "#7a3415" }}>
-                    <strong className="block mb-0.5 text-sm" style={{ color: BRAND.primaryDark }}>
+                  <div className="text-xs leading-relaxed" style={{ color: BRAND.ink }}>
+                    <strong className="block mb-0.5 text-sm" style={{ color: accent.dark }}>
                       Après votre paiement
                     </strong>
-                    Si votre solde n'est pas mis à jour automatiquement dans quelques minutes, descendez dans{" "}
-                    <strong>l'historique des recharges ci-dessous</strong>, trouvez votre paiement et cliquez sur le bouton{" "}
-                    <span className="inline-flex items-center gap-1 font-bold px-1.5 py-0.5 rounded" style={{ background: `${BRAND.primary}22` }}>
+                    Si votre solde n'est pas mis à jour automatiquement dans quelques minutes, ouvrez{" "}
+                    <strong>l'historique des recharges ci-dessous</strong>, trouvez votre paiement et cliquez sur{" "}
+                    <span className="inline-flex items-center gap-1 font-bold px-1.5 py-0.5 rounded" style={{ background: `${accent.main}22` }}>
                       <RefreshCw className="w-3 h-3" /> Vérifier
                     </span>{" "}
                     pour créditer votre solde manuellement.
                   </div>
                 </motion.div>
 
-                {/* Sélecteur de pays — uniquement pour Mobile Money */}
-                {paymentMethod === "mobile_money" && (
-                  <div className="mb-5">
-                    <label className="text-sm font-medium text-muted-foreground block mb-2">
-                      Pays de paiement
-                    </label>
-                    <select
-                      value={countryIso}
-                      onChange={e => handleCountryChange(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-sm text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
-                      style={{ borderColor: countryIso ? `${BRAND.primary}66` : undefined }}
+                {/* Sélecteur de pays — uniquement Mobile Money */}
+                <AnimatePresence initial={false}>
+                  {!isCardMethod && (
+                    <motion.div
+                      key="country-field"
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: "auto", marginBottom: 20 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      className="overflow-hidden"
                     >
-                      <option value="">— Sélectionnez votre pays —</option>
-                      {ALLOWED_COUNTRIES.map(c => (
-                        <option key={c.code} value={c.code}>
-                          {c.name} ({c.currency})
-                        </option>
-                      ))}
-                    </select>
-                    {!countryIso && (
-                      <p className="text-xs text-muted-foreground mt-1.5">
-                        Sélectionnez votre pays de paiement pour continuer.
-                      </p>
-                    )}
-                  </div>
-                )}
+                      <label className="text-sm font-medium text-muted-foreground block mb-2">
+                        <Globe className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+                        Pays de paiement
+                      </label>
+                      <select
+                        value={countryIso}
+                        onChange={e => handleCountryChange(e.target.value)}
+                        className="w-full px-4 py-3.5 bg-white rounded-2xl text-sm text-foreground focus:outline-none transition-all"
+                        style={{
+                          border: countryIso ? `2px solid ${accent.main}` : `1px solid ${BRAND.border}`,
+                          boxShadow: countryIso ? `0 0 0 4px ${accent.main}14` : "none"
+                        }}
+                      >
+                        <option value="">— Sélectionnez votre pays —</option>
+                        {ALLOWED_COUNTRIES.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.name} ({c.currency})
+                          </option>
+                        ))}
+                      </select>
+                      {!countryIso && (
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Sélectionnez votre pays pour continuer.
+                        </p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                {/* Tiles présélectionnées */}
+                {/* Tiles montants */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   {PRESET_AMOUNTS.map((a, idx) => {
                     const isSelected = selectedAmount === a;
-                    const localA = paymentMethod === "card"
+                    const localA = isCardMethod
                       ? `${Math.round(a * TEXERRA_FX.EUR_TO_XAF).toLocaleString("fr-FR")} FCFA`
                       : payCurrency ? formatLocalAmount(a, payCurrency) : null;
                     return (
@@ -1405,22 +1717,22 @@ export default function WalletPage() {
                         style={
                           isSelected
                             ? {
-                                background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
+                                background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
                                 color: "#ffffff",
-                                boxShadow: `0 8px 24px ${BRAND.primary}44`,
-                                border: `1px solid ${BRAND.primaryDark}`
+                                boxShadow: `0 8px 24px ${accent.main}44`,
+                                border: `1px solid ${accent.dark}`
                               }
                             : {
                                 background: "#ffffff",
-                                border: "1px solid #E7E2D9",
-                                color: "#1f2937"
+                                border: `1px solid ${BRAND.border}`,
+                                color: BRAND.ink
                               }
                         }
                       >
                         {isSelected && (
                           <motion.span
                             className="absolute inset-0 rounded-2xl"
-                            style={{ border: `2px solid ${BRAND.primaryLight}` }}
+                            style={{ border: `2px solid ${accent.light}` }}
                             animate={{ opacity: [0.8, 0, 0.8], scale: [1, 1.05, 1] }}
                             transition={{ duration: 2, repeat: Infinity }}
                           />
@@ -1430,7 +1742,7 @@ export default function WalletPage() {
                           {localA && (
                             <div
                               className="text-[10px] font-semibold mt-0.5"
-                              style={{ color: isSelected ? "#ffffffcc" : BRAND.primaryDark }}
+                              style={{ color: isSelected ? "#ffffffcc" : accent.dark }}
                             >
                               ≈ {localA}
                             </div>
@@ -1441,9 +1753,10 @@ export default function WalletPage() {
                   })}
                 </div>
 
+                {/* Autre montant */}
                 <div className="mb-5">
                   <label className="text-sm font-medium text-muted-foreground block mb-2">
-                    Autre montant <span className="text-xs opacity-70">(minimum {MIN_AMOUNT.toFixed(2)} €)</span>
+                    Autre montant <span className="text-xs opacity-70">(min {MIN_AMOUNT.toFixed(2)} €)</span>
                   </label>
                   <div className="relative">
                     <input
@@ -1453,8 +1766,11 @@ export default function WalletPage() {
                       placeholder={`Ex: ${MIN_AMOUNT.toFixed(2)}`}
                       value={customAmount}
                       onChange={e => { setCustomAmount(e.target.value); setSelectedAmount(null); }}
-                      className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all text-sm"
-                      style={{ borderColor: customAmount ? `${BRAND.primary}66` : undefined }}
+                      className="w-full px-4 py-3.5 bg-white rounded-2xl text-foreground placeholder:text-muted-foreground focus:outline-none transition-all text-sm"
+                      style={{
+                        border: customAmount ? `2px solid ${accent.main}` : `1px solid ${BRAND.border}`,
+                        boxShadow: customAmount ? `0 0 0 4px ${accent.main}14` : "none"
+                      }}
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">€</span>
                   </div>
@@ -1466,39 +1782,32 @@ export default function WalletPage() {
                     </div>
                   )}
 
-                  {paymentMethod === "card" && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-xs text-muted-foreground mt-1.5"
-                    >
+                  {isCardMethod && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-muted-foreground mt-1.5">
                       ≈ {Math.round(parseFloat(customAmount) * TEXERRA_FX.EUR_TO_XAF).toLocaleString("fr-FR")} FCFA
                     </motion.p>
                   )}
 
-                  {paymentMethod === "mobile_money" && payCurrency && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-xs text-muted-foreground mt-1.5"
-                    >
+                  {!isCardMethod && payCurrency && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-muted-foreground mt-1.5">
                       ≈ {formatLocalAmount(parseFloat(customAmount), payCurrency)}
                     </motion.p>
                   )}
                 </div>
 
-                {/* Récapitulatif de conversion */}
+                {/* Récapitulatif conversion */}
                 {amount && amount >= MIN_AMOUNT && (
                   <motion.div
+                    key={`conv-${paymentMethod}`}
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-5 px-4 py-3 rounded-2xl"
-                    style={{ background: `${BRAND.primary}0f`, border: `1px solid ${BRAND.primary}26` }}
+                    style={{ background: `${accent.main}0f`, border: `1px solid ${accent.main}26` }}
                   >
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-semibold text-muted-foreground">Montant converti</span>
-                      <span className="font-bold" style={{ color: BRAND.primaryDark }}>
-                        {paymentMethod === "card"
+                      <span className="font-bold" style={{ color: accent.dark }}>
+                        {isCardMethod
                           ? `≈ ${cardConversionXaf.toLocaleString("fr-FR")} FCFA`
                           : payCurrency ? `≈ ${formatLocalAmount(amount, payCurrency)}` : "—"}
                       </span>
@@ -1506,7 +1815,7 @@ export default function WalletPage() {
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
                       <span>Taux appliqué</span>
                       <span>
-                        {paymentMethod === "card"
+                        {isCardMethod
                           ? `1 € = ${TEXERRA_FX.EUR_TO_XAF} FCFA`
                           : payCurrency ? `1 € ≈ ${payCurrency}` : "—"}
                       </span>
@@ -1514,30 +1823,27 @@ export default function WalletPage() {
                   </motion.div>
                 )}
 
+                {/* CTA Continuer */}
                 <motion.button
                   onClick={() => {
                     if (!amount || amount < MIN_AMOUNT) return;
-                    if (paymentMethod === "mobile_money" && !countryIso) return;
+                    if (!isCardMethod && !countryIso) return;
                     setStep("details");
                   }}
-                  disabled={
-                    !amount ||
-                    amount < MIN_AMOUNT ||
-                    (paymentMethod === "mobile_money" && !countryIso)
-                  }
+                  disabled={!amount || amount < MIN_AMOUNT || (!isCardMethod && !countryIso)}
                   whileHover={amount && amount >= MIN_AMOUNT ? { y: -2 } : undefined}
                   whileTap={{ scale: 0.98 }}
                   className="relative w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden group"
                   style={{
-                    background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                    boxShadow: `0 8px 24px ${BRAND.primary}44`
+                    background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
+                    boxShadow: `0 8px 24px ${accent.main}44`
                   }}
                 >
                   {amount && amount >= MIN_AMOUNT && (
                     <motion.span
                       className="absolute inset-0 -translate-x-full"
                       style={{
-                        background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)",
+                        background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
                       }}
                       animate={{ translateX: ["-100%", "200%"] }}
                       transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
@@ -1548,6 +1854,22 @@ export default function WalletPage() {
                   </span>
                   <ArrowRight className="w-5 h-5 relative group-hover:translate-x-0.5 transition-transform" />
                 </motion.button>
+
+                {/* Badges de confiance */}
+                <div className="mt-5 grid grid-cols-3 gap-2 text-[10px] text-muted-foreground">
+                  <div className="flex flex-col items-center gap-1 py-2">
+                    <Shield className="w-4 h-4" style={{ color: BRAND.teal }} />
+                    <span className="font-semibold">Sécurisé</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 py-2 border-x" style={{ borderColor: BRAND.border }}>
+                    <Zap className="w-4 h-4" style={{ color: BRAND.primary }} />
+                    <span className="font-semibold">Rapide</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 py-2">
+                    <Lock className="w-4 h-4" style={{ color: BRAND.cool }} />
+                    <span className="font-semibold">Chiffré</span>
+                  </div>
+                </div>
               </motion.div>
             )}
 
@@ -1559,11 +1881,12 @@ export default function WalletPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.28, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-white border border-border/80 p-6 sm:p-8 mb-8 shadow-sm"
+                className="relative overflow-hidden rounded-3xl bg-white p-6 sm:p-8 mb-8 shadow-sm"
+                style={{ border: `1px solid ${BRAND.border}` }}
               >
                 <div
                   className="absolute top-0 left-0 h-1 w-full"
-                  style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
+                  style={{ background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }}
                 />
 
                 <div className="flex items-center gap-3 mb-6">
@@ -1573,19 +1896,21 @@ export default function WalletPage() {
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-bold text-foreground">Vos coordonnées</h2>
-                    <p className="text-xs text-muted-foreground">
-                      {paymentMethod === "card"
-                        ? "Pour le paiement par carte bancaire"
-                        : selectedCountry ? `Paiement depuis ${selectedCountry.name}` : "Pour la confirmation de votre paiement"}
+                    <p className="text-xs text-muted-foreground truncate">
+                      {isCardMethod
+                        ? paymentMethod === "visa" ? "Paiement par carte Visa"
+                          : paymentMethod === "mastercard" ? "Paiement par Mastercard"
+                          : "Paiement par PayPal"
+                        : selectedCountry ? `Paiement depuis ${selectedCountry.name}` : "Pour votre paiement Mobile Money"}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-black" style={{ color: BRAND.primaryDark }}>
+                  <div className="text-right shrink-0">
+                    <div className="text-2xl font-black" style={{ color: accent.dark }}>
                       {amount?.toFixed(2)} €
                     </div>
-                    {paymentMethod === "card" ? (
+                    {isCardMethod ? (
                       <div className="text-xs text-muted-foreground">
                         ≈ {cardConversionXaf.toLocaleString("fr-FR")} FCFA
                       </div>
@@ -1606,7 +1931,8 @@ export default function WalletPage() {
                         type="text" required placeholder="Jean Dupont"
                         value={form.name}
                         onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                        className="w-full pl-10 pr-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                        className="w-full pl-10 pr-4 py-3.5 bg-white rounded-2xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-all"
+                        style={{ border: `1px solid ${BRAND.border}` }}
                       />
                     </div>
                   </div>
@@ -1618,7 +1944,8 @@ export default function WalletPage() {
                         type="email" required placeholder="jean@exemple.com"
                         value={form.email}
                         onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                        className="w-full pl-10 pr-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                        className="w-full pl-10 pr-4 py-3.5 bg-white rounded-2xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-all"
+                        style={{ border: `1px solid ${BRAND.border}` }}
                       />
                     </div>
                   </div>
@@ -1633,34 +1960,48 @@ export default function WalletPage() {
                         type="tel" required placeholder="+237 6 XX XX XX XX"
                         value={form.mobile}
                         onChange={e => setForm(f => ({ ...f, mobile: e.target.value }))}
-                        className="w-full pl-10 pr-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                        className="w-full pl-10 pr-4 py-3.5 bg-white rounded-2xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-all"
+                        style={{ border: `1px solid ${BRAND.border}` }}
                       />
                     </div>
                   </div>
                 </div>
 
+                {isCardMethod && (
+                  <div
+                    className="mb-4 flex items-start gap-2 rounded-2xl px-4 py-3 text-xs"
+                    style={{ background: BRAND.tealSoft, color: BRAND.teal }}
+                  >
+                    <Shield className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block mb-0.5">Vous allez être redirigé vers notre partenaire sécurisé.</strong>
+                      Le paiement sera complété sur une page protégée. Texerra ne stocke jamais vos coordonnées bancaires.
+                    </div>
+                  </div>
+                )}
+
                 <motion.button
                   onClick={handleInitiate}
                   disabled={
-                    !form.name ||
-                    !form.email ||
-                    !form.mobile ||
-                    (paymentMethod === "mobile_money" && !countryIso) ||
+                    !form.name || !form.email || !form.mobile ||
+                    (!isCardMethod && !countryIso) ||
                     initiateTopupMutation.isPending
                   }
                   whileHover={!initiateTopupMutation.isPending ? { y: -2 } : undefined}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed relative overflow-hidden"
                   style={{
-                    background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                    boxShadow: `0 8px 24px ${BRAND.primary}33`
+                    background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
+                    boxShadow: `0 8px 24px ${accent.main}33`
                   }}
                 >
                   {initiateTopupMutation.isPending ? (
-                    <><Loader2 className="w-5 h-5 animate-spin" /> Préparation du paiement…</>
+                    <><Loader2 className="w-5 h-5 animate-spin" /> Préparation…</>
                   ) : (
                     <>
-                      {paymentMethod === "card" ? "Payer par carte" : "Payer"} {amount?.toFixed(2)} € <ArrowRight className="w-5 h-5" />
+                      <Lock className="w-4 h-4" />
+                      {isCardMethod ? "Payer par carte" : "Payer"} {amount?.toFixed(2)} €
+                      <ArrowRight className="w-5 h-5" />
                     </>
                   )}
                 </motion.button>
@@ -1672,7 +2013,7 @@ export default function WalletPage() {
               </motion.div>
             )}
 
-            {/* ── ÉTAPE : paiement en attente ── */}
+            {/* ── ÉTAPE : en attente ── */}
             {step === "pending" && (
               <motion.div
                 key="step-pending"
@@ -1680,29 +2021,30 @@ export default function WalletPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.28, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-white border border-border/80 p-6 sm:p-8 text-center mb-8 shadow-sm"
+                className="relative overflow-hidden rounded-3xl bg-white p-6 sm:p-8 text-center mb-8 shadow-sm"
+                style={{ border: `1px solid ${BRAND.border}` }}
               >
                 <div
                   className="absolute top-0 left-0 h-1 w-full"
-                  style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
+                  style={{ background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }}
                 />
 
                 <div className="relative w-20 h-20 mx-auto mb-6">
                   <motion.div
                     className="absolute inset-0 rounded-full"
-                    style={{ background: `${BRAND.primary}22` }}
+                    style={{ background: `${accent.main}22` }}
                     animate={{ scale: [1, 1.3, 1], opacity: [0.6, 0, 0.6] }}
                     transition={{ duration: 2, repeat: Infinity }}
                   />
                   <motion.div
                     className="absolute inset-2 rounded-full"
-                    style={{ background: `${BRAND.primary}33` }}
+                    style={{ background: `${accent.main}33` }}
                     animate={{ scale: [1, 1.2, 1], opacity: [0.8, 0.2, 0.8] }}
                     transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
                   />
                   <div
                     className="absolute inset-4 rounded-full flex items-center justify-center shadow-md"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}
+                    style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})` }}
                   >
                     <Clock className="w-7 h-7 text-white animate-pulse" />
                   </div>
@@ -1710,17 +2052,16 @@ export default function WalletPage() {
 
                 <h2 className="text-xl font-bold mb-2 text-foreground">Paiement en attente</h2>
                 <p className="text-muted-foreground mb-2 text-sm leading-relaxed max-w-md mx-auto">
-                  {paymentMethod === "card"
-                    ? "Complétez le paiement par carte dans la fenêtre ouverte, puis revenez ici."
-                    : "Complétez le paiement Mobile Money dans la fenêtre ouverte, puis revenez ici."}
+                  Complétez le paiement dans la fenêtre ouverte, puis revenez ici.
                 </p>
                 <p className="text-xs text-muted-foreground mb-6">
                   La vérification est automatique. Si vous avez déjà payé, cliquez sur le bouton ci-dessous.
                 </p>
 
                 {topupStatus && topupStatus.status !== "pending" && (
-                  <div className="bg-secondary border border-border rounded-2xl px-4 py-3 text-sm font-medium mb-6">
-                    Statut : <span className={topupStatus.status === "completed" ? "text-green-600" : "text-primary capitalize"}>{topupStatus.status}</span>
+                  <div className="rounded-2xl px-4 py-3 text-sm font-medium mb-6"
+                    style={{ background: BRAND.bg, border: `1px solid ${BRAND.border}` }}>
+                    Statut : <span className={topupStatus.status === "completed" ? "text-green-600" : ""} style={topupStatus.status !== "completed" ? { color: accent.main } : undefined}>{topupStatus.status}</span>
                   </div>
                 )}
 
@@ -1747,8 +2088,8 @@ export default function WalletPage() {
                   disabled={forceChecking}
                   className="w-full flex items-center justify-center gap-2 py-3.5 text-white font-bold rounded-2xl transition-all disabled:opacity-60 text-sm mb-3 active:scale-[0.99]"
                   style={{
-                    background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                    boxShadow: `0 6px 20px ${BRAND.primary}33`
+                    background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
+                    boxShadow: `0 6px 20px ${accent.main}33`
                   }}
                 >
                   {forceChecking ? (
@@ -1764,14 +2105,16 @@ export default function WalletPage() {
                       href={checkoutUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-center gap-2 flex-1 py-3 bg-secondary border border-border rounded-2xl text-sm font-semibold hover:border-primary/40 transition-colors"
+                      className="flex items-center justify-center gap-2 flex-1 py-3 bg-white rounded-2xl text-sm font-semibold hover:border-primary/40 transition-colors"
+                      style={{ border: `1px solid ${BRAND.border}` }}
                     >
                       <ExternalLink className="w-4 h-4" /> Rouvrir le paiement
                     </a>
                   )}
                   <button
                     onClick={handleReset}
-                    className="flex-1 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground border border-border rounded-2xl hover:bg-secondary/50 transition-colors"
+                    className="flex-1 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground rounded-2xl hover:bg-secondary/50 transition-colors"
+                    style={{ border: `1px solid ${BRAND.border}` }}
                   >
                     Annuler
                   </button>
@@ -1787,7 +2130,8 @@ export default function WalletPage() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.35, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-white border border-green-200 p-8 text-center mb-8 shadow-sm"
+                className="relative overflow-hidden rounded-3xl bg-white p-8 text-center mb-8 shadow-sm"
+                style={{ border: "1px solid #86EFAC" }}
               >
                 <Confetti />
                 <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-green-400 to-emerald-500" />
@@ -1817,13 +2161,14 @@ export default function WalletPage() {
                   <a
                     href="/order"
                     className="flex items-center justify-center gap-2 px-6 py-3 text-white font-semibold rounded-2xl transition-all active:scale-95 text-sm"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}
+                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` }}
                   >
                     Commander un numéro <ArrowRight className="w-4 h-4" />
                   </a>
                   <button
                     onClick={handleReset}
-                    className="px-6 py-3 border border-border rounded-2xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    className="px-6 py-3 rounded-2xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    style={{ border: `1px solid ${BRAND.border}` }}
                   >
                     Recharger encore
                   </button>
@@ -1839,18 +2184,21 @@ export default function WalletPage() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.35, ease: "easeOut" }}
-                className="relative overflow-hidden rounded-3xl bg-white border border-red-200 p-8 text-center mb-8 shadow-sm"
+                className="relative overflow-hidden rounded-3xl bg-white p-8 text-center mb-8 shadow-sm"
+                style={{ border: "1px solid #FCA5A5" }}
               >
                 <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-red-400 to-rose-500" />
                 <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-6">
                   <XCircle className="w-10 h-10 text-red-500" />
                 </div>
                 <h2 className="text-xl font-bold mb-3 text-foreground">Paiement non abouti</h2>
-                <p className="text-muted-foreground mb-6 text-sm">Le paiement n'a pas pu être confirmé. Votre solde n'a pas été modifié.</p>
+                <p className="text-muted-foreground mb-6 text-sm">
+                  Le paiement n'a pas pu être confirmé. Votre solde n'a pas été modifié.
+                </p>
                 <button
                   onClick={handleReset}
                   className="px-6 py-3 text-white font-semibold rounded-2xl transition-all active:scale-95 text-sm"
-                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}
+                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` }}
                 >
                   Réessayer
                 </button>
@@ -1865,19 +2213,20 @@ export default function WalletPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="relative overflow-hidden rounded-3xl bg-white border border-border/80 shadow-sm"
+            className="relative overflow-hidden rounded-3xl bg-white shadow-sm"
+            style={{ border: `1px solid ${BRAND.border}` }}
           >
             <div
               className="absolute top-0 left-0 h-1 w-full"
-              style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
+              style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.cool})` }}
             />
 
-            <div className="p-5 sm:p-6 border-b border-border/60 bg-gradient-to-br from-white to-secondary/30">
+            <div className="p-5 sm:p-6 border-b" style={{ borderColor: BRAND.border }}>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div
                     className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, color: "#ffffff" }}
+                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})`, color: "#ffffff" }}
                   >
                     <Receipt className="w-5 h-5" />
                   </div>
@@ -1889,13 +2238,13 @@ export default function WalletPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 bg-white border border-border/70 rounded-xl p-0.5">
+                <div className="flex items-center gap-1 bg-white rounded-xl p-0.5" style={{ border: `1px solid ${BRAND.border}` }}>
                   <button
                     onClick={() => setView("list")}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       view === "list" ? "text-white shadow-sm" : "text-muted-foreground hover:bg-secondary/60"
                     }`}
-                    style={view === "list" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
+                    style={view === "list" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` } : undefined}
                     title="Vue liste"
                   >
                     <List className="w-3.5 h-3.5" />
@@ -1906,7 +2255,7 @@ export default function WalletPage() {
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       view === "grid" ? "text-white shadow-sm" : "text-muted-foreground hover:bg-secondary/60"
                     }`}
-                    style={view === "grid" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
+                    style={view === "grid" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` } : undefined}
                     title="Vue grille"
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
@@ -1950,7 +2299,8 @@ export default function WalletPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.03 }}
                       whileHover={{ y: -2 }}
-                      className="rounded-2xl border border-border/60 p-4 hover:shadow-md transition-all bg-white"
+                      className="rounded-2xl p-4 hover:shadow-md transition-all bg-white"
+                      style={{ border: `1px solid ${BRAND.border}` }}
                     >
                       <TopupHistoryItem
                         topup={topup}
@@ -1973,7 +2323,8 @@ export default function WalletPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.03 }}
                       whileHover={{ x: 2 }}
-                      className="rounded-2xl border border-border/60 p-4 hover:shadow-md transition-all bg-white"
+                      className="rounded-2xl p-4 hover:shadow-md transition-all bg-white"
+                      style={{ border: `1px solid ${BRAND.border}` }}
                     >
                       <TopupHistoryItem
                         topup={topup}
@@ -1990,7 +2341,8 @@ export default function WalletPage() {
               )}
 
               {historyTopups.some(t => t.status === "pending") && (
-                <div className="mt-6 flex items-start gap-2 text-xs text-muted-foreground bg-amber-50/60 border border-amber-200/60 rounded-2xl px-4 py-3">
+                <div className="mt-6 flex items-start gap-2 text-xs text-muted-foreground rounded-2xl px-4 py-3"
+                  style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
                   <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
                   <span>
                     Les recharges <span className="font-semibold text-amber-700">En attente</span> peuvent être vérifiées manuellement.
