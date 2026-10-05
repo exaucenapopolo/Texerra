@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useMeta } from "../lib/use-meta";
 import { auth } from "../lib/firebase";
 import {
   Wallet, Plus, ArrowRight, ArrowLeft, CheckCircle2, Clock, Loader2, ExternalLink,
-  User, Mail, Phone, RefreshCw, XCircle, History, AlertCircle, Sparkles, Receipt,
-  TrendingUp, Calendar, LayoutGrid, List, Coins, CreditCard, Smartphone, Shield,
-  Lock, Check, Zap, Globe
+  User, Mail, Phone, RefreshCw, XCircle, AlertCircle, Sparkles, Receipt,
+  LayoutGrid, List, CreditCard, Smartphone, Shield, Lock, Check, Zap, Globe
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -20,10 +19,10 @@ const MIN_AMOUNT = 1.65;
 const PRESET_AMOUNTS = [2, 5, 10, 20];
 const VIEW_STORAGE_KEY = "texerra:wallet:view";
 const COUNTRY_STORAGE_PREFIX = "texerra:wallet:country:";
-const PAYMENT_METHOD_STORAGE_KEY = "texerra:wallet:payment-method";
+const PAYMENT_METHOD_STORAGE_PREFIX = "texerra:wallet:payment-method:";
 
-/* Méthode UI (le backend ne connaît que "mobile_money" | "card") */
 type UiPaymentMethod = "mobile_money" | "visa" | "mastercard" | "paypal";
+type CardBrand = "visa" | "mastercard" | "paypal";
 
 const ALLOWED_COUNTRIES: { code: string; name: string; currency: string }[] = [
   { code: "CM", name: "Cameroun", currency: "XAF" },
@@ -57,11 +56,12 @@ const UNIQUE_CURRENCY_TO_COUNTRY: Record<string, string> = {
   RWF: "RW",
 };
 
-/* ── Palette équilibrée : orange chaud (Mobile Money) + bleu froid (Cartes) ── */
+/* ── Palette : chaque couleur reste dans SA famille, pas de mélange ── */
 const BRAND = {
   /* Orange — Mobile Money */
   primary: "#C55A34",
   primaryDark: "#A84A28",
+  primaryDeep: "#7C2D12",
   primaryLight: "#E8A47F",
   primarySoft: "#FBEEE7",
 
@@ -71,7 +71,7 @@ const BRAND = {
   coolLight: "#93C5FD",
   coolSoft: "#EFF6FF",
 
-  /* Teal — accents secondaires */
+  /* Teal — accents de confiance */
   teal: "#0D9488",
   tealSoft: "#CCFBF1",
 
@@ -83,12 +83,13 @@ const BRAND = {
   bg2: "#F2EDE4",
 };
 
-/** Renvoie la palette active selon le moyen de paiement */
+/** Accent unique selon méthode : orange OU bleu, jamais mélangés */
 function getAccent(method: UiPaymentMethod) {
   if (method === "mobile_money") {
     return {
       main: BRAND.primary,
       dark: BRAND.primaryDark,
+      deep: BRAND.primaryDeep,
       light: BRAND.primaryLight,
       soft: BRAND.primarySoft,
     };
@@ -96,9 +97,17 @@ function getAccent(method: UiPaymentMethod) {
   return {
     main: BRAND.cool,
     dark: BRAND.coolDark,
+    deep: "#0F172A",
     light: BRAND.coolLight,
     soft: BRAND.coolSoft,
   };
+}
+
+function getMethodLabel(m: UiPaymentMethod): string {
+  if (m === "mobile_money") return "Mobile Money";
+  if (m === "visa") return "Visa";
+  if (m === "mastercard") return "Mastercard";
+  return "PayPal";
 }
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -112,6 +121,7 @@ export interface Topup {
   createdAt: string;
   provider?: string;
   method?: string;
+  brand?: CardBrand;
 }
 
 interface UserProfile {
@@ -123,26 +133,23 @@ interface UserProfile {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Logos SVG paiement                                                 */
+/* Logos paiement — versions compactes (44×44) et carte (96×60)      */
 /* ────────────────────────────────────────────────────────────────── */
 
-/** Logo Mobile Money — ondes + téléphone, en orange */
 function MobileMoneyIcon({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 44 44" className={className} fill="none" aria-hidden="true">
       <rect width="44" height="44" rx="10" fill={BRAND.primarySoft} />
-      {/* Téléphone */}
       <rect x="14" y="10" width="16" height="24" rx="3.2" stroke={BRAND.primary} strokeWidth="1.8" fill="#fff" />
       <circle cx="22" cy="29" r="1.4" fill={BRAND.primary} />
       <rect x="17" y="14" width="10" height="10" rx="1.6" fill={BRAND.primary} opacity="0.14" />
-      {/* Ondes */}
       <path d="M26.5 8.5 q3.5 3.5 0 7" stroke={BRAND.primary} strokeWidth="1.6" strokeLinecap="round" fill="none" />
       <path d="M29.5 6.5 q5 5 0 11" stroke={BRAND.primary} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.55" />
     </svg>
   );
 }
 
-/** Logo VISA — texte italique bleu marine sur carte blanche */
+/* VISA — carte complète */
 function VisaLogo({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 96 60" className={className} fill="none" aria-hidden="true">
@@ -154,23 +161,16 @@ function VisaLogo({ className = "" }: { className?: string }) {
       </defs>
       <rect x="0.5" y="0.5" width="95" height="59" rx="8" fill="url(#visaCardBg)" stroke="#E3E8EF" />
       <text
-        x="48"
-        y="40"
-        textAnchor="middle"
+        x="48" y="40" textAnchor="middle"
         fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
-        fontWeight="900"
-        fontStyle="italic"
-        fontSize="22"
-        letterSpacing="1"
+        fontWeight="900" fontStyle="italic" fontSize="22" letterSpacing="1"
         fill="#1A1F71"
-      >
-        VISA
-      </text>
+      >VISA</text>
     </svg>
   );
 }
 
-/** Logo Mastercard — deux cercles */
+/* MASTERCARD */
 function MastercardLogo({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 96 60" className={className} fill="none" aria-hidden="true">
@@ -183,15 +183,12 @@ function MastercardLogo({ className = "" }: { className?: string }) {
       <rect x="0.5" y="0.5" width="95" height="59" rx="8" fill="url(#mcCardBg)" stroke="#E3E8EF" />
       <circle cx="38" cy="30" r="13" fill="#EB001B" />
       <circle cx="58" cy="30" r="13" fill="#F79E1B" />
-      <path
-        d="M48 20 a13 13 0 0 1 0 20 a13 13 0 0 1 0 -20"
-        fill="#FF5F00"
-      />
+      <path d="M48 20 a13 13 0 0 1 0 20 a13 13 0 0 1 0 -20" fill="#FF5F00" />
     </svg>
   );
 }
 
-/** Logo PayPal — deux "P" superposés bleu foncé / bleu clair */
+/* PAYPAL */
 function PaypalLogo({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 96 60" className={className} fill="none" aria-hidden="true">
@@ -202,29 +199,96 @@ function PaypalLogo({ className = "" }: { className?: string }) {
         </linearGradient>
       </defs>
       <rect x="0.5" y="0.5" width="95" height="59" rx="8" fill="url(#ppCardBg)" stroke="#E3E8EF" />
-      {/* "P" bleu clair (derrière) */}
-      <path
-        d="M36 15 h13 c7 0 11 3.5 10 9.5 c-1 6.5 -6 10 -13 10 h-4.5 l-1.6 10 h-7.4 z"
-        fill="#009CDE"
-        opacity="0.9"
-      />
-      {/* "P" bleu foncé (devant) */}
-      <path
-        d="M42 12 h13 c7 0 11 3.5 10 9.5 c-1 6.5 -6 10 -13 10 h-4.5 l-1.6 10 h-7.4 z"
-        fill="#003087"
-      />
-      {/* "Pal" texte */}
-      <text
-        x="66"
-        y="40"
+      <path d="M36 15 h13 c7 0 11 3.5 10 9.5 c-1 6.5 -6 10 -13 10 h-4.5 l-1.6 10 h-7.4 z" fill="#009CDE" opacity="0.9" />
+      <path d="M42 12 h13 c7 0 11 3.5 10 9.5 c-1 6.5 -6 10 -13 10 h-4.5 l-1.6 10 h-7.4 z" fill="#003087" />
+      <text x="66" y="40"
         fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
-        fontWeight="900"
-        fontStyle="italic"
-        fontSize="13"
-        fill="#003087"
+        fontWeight="900" fontStyle="italic" fontSize="13" fill="#003087">Pal</text>
+    </svg>
+  );
+}
+
+/* VISA — compacte (historique) */
+function VisaIconCompact({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 44 44" className={className} fill="none" aria-hidden="true">
+      <rect width="44" height="44" rx="11" fill="#EEF2FF" />
+      <text x="22" y="28" textAnchor="middle"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+        fontWeight="900" fontStyle="italic" fontSize="11.5" letterSpacing="0.3"
+        fill="#1A1F71">VISA</text>
+    </svg>
+  );
+}
+
+/* MASTERCARD — compacte */
+function MastercardIconCompact({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 44 44" className={className} fill="none" aria-hidden="true">
+      <rect width="44" height="44" rx="11" fill="#FFF7ED" />
+      <circle cx="17" cy="22" r="7.5" fill="#EB001B" />
+      <circle cx="27" cy="22" r="7.5" fill="#F79E1B" />
+      <path d="M22 16.2 a7.5 7.5 0 0 1 0 11.6 a7.5 7.5 0 0 1 0 -11.6" fill="#FF5F00" />
+    </svg>
+  );
+}
+
+/* PAYPAL — compacte */
+function PaypalIconCompact({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 44 44" className={className} fill="none" aria-hidden="true">
+      <rect width="44" height="44" rx="11" fill="#F0F7FF" />
+      <path d="M17 13 h6.5 c3.5 0 5.5 1.8 5 5 c-0.5 3.2 -3 5 -6.5 5 h-2.2 l-0.8 5 h-3.7 z" fill="#009CDE" opacity="0.9" />
+      <path d="M20 11 h6.5 c3.5 0 5.5 1.8 5 5 c-0.5 3.2 -3 5 -6.5 5 h-2.2 l-0.8 5 h-3.7 z" fill="#003087" />
+    </svg>
+  );
+}
+
+/** Renvoie le bon logo compact pour un topup */
+function PaymentMethodIcon({ topup, className = "" }: { topup: Topup; className?: string }) {
+  if (topup.brand === "visa") return <VisaIconCompact className={className} />;
+  if (topup.brand === "mastercard") return <MastercardIconCompact className={className} />;
+  if (topup.brand === "paypal") return <PaypalIconCompact className={className} />;
+  if (topup.method === "card") {
+    /* Fallback : ancien topup carte sans brand → icône générique bleue */
+    return (
+      <div
+        className={`${className} rounded-[11px] flex items-center justify-center`}
+        style={{ background: BRAND.coolSoft }}
       >
-        Pal
-      </text>
+        <CreditCard className="w-5 h-5" style={{ color: BRAND.cool }} />
+      </div>
+    );
+  }
+  return <MobileMoneyIcon className={className} />;
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Chip SVG (puce EMV, pour la carte solde)                          */
+/* ────────────────────────────────────────────────────────────────── */
+
+function ChipSVG({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 42 32" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="chipGold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#FDE68A" />
+          <stop offset="0.5" stopColor="#FBBF24" />
+          <stop offset="1" stopColor="#B45309" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="42" height="32" rx="5" fill="url(#chipGold)" />
+      <path
+        d="M0 11 H42 M0 21 H42 M14 0 V32 M28 0 V32"
+        stroke="#78350F"
+        strokeWidth="0.7"
+        opacity="0.55"
+      />
+      <rect x="15" y="11" width="12" height="10" rx="2" fill="#FCD34D" opacity="0.55" />
+      <rect
+        x="0.5" y="0.5" width="41" height="31" rx="4.5"
+        stroke="#78350F" strokeOpacity="0.35" fill="none"
+      />
     </svg>
   );
 }
@@ -245,7 +309,7 @@ function getTimeSlot(): TimeSlot {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Arrière-plan : orbes orange + bleu + teal pour équilibrer         */
+/* Arrière-plan                                                       */
 /* ────────────────────────────────────────────────────────────────── */
 
 function AnimatedBackground() {
@@ -269,18 +333,12 @@ function AnimatedBackground() {
         animate={{ x: [0, 25, -15, 0], y: [0, -20, 20, 0] }}
         transition={{ duration: 32, repeat: Infinity, ease: "easeInOut", delay: 4 }}
       />
-      <motion.div
-        className="absolute top-2/3 left-2 w-[280px] h-[280px] rounded-full blur-3xl"
-        style={{ background: `radial-gradient(circle, #a855f71c, transparent 70%)` }}
-        animate={{ x: [0, 30, -20, 0], y: [0, -20, 20, 0] }}
-        transition={{ duration: 34, repeat: Infinity, ease: "easeInOut", delay: 6 }}
-      />
     </div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Compteur animé de solde                                            */
+/* Compteur animé                                                     */
 /* ────────────────────────────────────────────────────────────────── */
 
 function AnimatedNumber({ value, decimals = 2, duration = 900 }: { value: number; decimals?: number; duration?: number }) {
@@ -343,7 +401,13 @@ function Confetti() {
 /* Barre d'étapes                                                     */
 /* ────────────────────────────────────────────────────────────────── */
 
-function StepBar({ step, accent }: { step: "select" | "details" | "pending" | "success" | "failed"; accent: { main: string; dark: string; light: string; soft: string } }) {
+function StepBar({
+  step,
+  accent,
+}: {
+  step: "select" | "details" | "pending" | "success" | "failed";
+  accent: { main: string; light: string };
+}) {
   const steps = [
     { key: "select", label: "Montant" },
     { key: "details", label: "Coordonnées" },
@@ -388,7 +452,10 @@ function StepBar({ step, accent }: { step: "select" | "details" | "pending" | "s
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div className="relative flex-1 mx-1 sm:mx-2 h-[2px] rounded-full overflow-hidden" style={{ background: BRAND.border }}>
+              <div
+                className="relative flex-1 mx-1 sm:mx-2 h-[2px] rounded-full overflow-hidden"
+                style={{ background: BRAND.border }}
+              >
                 <motion.div
                   className="absolute inset-y-0 left-0 rounded-full"
                   style={{ background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }}
@@ -406,18 +473,16 @@ function StepBar({ step, accent }: { step: "select" | "details" | "pending" | "s
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Bouton de marque (Visa / MC / PayPal)                              */
+/* Bouton de marque (Visa / MC / PayPal)                             */
 /* ────────────────────────────────────────────────────────────────── */
 
 function PaymentBrandButton({
-  brand,
   selected,
   onSelect,
   logo,
   label,
   index,
 }: {
-  brand: "visa" | "mastercard" | "paypal";
   selected: boolean;
   onSelect: () => void;
   logo: React.ReactNode;
@@ -442,7 +507,6 @@ function PaymentBrandButton({
       aria-pressed={selected}
       aria-label={label}
     >
-      {/* halo pulsé quand sélectionné */}
       {selected && (
         <motion.span
           className="absolute inset-0 rounded-2xl pointer-events-none"
@@ -456,7 +520,6 @@ function PaymentBrandButton({
         {logo}
       </div>
 
-      {/* Badge check quand sélectionné */}
       <AnimatePresence>
         {selected && (
           <motion.span
@@ -471,7 +534,6 @@ function PaymentBrandButton({
         )}
       </AnimatePresence>
 
-      {/* Shimmer au survol */}
       <motion.span
         className="absolute inset-0 -translate-x-full pointer-events-none"
         style={{
@@ -880,30 +942,32 @@ function TopupHistoryItem({
   });
 
   const statusCfg = {
-    pending:   { label: "En attente", grad: "linear-gradient(135deg, #FEF3C7, #FDE68A)", border: "#FCD34D", text: "#92400E", dot: "#F59E0B", Icon: Clock },
-    completed: { label: "Crédité",    grad: "linear-gradient(135deg, #DCFCE7, #BBF7D0)", border: "#86EFAC", text: "#166534", dot: "#16A34A", Icon: CheckCircle2 },
-    failed:    { label: "Échoué",     grad: "linear-gradient(135deg, #FEE2E2, #FECACA)", border: "#FCA5A5", text: "#991B1B", dot: "#DC2626", Icon: XCircle },
+    pending:   { label: "En attente", grad: "linear-gradient(135deg, #FEF3C7, #FDE68A)", border: "#FCD34D", text: "#92400E", dot: "#F59E0B" },
+    completed: { label: "Crédité",    grad: "linear-gradient(135deg, #DCFCE7, #BBF7D0)", border: "#86EFAC", text: "#166534", dot: "#16A34A" },
+    failed:    { label: "Échoué",     grad: "linear-gradient(135deg, #FEE2E2, #FECACA)", border: "#FCA5A5", text: "#991B1B", dot: "#DC2626" },
   };
   const cfg = statusCfg[topup.status as keyof typeof statusCfg] ?? statusCfg.pending;
-  const StatusIcon = cfg.Icon;
 
   const amount = parseFloat(String(topup.amountEur));
   const localAmount = currency && currency !== "EUR" ? formatLocalAmount(amount, currency) : null;
 
+  /* Couleur de l'accent selon le moyen de paiement (orange / bleu uniquement) */
   const isCard = topup.method === "card";
-  const methodLabel = isCard ? "Carte / PayPal" : "Mobile Money";
-  const providerLabel = topup.provider === "nelsiuspay" ? "NelsiusPay" : "AccountPe";
+  const accentColor = isCard ? BRAND.cool : BRAND.primary;
+  const accentDark = isCard ? BRAND.coolDark : BRAND.primaryDark;
+
+  const methodLabel =
+    topup.brand === "visa" ? "Visa"
+    : topup.brand === "mastercard" ? "Mastercard"
+    : topup.brand === "paypal" ? "PayPal"
+    : isCard ? "Carte bancaire"
+    : "Mobile Money";
 
   if (view === "grid") {
     return (
       <div className="flex flex-col gap-3 h-full">
         <div className="flex items-start justify-between gap-3">
-          <div
-            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-            style={{ background: cfg.grad, border: `1px solid ${cfg.border}` }}
-          >
-            <StatusIcon className="w-5 h-5" style={{ color: cfg.text }} />
-          </div>
+          <PaymentMethodIcon topup={topup} className="w-11 h-11 shrink-0" />
           <span
             className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap"
             style={{ background: cfg.grad, border: `1px solid ${cfg.border}`, color: cfg.text }}
@@ -918,17 +982,14 @@ function TopupHistoryItem({
             +{amount.toFixed(2)} €
           </div>
           {localAmount && (
-            <div className="text-xs font-semibold mt-0.5" style={{ color: BRAND.primaryDark }}>
+            <div className="text-xs font-semibold mt-0.5" style={{ color: accentDark }}>
               ≈ {localAmount}
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          {isCard ? <CreditCard className="w-3 h-3" style={{ color: BRAND.cool }} /> : <Smartphone className="w-3 h-3" style={{ color: BRAND.primary }} />}
-          <span>{methodLabel}</span>
-          <span className="opacity-40">·</span>
-          <span className="opacity-70">{providerLabel}</span>
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: accentColor }}>
+          {methodLabel}
         </div>
 
         <div className="text-[11px] text-muted-foreground mt-auto">
@@ -940,11 +1001,7 @@ function TopupHistoryItem({
             onClick={handleVerify}
             disabled={checking}
             className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl text-white disabled:opacity-60 transition-all active:scale-95"
-            style={{
-              background: isCard
-                ? `linear-gradient(135deg, ${BRAND.cool}, ${BRAND.coolDark})`
-                : `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-            }}
+            style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentDark})` }}
           >
             {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             {checking ? "Vérification…" : "Vérifier"}
@@ -969,34 +1026,22 @@ function TopupHistoryItem({
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div
-            className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-            style={{ background: cfg.grad, border: `1px solid ${cfg.border}` }}
-          >
-            <StatusIcon className="w-5 h-5" style={{ color: cfg.text }} />
-          </div>
+          <PaymentMethodIcon topup={topup} className="w-11 h-11 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className="font-bold text-foreground text-base">
                 +{amount.toFixed(2)} €
               </span>
               {localAmount && (
-                <span className="text-xs font-semibold" style={{ color: BRAND.primaryDark }}>
+                <span className="text-xs font-semibold" style={{ color: accentDark }}>
                   ≈ {localAmount}
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-              <span>{date} · {time}</span>
+              <span className="font-semibold" style={{ color: accentColor }}>{methodLabel}</span>
               <span className="opacity-40">·</span>
-              <span className="inline-flex items-center gap-1">
-                {isCard
-                  ? <CreditCard className="w-3 h-3" style={{ color: BRAND.cool }} />
-                  : <Smartphone className="w-3 h-3" style={{ color: BRAND.primary }} />}
-                {methodLabel}
-              </span>
-              <span className="opacity-40 hidden sm:inline">·</span>
-              <span className="hidden sm:inline opacity-70">{providerLabel}</span>
+              <span>{date} · {time}</span>
             </div>
           </div>
         </div>
@@ -1014,11 +1059,7 @@ function TopupHistoryItem({
               onClick={handleVerify}
               disabled={checking}
               className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-white disabled:opacity-60 transition-all active:scale-95 whitespace-nowrap"
-              style={{
-                background: isCard
-                  ? `linear-gradient(135deg, ${BRAND.cool}, ${BRAND.coolDark})`
-                  : `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-              }}
+              style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentDark})` }}
               title="Vérifier si ce paiement a été confirmé"
             >
               {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -1058,7 +1099,7 @@ function TopupHistoryItem({
 export default function WalletPage() {
   useMeta({
     title: "Portefeuille — Rechargez votre solde Texerra",
-    description: "Rechargez votre solde Texerra par Mobile Money (Orange, MTN, Wave, Airtel), carte Visa, Mastercard ou PayPal. Paiement rapide et sécurisé depuis toute l'Afrique.",
+    description: "Rechargez votre solde Texerra par Mobile Money, Visa, Mastercard ou PayPal. Paiement rapide et sécurisé depuis toute l'Afrique.",
     canonical: "https://texerra.site/wallet",
     noindex: true,
   });
@@ -1100,6 +1141,7 @@ export default function WalletPage() {
       mobile: string;
       countryIso: string;
       paymentMethod: "mobile_money" | "card";
+      brand?: CardBrand;
     }) => {
       const token = await auth.currentUser?.getIdToken().catch(() => null);
       const res = await fetch("/api/topups", {
@@ -1127,9 +1169,15 @@ export default function WalletPage() {
   const [forceCheckMsg, setForceCheckMsg] = useState<{ type: "info" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", mobile: "" });
 
-  /* ── Méthode UI (migre anciennement "card" → "visa") ── */
+  /* ── Clé utilisateur (pour préférences persistantes) ── */
+  const userKey = user?.uid || user?.email || me?.email || "guest";
+  const methodStorageKey = `${PAYMENT_METHOD_STORAGE_PREFIX}${userKey}`;
+
+  /* ── Méthode UI, persistée PAR utilisateur ── */
   const [paymentMethod, setPaymentMethod] = useState<UiPaymentMethod>(() => {
-    const saved = localStorage.getItem(PAYMENT_METHOD_STORAGE_KEY);
+    // On lit une clé globale d'abord (migration), puis par utilisateur
+    const globalSaved = localStorage.getItem("texerra:wallet:payment-method");
+    const saved = globalSaved;
     if (saved === "mobile_money" || saved === "visa" || saved === "mastercard" || saved === "paypal") {
       return saved;
     }
@@ -1137,13 +1185,46 @@ export default function WalletPage() {
     return "mobile_money";
   });
 
+  /* Quand userKey devient dispo, on charge la préférence par utilisateur */
+  const loadedMethodForRef = useRef<string | null>(null);
   useEffect(() => {
-    localStorage.setItem(PAYMENT_METHOD_STORAGE_KEY, paymentMethod);
-  }, [paymentMethod]);
+    if (!userKey || userKey === "guest") return;
+    if (loadedMethodForRef.current === userKey) return;
+    try {
+      const saved = localStorage.getItem(methodStorageKey);
+      if (saved === "mobile_money" || saved === "visa" || saved === "mastercard" || saved === "paypal") {
+        setPaymentMethod(saved);
+      } else if (saved === "card") {
+        setPaymentMethod("visa");
+      }
+    } catch { /* ignore */ }
+    loadedMethodForRef.current = userKey;
+  }, [userKey, methodStorageKey]);
 
-  /* Accent dynamique selon la méthode sélectionnée */
+  /* On persiste à chaque changement */
+  useEffect(() => {
+    if (!userKey || userKey === "guest") {
+      // Fallback global pour visiteurs
+      try { localStorage.setItem("texerra:wallet:payment-method", paymentMethod); } catch {}
+      return;
+    }
+    try { localStorage.setItem(methodStorageKey, paymentMethod); } catch {}
+  }, [paymentMethod, userKey, methodStorageKey]);
+
   const accent = getAccent(paymentMethod);
   const isCardMethod = paymentMethod !== "mobile_money";
+
+  /* ── Dernier moyen utilisé (depuis l'historique) ── */
+  const lastUsedMethod = useMemo<UiPaymentMethod | null>(() => {
+    const latest = (topups ?? [])[0];
+    if (!latest) return null;
+    if (latest.brand === "visa" || latest.brand === "mastercard" || latest.brand === "paypal") {
+      return latest.brand;
+    }
+    if (latest.method === "card") return "visa";
+    if (latest.method === "mobile_money") return "mobile_money";
+    return null;
+  }, [topups]);
 
   /* Vue liste / grille */
   const [view, setView] = useState<"list" | "grid">(() => {
@@ -1156,7 +1237,6 @@ export default function WalletPage() {
   }, [view]);
 
   /* ── Pays de paiement ── */
-  const userKey = user?.uid || user?.email || me?.email || "guest";
   const countryStorageKey = `${COUNTRY_STORAGE_PREFIX}${userKey}`;
   const [countryIso, setCountryIso] = useState<string>("");
   const initializedForRef = useRef<string | null>(null);
@@ -1229,7 +1309,6 @@ export default function WalletPage() {
   const localCurrency = payCurrency ? getCurrency(payCurrency) : null;
   const showConversion = !!(localCurrency && localCurrency.code !== "EUR" && amount && amount > 0);
 
-  /* Pour carte/PayPal → conversion XAF via taux Texerra */
   const cardConversionXaf = amount && amount > 0 ? Math.round(amount * TEXERRA_FX.EUR_TO_XAF) : 0;
 
   const { data: topupStatus } = useQuery<{ status: string }>({
@@ -1266,6 +1345,10 @@ export default function WalletPage() {
     if (!amount || amount < MIN_AMOUNT || !form.name || !form.email || !form.mobile) return;
     if (!isCardMethod && !countryIso) return;
 
+    const brand: CardBrand | undefined = isCardMethod
+      ? (paymentMethod as CardBrand)
+      : undefined;
+
     initiateTopupMutation.mutate(
       {
         amountEur: amount,
@@ -1273,8 +1356,8 @@ export default function WalletPage() {
         email: form.email,
         mobile: form.mobile,
         countryIso: !isCardMethod ? countryIso : "",
-        /* ⬇︎ Mapping UI → backend : Visa / MC / PayPal → "card" */
         paymentMethod: isCardMethod ? "card" : "mobile_money",
+        brand,
       },
       {
         onSuccess: (data) => {
@@ -1359,6 +1442,7 @@ export default function WalletPage() {
     .reduce((sum, t) => sum + parseFloat(String(t.amountEur)), 0);
 
   const slot = getTimeSlot();
+  const holderName = (me?.name || user?.displayName || "Utilisateur").toUpperCase();
 
   return (
     <div
@@ -1399,65 +1483,107 @@ export default function WalletPage() {
           <MoneyIllustration slot={slot} />
         </motion.div>
 
-        {/* Carte solde — gradient orange + bleu pour équilibrer */}
+        {/* ═══════════════════════════════════════════════════════════════
+         * CARTE SOLDE — Design "Visa/Mastercard" avec puce EMV
+         * Solde au centre, titulaire en bas comme sur une vraie carte
+         * ═══════════════════════════════════════════════════════════════ */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          whileHover={{ y: -2 }}
-          className="relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-8 shadow-sm group"
+          whileHover={{ y: -3, rotateX: 0.5 }}
+          className="relative overflow-hidden rounded-3xl mb-8 shadow-lg group"
           style={{
-            background: `linear-gradient(135deg, ${BRAND.primarySoft} 0%, #ffffff 45%, ${BRAND.coolSoft} 100%)`,
-            border: `1px solid ${BRAND.primary}1f`
+            background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.primaryDeep} 100%)`,
+            aspectRatio: "1.75 / 1",
+            maxHeight: 260,
           }}
         >
+          {/* Cercles décoratifs (comme sur les cartes premium) */}
           <div
-            className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-60 group-hover:opacity-90 transition-opacity"
-            style={{ background: `${BRAND.cool}22` }}
+            className="absolute -top-24 -right-24 w-72 h-72 rounded-full pointer-events-none"
+            style={{ background: "rgba(255,255,255,0.08)" }}
           />
           <div
-            className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full blur-3xl pointer-events-none opacity-50 group-hover:opacity-80 transition-opacity"
-            style={{ background: `${BRAND.primary}1c` }}
+            className="absolute -bottom-32 -left-24 w-80 h-80 rounded-full pointer-events-none"
+            style={{ background: "rgba(255,255,255,0.06)" }}
+          />
+          <div
+            className="absolute top-1/3 right-1/4 w-40 h-40 rounded-full pointer-events-none"
+            style={{ background: "rgba(255,255,255,0.05)" }}
           />
 
-          <div className="relative flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
-                <motion.div
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm relative"
-                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})`, color: "#ffffff" }}
-                  animate={{ boxShadow: [
-                    `0 0 0 0px ${BRAND.primary}55`,
-                    `0 0 0 10px ${BRAND.primary}00`,
-                    `0 0 0 0px ${BRAND.primary}00`,
-                  ] }}
-                  transition={{ duration: 2.6, repeat: Infinity, ease: "easeOut" }}
+          {/* Reflet animé au survol */}
+          <motion.div
+            className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{
+              background: "linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.14) 50%, transparent 60%)",
+            }}
+            initial={{ x: "-100%" }}
+            whileHover={{ x: "100%" }}
+            transition={{ duration: 1.1, ease: "easeOut" }}
+          />
+
+          <div className="relative h-full flex flex-col p-6 sm:p-7">
+            {/* Rangée du haut : wordmark + puce */}
+            <div className="flex items-start justify-between">
+              <div>
+                <div
+                  className="text-white font-black text-base tracking-[0.28em] leading-none"
+                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}
                 >
-                  <Wallet className="w-5 h-5" />
-                </motion.div>
-                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  Solde disponible
-                </span>
+                  TEXERRA
+                </div>
+                <div className="text-white/60 text-[10px] font-semibold tracking-widest uppercase mt-1">
+                  Portefeuille
+                </div>
               </div>
+              <ChipSVG className="w-10 h-8 drop-shadow-md" />
+            </div>
 
+            {/* Solde au centre */}
+            <div className="flex-1 flex flex-col justify-center py-3">
+              <div className="text-white/60 text-[10px] font-semibold tracking-widest uppercase mb-1.5">
+                Solde disponible
+              </div>
               {loadingMe ? (
-                <div className="h-14 w-40 bg-secondary animate-pulse rounded-xl" />
+                <div className="h-12 w-40 bg-white/10 rounded-lg animate-pulse" />
               ) : (
-                <>
-                  <div className="text-4xl sm:text-5xl font-black text-foreground tracking-tight tabular-nums">
-                    <AnimatedNumber value={me?.balance ?? 0} /> <span className="text-2xl sm:text-3xl">€</span>
-                  </div>
-                  {balanceLocal && (
-                    <div className="text-sm font-bold mt-1.5" style={{ color: BRAND.primaryDark }}>
-                      ≈ {balanceLocal}
-                    </div>
-                  )}
-                </>
+                <motion.div
+                  className="text-white text-4xl sm:text-5xl font-black tabular-nums leading-none"
+                  style={{ textShadow: "0 2px 8px rgba(0,0,0,0.18)" }}
+                >
+                  <AnimatedNumber value={me?.balance ?? 0} />
+                  <span className="text-2xl sm:text-3xl ml-1.5 font-bold">€</span>
+                </motion.div>
               )}
+              {balanceLocal && (
+                <div className="text-white/75 text-sm font-semibold mt-2">
+                  ≈ {balanceLocal}
+                </div>
+              )}
+            </div>
 
-              <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
-                <Sparkles className="w-3.5 h-3.5" style={{ color: BRAND.primary }} />
-                <span>Solde permanent — n'expire jamais</span>
+            {/* Rangée du bas : titulaire + devise */}
+            <div className="flex items-end justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-white/55 text-[9px] font-bold tracking-widest uppercase mb-1">
+                  Titulaire
+                </div>
+                <div
+                  className="text-white font-bold text-sm sm:text-base tracking-wider uppercase truncate max-w-[200px]"
+                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}
+                >
+                  {holderName}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-white/55 text-[9px] font-bold tracking-widest uppercase mb-1">
+                  Devise
+                </div>
+                <div className="text-white font-bold text-sm sm:text-base tracking-wider">
+                  EUR
+                </div>
               </div>
             </div>
           </div>
@@ -1468,7 +1594,7 @@ export default function WalletPage() {
 
         <div className="relative">
           <AnimatePresence mode="wait">
-            {/* ── ÉTAPE : sélection du montant ── */}
+            {/* ── ÉTAPE : sélection ── */}
             {step === "select" && (
               <motion.div
                 key="step-select"
@@ -1479,7 +1605,6 @@ export default function WalletPage() {
                 className="relative overflow-hidden rounded-3xl bg-white p-6 sm:p-8 mb-8 shadow-sm"
                 style={{ border: `1px solid ${BRAND.border}` }}
               >
-                {/* Liseré supérieur dynamique */}
                 <motion.div
                   key={`top-${paymentMethod}`}
                   initial={{ opacity: 0 }}
@@ -1501,16 +1626,42 @@ export default function WalletPage() {
                   </div>
                 </div>
 
-                {/* ═════════════════════════════════════════════════
-                 * CHOIX DU MOYEN DE PAIEMENT
-                 * ═════════════════════════════════════════════════ */}
+                {/* Hint "dernier moyen utilisé" */}
+                <AnimatePresence>
+                  {lastUsedMethod && lastUsedMethod !== paymentMethod && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: "auto", marginBottom: 16 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod(lastUsedMethod)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs transition-all hover:shadow-sm"
+                        style={{ background: BRAND.bg, border: `1px dashed ${BRAND.border}` }}
+                      >
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <Sparkles className="w-3.5 h-3.5" style={{ color: BRAND.primary }} />
+                          Dernier moyen utilisé :{" "}
+                          <strong className="text-foreground">{getMethodLabel(lastUsedMethod)}</strong>
+                        </span>
+                        <span className="flex items-center gap-1 font-bold" style={{ color: BRAND.primary }}>
+                          Utiliser <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* ═══════ CHOIX DU MOYEN DE PAIEMENT ═══════ */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-semibold text-foreground">
-                      Moyen de paiement
-                    </label>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: BRAND.tealSoft, color: BRAND.teal }}>
+                    <label className="text-sm font-semibold text-foreground">Moyen de paiement</label>
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: BRAND.tealSoft, color: BRAND.teal }}
+                    >
                       <Lock className="w-3 h-3" /> 100 % sécurisé
                     </span>
                   </div>
@@ -1521,13 +1672,11 @@ export default function WalletPage() {
                     onClick={() => setPaymentMethod("mobile_money")}
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
                     className="relative w-full p-4 rounded-2xl text-left overflow-hidden transition-colors mb-4"
                     style={
                       paymentMethod === "mobile_money"
                         ? {
-                            background: `linear-gradient(135deg, ${BRAND.primary}0f, #ffffff 70%)`,
+                            background: `linear-gradient(135deg, ${BRAND.primarySoft}, #ffffff 70%)`,
                             border: `2px solid ${BRAND.primary}`,
                             boxShadow: `0 10px 28px ${BRAND.primary}26`,
                           }
@@ -1576,9 +1725,7 @@ export default function WalletPage() {
                       <div className="w-full border-t border-dashed" style={{ borderColor: BRAND.border }} />
                     </div>
                     <div className="relative flex justify-center">
-                      <span
-                        className="px-3 text-[11px] text-muted-foreground font-semibold uppercase tracking-wider bg-white"
-                      >
+                      <span className="px-3 text-[11px] text-muted-foreground font-semibold uppercase tracking-wider bg-white">
                         ou payez par
                       </span>
                     </div>
@@ -1587,7 +1734,6 @@ export default function WalletPage() {
                   {/* Visa / Mastercard / PayPal */}
                   <div className="grid grid-cols-3 gap-3">
                     <PaymentBrandButton
-                      brand="visa"
                       selected={paymentMethod === "visa"}
                       onSelect={() => setPaymentMethod("visa")}
                       logo={<VisaLogo className="w-full h-auto max-h-12" />}
@@ -1595,7 +1741,6 @@ export default function WalletPage() {
                       index={0}
                     />
                     <PaymentBrandButton
-                      brand="mastercard"
                       selected={paymentMethod === "mastercard"}
                       onSelect={() => setPaymentMethod("mastercard")}
                       logo={<MastercardLogo className="w-full h-auto max-h-12" />}
@@ -1603,7 +1748,6 @@ export default function WalletPage() {
                       index={1}
                     />
                     <PaymentBrandButton
-                      brand="paypal"
                       selected={paymentMethod === "paypal"}
                       onSelect={() => setPaymentMethod("paypal")}
                       logo={<PaypalLogo className="w-full h-auto max-h-12" />}
@@ -1612,7 +1756,7 @@ export default function WalletPage() {
                     />
                   </div>
 
-                  {/* Badge sécurité pour les cartes */}
+                  {/* Badge sécurité cartes */}
                   <AnimatePresence>
                     {isCardMethod && (
                       <motion.div
@@ -1628,14 +1772,14 @@ export default function WalletPage() {
                   </AnimatePresence>
                 </div>
 
-                {/* Avertissement méthode */}
+                {/* Avertissement */}
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={`tip-${paymentMethod}`}
                   className="mb-6 flex items-start gap-3 rounded-2xl px-4 py-3"
                   style={{
-                    background: `linear-gradient(135deg, ${accent.soft}, #ffffff)`,
+                    background: accent.soft,
                     border: `1px solid ${accent.main}33`
                   }}
                 >
@@ -1653,12 +1797,11 @@ export default function WalletPage() {
                     <strong>l'historique des recharges ci-dessous</strong>, trouvez votre paiement et cliquez sur{" "}
                     <span className="inline-flex items-center gap-1 font-bold px-1.5 py-0.5 rounded" style={{ background: `${accent.main}22` }}>
                       <RefreshCw className="w-3 h-3" /> Vérifier
-                    </span>{" "}
-                    pour créditer votre solde manuellement.
+                    </span>.
                   </div>
                 </motion.div>
 
-                {/* Sélecteur de pays — uniquement Mobile Money */}
+                {/* Sélecteur de pays — Mobile Money uniquement */}
                 <AnimatePresence initial={false}>
                   {!isCardMethod && (
                     <motion.div
@@ -1717,7 +1860,7 @@ export default function WalletPage() {
                         style={
                           isSelected
                             ? {
-                                background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
+                                background: `linear-gradient(135deg, ${accent.main}, ${accent.deep})`,
                                 color: "#ffffff",
                                 boxShadow: `0 8px 24px ${accent.main}44`,
                                 border: `1px solid ${accent.dark}`
@@ -1778,7 +1921,7 @@ export default function WalletPage() {
                   {customAmount && parseFloat(customAmount) > 0 && parseFloat(customAmount) < MIN_AMOUNT && (
                     <div className="mt-2 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      Le montant minimum de recharge est de {MIN_AMOUNT.toFixed(2)} €
+                      Minimum de recharge : {MIN_AMOUNT.toFixed(2)} €
                     </div>
                   )}
 
@@ -1795,7 +1938,7 @@ export default function WalletPage() {
                   )}
                 </div>
 
-                {/* Récapitulatif conversion */}
+                {/* Récap conversion */}
                 {amount && amount >= MIN_AMOUNT && (
                   <motion.div
                     key={`conv-${paymentMethod}`}
@@ -1835,16 +1978,14 @@ export default function WalletPage() {
                   whileTap={{ scale: 0.98 }}
                   className="relative w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden group"
                   style={{
-                    background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
+                    background: `linear-gradient(135deg, ${accent.main}, ${accent.deep})`,
                     boxShadow: `0 8px 24px ${accent.main}44`
                   }}
                 >
                   {amount && amount >= MIN_AMOUNT && (
                     <motion.span
                       className="absolute inset-0 -translate-x-full"
-                      style={{
-                        background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)",
-                      }}
+                      style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)" }}
                       animate={{ translateX: ["-100%", "200%"] }}
                       transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
                     />
@@ -1873,7 +2014,7 @@ export default function WalletPage() {
               </motion.div>
             )}
 
-            {/* ── ÉTAPE : formulaire ── */}
+            {/* ── ÉTAPE : coordonnées ── */}
             {step === "details" && (
               <motion.div
                 key="step-details"
@@ -1900,10 +2041,8 @@ export default function WalletPage() {
                     <h2 className="text-lg font-bold text-foreground">Vos coordonnées</h2>
                     <p className="text-xs text-muted-foreground truncate">
                       {isCardMethod
-                        ? paymentMethod === "visa" ? "Paiement par carte Visa"
-                          : paymentMethod === "mastercard" ? "Paiement par Mastercard"
-                          : "Paiement par PayPal"
-                        : selectedCountry ? `Paiement depuis ${selectedCountry.name}` : "Pour votre paiement Mobile Money"}
+                        ? `Paiement par ${getMethodLabel(paymentMethod)}`
+                        : selectedCountry ? `Paiement depuis ${selectedCountry.name}` : "Pour votre paiement"}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
@@ -1974,7 +2113,7 @@ export default function WalletPage() {
                   >
                     <Shield className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="block mb-0.5">Vous allez être redirigé vers notre partenaire sécurisé.</strong>
+                      <strong className="block mb-0.5">Redirection vers notre partenaire sécurisé.</strong>
                       Le paiement sera complété sur une page protégée. Texerra ne stocke jamais vos coordonnées bancaires.
                     </div>
                   </div>
@@ -1991,7 +2130,7 @@ export default function WalletPage() {
                   whileTap={{ scale: 0.98 }}
                   className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed relative overflow-hidden"
                   style={{
-                    background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
+                    background: `linear-gradient(135deg, ${accent.main}, ${accent.deep})`,
                     boxShadow: `0 8px 24px ${accent.main}33`
                   }}
                 >
@@ -2000,7 +2139,7 @@ export default function WalletPage() {
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      {isCardMethod ? "Payer par carte" : "Payer"} {amount?.toFixed(2)} €
+                      {isCardMethod ? `Payer par ${getMethodLabel(paymentMethod)}` : "Payer"} {amount?.toFixed(2)} €
                       <ArrowRight className="w-5 h-5" />
                     </>
                   )}
@@ -2044,7 +2183,7 @@ export default function WalletPage() {
                   />
                   <div
                     className="absolute inset-4 rounded-full flex items-center justify-center shadow-md"
-                    style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})` }}
+                    style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.deep})` }}
                   >
                     <Clock className="w-7 h-7 text-white animate-pulse" />
                   </div>
@@ -2059,9 +2198,14 @@ export default function WalletPage() {
                 </p>
 
                 {topupStatus && topupStatus.status !== "pending" && (
-                  <div className="rounded-2xl px-4 py-3 text-sm font-medium mb-6"
-                    style={{ background: BRAND.bg, border: `1px solid ${BRAND.border}` }}>
-                    Statut : <span className={topupStatus.status === "completed" ? "text-green-600" : ""} style={topupStatus.status !== "completed" ? { color: accent.main } : undefined}>{topupStatus.status}</span>
+                  <div
+                    className="rounded-2xl px-4 py-3 text-sm font-medium mb-6"
+                    style={{ background: BRAND.bg, border: `1px solid ${BRAND.border}` }}
+                  >
+                    Statut :{" "}
+                    <span className={topupStatus.status === "completed" ? "text-green-600" : ""} style={topupStatus.status !== "completed" ? { color: accent.main } : undefined}>
+                      {topupStatus.status}
+                    </span>
                   </div>
                 )}
 
@@ -2088,12 +2232,12 @@ export default function WalletPage() {
                   disabled={forceChecking}
                   className="w-full flex items-center justify-center gap-2 py-3.5 text-white font-bold rounded-2xl transition-all disabled:opacity-60 text-sm mb-3 active:scale-[0.99]"
                   style={{
-                    background: `linear-gradient(135deg, ${accent.main}, ${accent.dark})`,
+                    background: `linear-gradient(135deg, ${accent.main}, ${accent.deep})`,
                     boxShadow: `0 6px 20px ${accent.main}33`
                   }}
                 >
                   {forceChecking ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Vérification en cours…</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Vérification…</>
                   ) : (
                     <><RefreshCw className="w-4 h-4" /> J'ai payé — vérifier maintenant</>
                   )}
@@ -2105,7 +2249,7 @@ export default function WalletPage() {
                       href={checkoutUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-center gap-2 flex-1 py-3 bg-white rounded-2xl text-sm font-semibold hover:border-primary/40 transition-colors"
+                      className="flex items-center justify-center gap-2 flex-1 py-3 bg-white rounded-2xl text-sm font-semibold hover:shadow-sm transition-colors"
                       style={{ border: `1px solid ${BRAND.border}` }}
                     >
                       <ExternalLink className="w-4 h-4" /> Rouvrir le paiement
@@ -2161,7 +2305,7 @@ export default function WalletPage() {
                   <a
                     href="/order"
                     className="flex items-center justify-center gap-2 px-6 py-3 text-white font-semibold rounded-2xl transition-all active:scale-95 text-sm"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` }}
+                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDeep})` }}
                   >
                     Commander un numéro <ArrowRight className="w-4 h-4" />
                   </a>
@@ -2198,7 +2342,7 @@ export default function WalletPage() {
                 <button
                   onClick={handleReset}
                   className="px-6 py-3 text-white font-semibold rounded-2xl transition-all active:scale-95 text-sm"
-                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` }}
+                  style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDeep})` }}
                 >
                   Réessayer
                 </button>
@@ -2216,17 +2360,19 @@ export default function WalletPage() {
             className="relative overflow-hidden rounded-3xl bg-white shadow-sm"
             style={{ border: `1px solid ${BRAND.border}` }}
           >
+            {/* Liseré : uniquement orange (pas de mélange) */}
             <div
               className="absolute top-0 left-0 h-1 w-full"
-              style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.cool})` }}
+              style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
             />
 
             <div className="p-5 sm:p-6 border-b" style={{ borderColor: BRAND.border }}>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
+                  {/* Icône historique : orange uniquement */}
                   <div
                     className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-sm"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})`, color: "#ffffff" }}
+                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, color: "#ffffff" }}
                   >
                     <Receipt className="w-5 h-5" />
                   </div>
@@ -2238,13 +2384,14 @@ export default function WalletPage() {
                   </div>
                 </div>
 
+                {/* Toggle : orange uniquement (pas de mélange) */}
                 <div className="flex items-center gap-1 bg-white rounded-xl p-0.5" style={{ border: `1px solid ${BRAND.border}` }}>
                   <button
                     onClick={() => setView("list")}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       view === "list" ? "text-white shadow-sm" : "text-muted-foreground hover:bg-secondary/60"
                     }`}
-                    style={view === "list" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` } : undefined}
+                    style={view === "list" ? { background: BRAND.primary } : undefined}
                     title="Vue liste"
                   >
                     <List className="w-3.5 h-3.5" />
@@ -2255,7 +2402,7 @@ export default function WalletPage() {
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       view === "grid" ? "text-white shadow-sm" : "text-muted-foreground hover:bg-secondary/60"
                     }`}
-                    style={view === "grid" ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.cool})` } : undefined}
+                    style={view === "grid" ? { background: BRAND.primary } : undefined}
                     title="Vue grille"
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
@@ -2341,8 +2488,10 @@ export default function WalletPage() {
               )}
 
               {historyTopups.some(t => t.status === "pending") && (
-                <div className="mt-6 flex items-start gap-2 text-xs text-muted-foreground rounded-2xl px-4 py-3"
-                  style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
+                <div
+                  className="mt-6 flex items-start gap-2 text-xs text-muted-foreground rounded-2xl px-4 py-3"
+                  style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
+                >
                   <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
                   <span>
                     Les recharges <span className="font-semibold text-amber-700">En attente</span> peuvent être vérifiées manuellement.
