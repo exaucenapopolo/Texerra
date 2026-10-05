@@ -4,12 +4,12 @@ import { auth } from "../lib/firebase";
 import {
   Wallet, Plus, ArrowRight, ArrowLeft, CheckCircle2, Clock, Loader2, ExternalLink,
   User, Mail, Phone, RefreshCw, XCircle, History, AlertCircle, Sparkles, Receipt,
-  TrendingUp, Calendar, LayoutGrid, List, Coins
+  TrendingUp, Calendar, LayoutGrid, List, Coins, CreditCard, Smartphone
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth-context";
-import { getCurrency, formatLocalAmount } from "../lib/currencies";
+import { getCurrency, formatLocalAmount, TEXERRA_FX } from "../lib/currencies";
 
 /* ────────────────────────────────────────────────────────────────── */
 /* Constantes                                                         */
@@ -19,6 +19,9 @@ const MIN_AMOUNT = 1.65;
 const PRESET_AMOUNTS = [2, 5, 10, 20];
 const VIEW_STORAGE_KEY = "texerra:wallet:view";
 const COUNTRY_STORAGE_PREFIX = "texerra:wallet:country:";
+const PAYMENT_METHOD_STORAGE_KEY = "texerra:wallet:payment-method";
+
+type PaymentMethod = "mobile_money" | "card";
 
 const ALLOWED_COUNTRIES: { code: string; name: string; currency: string }[] = [
   { code: "CM", name: "Cameroun", currency: "XAF" },
@@ -68,6 +71,8 @@ export interface Topup {
   amountEur: number | string;
   status: string;
   createdAt: string;
+  provider?: string;
+  method?: string;
 }
 
 interface UserProfile {
@@ -139,7 +144,6 @@ function AnimatedNumber({ value, decimals = 2, duration = 900 }: { value: number
       if (startRef.current === null) startRef.current = t;
       const elapsed = t - startRef.current;
       const progress = Math.min(elapsed / duration, 1);
-      // easeOutExpo
       const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
       const next = fromRef.current + (value - fromRef.current) * eased;
       setDisplay(next);
@@ -155,7 +159,7 @@ function AnimatedNumber({ value, decimals = 2, duration = 900 }: { value: number
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Confettis (écran de succès)                                        */
+/* Confettis                                                          */
 /* ────────────────────────────────────────────────────────────────── */
 
 function Confetti() {
@@ -174,7 +178,7 @@ function Confetti() {
             className="absolute top-0 block w-2 h-3 rounded-sm"
             style={{ left: `${left}%`, background: color }}
             initial={{ y: -20, opacity: 0, rotate: 0 }}
-            animate={{ y: [ -20, 260 ], opacity: [0, 1, 1, 0], rotate: rotate + 360 }}
+            animate={{ y: [-20, 260], opacity: [0, 1, 1, 0], rotate: rotate + 360 }}
             transition={{ duration: 2.4, delay, ease: "easeOut", repeat: Infinity, repeatDelay: 1.2 }}
           />
         );
@@ -200,7 +204,7 @@ function StepBar({ step }: { step: "select" | "details" | "pending" | "success" 
     step === "details" ? 1 :
     step === "pending" ? 2 :
     step === "success" ? 3 :
-    1; // failed -> revient sur coordonnées
+    1;
 
   return (
     <div className="flex items-center gap-1 sm:gap-2 mb-6 px-1">
@@ -250,7 +254,7 @@ function StepBar({ step }: { step: "select" | "details" | "pending" | "success" 
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* SVG 1 — Matin : Chat + tirelire (pièce qui tombe)                  */
+/* Illustrations SVG (inchangées)                                    */
 /* ────────────────────────────────────────────────────────────────── */
 
 function PiggyBankSVG() {
@@ -291,13 +295,9 @@ function PiggyBankSVG() {
           .pgBlink { animation: pgBlink 4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
           .pgGlow { animation: pgGlow 3s ease-in-out infinite; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#pgSky)" />
-
         <circle cx="98" cy="22" r="10" fill="#fef9c3" opacity="0.85" className="pgGlow" />
-
         <ellipse cx="60" cy="102" rx="46" ry="6" fill="#78350f" opacity="0.2" />
-
         <g>
           <ellipse cx="84" cy="88" rx="17" ry="13" fill="url(#pgPig)" />
           <circle cx="80" cy="84" r="1.3" fill="#1f2937" />
@@ -310,19 +310,16 @@ function PiggyBankSVG() {
           <rect x="74" y="98" width="4" height="5" rx="1" fill="#db2777" />
           <rect x="90" y="98" width="4" height="5" rx="1" fill="#db2777" />
         </g>
-
         <g className="pgCoin">
           <circle cx="83" cy="60" r="6" fill="url(#pgCoin)" stroke="#a16207" strokeWidth="0.6" />
           <text x="83" y="63" textAnchor="middle" fontSize="7" fontWeight="900" fill="#78350f" fontFamily="system-ui">€</text>
         </g>
-
         <g>
           <path className="pgTail" d="M32 92 Q22 88 22 80" stroke="url(#pgCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M28 94 Q26 78 40 72 Q54 70 56 86 Q58 94 56 98 L28 98 Z" fill="url(#pgCat)" />
           <ellipse cx="52" cy="96" rx="7" ry="3.2" fill="url(#pgCat)" />
           <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#pgCat)" />
           <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#pgCat)" />
-
           <ellipse cx="36" cy="58" rx="14" ry="13" fill="url(#pgCat)" />
           <path d="M24 48 L22 40 L32 46 Z" fill="url(#pgCat)" />
           <path d="M46 48 L52 40 L48 52 Z" fill="url(#pgCat)" />
@@ -346,10 +343,6 @@ function PiggyBankSVG() {
     </div>
   );
 }
-
-/* ────────────────────────────────────────────────────────────────── */
-/* SVG 2 — Après-midi : Chat + portefeuille ouvert avec pièces        */
-/* ────────────────────────────────────────────────────────────────── */
 
 function WalletCoinsSVG() {
   return (
@@ -387,17 +380,13 @@ function WalletCoinsSVG() {
           .wcBlink { animation: wcBlink 4.5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
           .wcCloud { animation: wcCloud 7s ease-in-out infinite alternate; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#wcSky)" />
-
         <g className="wcCloud" opacity="0.9">
           <ellipse cx="26" cy="26" rx="12" ry="5" fill="#ffffff" />
           <ellipse cx="34" cy="24" rx="9" ry="6" fill="#ffffff" />
           <ellipse cx="20" cy="25" rx="7" ry="4.5" fill="#ffffff" />
         </g>
-
         <ellipse cx="60" cy="102" rx="46" ry="6" fill="#1e40af" opacity="0.18" />
-
         <g>
           <path d="M70 78 L104 78 Q108 78 108 82 L108 96 Q108 100 104 100 L70 100 Q66 100 66 96 L66 82 Q66 78 70 78 Z" fill="url(#wcWallet)" />
           <path d="M70 78 L104 78 Q108 78 108 82 L108 86 L66 86 L66 82 Q66 78 70 78 Z" fill="#9a3412" opacity="0.85" />
@@ -406,7 +395,6 @@ function WalletCoinsSVG() {
           <path d="M72 78 L78 70 L102 70 L104 78 Z" fill="#86efac" stroke="#16a34a" strokeWidth="0.4" />
           <path d="M74 78 L80 72 L98 72 L100 78 Z" fill="#4ade80" opacity="0.9" />
         </g>
-
         <g className="wcC1">
           <circle cx="58" cy="62" r="5.5" fill="url(#wcCoin)" stroke="#a16207" strokeWidth="0.5" />
           <text x="58" y="65" textAnchor="middle" fontSize="6" fontWeight="900" fill="#78350f">€</text>
@@ -419,14 +407,12 @@ function WalletCoinsSVG() {
           <circle cx="80" cy="66" r="5" fill="url(#wcCoin)" stroke="#a16207" strokeWidth="0.5" />
           <text x="80" y="69" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#78350f">€</text>
         </g>
-
         <g>
           <path className="wcTail" d="M32 92 Q22 88 22 80" stroke="url(#wcCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M28 94 Q26 78 40 72 Q52 70 54 86 Q56 94 54 98 L28 98 Z" fill="url(#wcCat)" />
           <ellipse cx="50" cy="96" rx="6" ry="3" fill="url(#wcCat)" />
           <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#wcCat)" />
           <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#wcCat)" />
-
           <ellipse cx="34" cy="56" rx="14" ry="13" fill="url(#wcCat)" />
           <path d="M22 46 L20 38 L30 44 Z" fill="url(#wcCat)" />
           <path d="M44 46 L50 38 L46 50 Z" fill="url(#wcCat)" />
@@ -448,10 +434,6 @@ function WalletCoinsSVG() {
     </div>
   );
 }
-
-/* ────────────────────────────────────────────────────────────────── */
-/* SVG 3 — Soir : Chat contemplant une pile de pièces                 */
-/* ────────────────────────────────────────────────────────────────── */
 
 function CoinStackSVG() {
   return (
@@ -482,16 +464,11 @@ function CoinStackSVG() {
           .csStar { animation: csStar 5s ease-in-out infinite; }
           .csShine { animation: csShine 2.5s ease-in-out infinite; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#csSky)" />
-
         <circle className="csStar" cx="22" cy="20" r="1.2" fill="#ffffff" />
         <circle className="csStar" cx="100" cy="28" r="1" fill="#ffffff" style={{ animationDelay: "1.5s" }} />
-
         <circle cx="60" cy="78" r="20" fill="#fcd34d" opacity="0.85" />
-
         <ellipse cx="60" cy="102" rx="46" ry="7" fill="#4c1d95" opacity="0.35" />
-
         <g>
           <ellipse cx="82" cy="98" rx="12" ry="2.5" fill="#a16207" opacity="0.6" />
           <ellipse cx="82" cy="96" rx="11" ry="4" fill="url(#csCoin)" stroke="#a16207" strokeWidth="0.5" />
@@ -501,14 +478,12 @@ function CoinStackSVG() {
           <text x="82" y="87" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#78350f">€</text>
           <path className="csShine" d="M82 76 L80 72 L82 68 L84 72 Z" fill="#fef9c3" />
         </g>
-
         <g>
           <path className="csTail" d="M32 92 Q22 88 22 80" stroke="url(#csCat)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M28 94 Q26 78 40 72 Q52 70 54 86 Q56 94 54 98 L28 98 Z" fill="url(#csCat)" />
           <ellipse cx="50" cy="96" rx="6" ry="3" fill="url(#csCat)" />
           <rect x="30" y="90" width="4" height="8" rx="2" fill="url(#csCat)" />
           <rect x="38" y="90" width="4" height="8" rx="2" fill="url(#csCat)" />
-
           <g className="csHead">
             <ellipse cx="34" cy="56" rx="14" ry="13" fill="url(#csCat)" />
             <path d="M22 46 L20 38 L30 44 Z" fill="url(#csCat)" />
@@ -530,10 +505,6 @@ function CoinStackSVG() {
     </div>
   );
 }
-
-/* ────────────────────────────────────────────────────────────────── */
-/* SVG 4 — Nuit : Chat dormant sur un sac d'argent                    */
-/* ────────────────────────────────────────────────────────────────── */
 
 function MoneyBagSleepSVG() {
   return (
@@ -569,22 +540,17 @@ function MoneyBagSleepSVG() {
           .mbStarC { animation: mbTwinkle 2.2s ease-in-out infinite 1.5s; }
           .mbMoon { animation: mbMoon 4s ease-in-out infinite; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#mbSky)" />
-
         <circle className="mbStarA" cx="24" cy="26" r="1.2" fill="#fef3c7" />
         <circle className="mbStarB" cx="94" cy="22" r="1.5" fill="#fef3c7" />
         <circle className="mbStarC" cx="100" cy="54" r="1" fill="#fef3c7" />
         <circle className="mbStarA" cx="16" cy="52" r="0.9" fill="#fef3c7" />
         <circle className="mbStarB" cx="82" cy="14" r="1" fill="#fef3c7" />
-
         <g className="mbMoon">
           <circle cx="96" cy="32" r="8" fill="#fef3c7" />
           <circle cx="99" cy="29" r="7" fill="#1a2547" />
         </g>
-
         <ellipse cx="60" cy="100" rx="42" ry="7" fill="#0f1833" opacity="0.75" />
-
         <g>
           <path d="M30 88 Q26 78 34 74 L86 74 Q94 78 90 88 Q90 98 60 100 Q30 98 30 88 Z" fill="url(#mbBag)" />
           <path d="M42 74 Q52 70 60 70 Q68 70 78 74" stroke="#fbbf24" strokeWidth="1.5" fill="none" strokeLinecap="round" />
@@ -592,7 +558,6 @@ function MoneyBagSleepSVG() {
           <circle cx="60" cy="86" r="7" fill="#fbbf24" opacity="0.9" />
           <text x="60" y="90" textAnchor="middle" fontSize="11" fontWeight="900" fill="#78350f" fontFamily="system-ui">€</text>
         </g>
-
         <g className="mbBody">
           <ellipse cx="58" cy="72" rx="26" ry="12" fill="url(#mbCat)" />
           <path d="M42 68 Q46 72 42 76" stroke="#c9723a" strokeWidth="1.2" fill="none" opacity="0.55" strokeLinecap="round" />
@@ -609,7 +574,6 @@ function MoneyBagSleepSVG() {
           <path d="M26 73 L18 71" stroke="#3a2417" strokeWidth="0.7" opacity="0.55" strokeLinecap="round" />
           <path d="M26 75 L18 76" stroke="#3a2417" strokeWidth="0.7" opacity="0.55" strokeLinecap="round" />
         </g>
-
         <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
           <text className="mbZ1" x="72" y="54" fontSize="11">Z</text>
           <text className="mbZ2" x="78" y="52" fontSize="13">Z</text>
@@ -694,7 +658,9 @@ function TopupHistoryItem({
   const amount = parseFloat(String(topup.amountEur));
   const localAmount = currency && currency !== "EUR" ? formatLocalAmount(amount, currency) : null;
 
-  /* Layout compact pour mode grille */
+  const methodLabel = topup.method === "card" ? "Carte bancaire" : "Mobile Money";
+  const providerLabel = topup.provider === "nelsiuspay" ? "NelsiusPay" : "AccountPe";
+
   if (view === "grid") {
     return (
       <div className="flex flex-col gap-3 h-full">
@@ -723,6 +689,13 @@ function TopupHistoryItem({
               ≈ {localAmount}
             </div>
           )}
+        </div>
+
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          {topup.method === "card" ? <CreditCard className="w-3 h-3" /> : <Smartphone className="w-3 h-3" />}
+          <span>{methodLabel}</span>
+          <span className="opacity-40">·</span>
+          <span className="opacity-70">{providerLabel}</span>
         </div>
 
         <div className="text-[11px] text-muted-foreground mt-auto">
@@ -755,7 +728,6 @@ function TopupHistoryItem({
     );
   }
 
-  /* Layout liste responsive (2 lignes sur mobile) */
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
@@ -777,8 +749,15 @@ function TopupHistoryItem({
                 </span>
               )}
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5 truncate">
-              {date} · {time}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+              <span>{date} · {time}</span>
+              <span className="opacity-40">·</span>
+              <span className="inline-flex items-center gap-1">
+                {topup.method === "card" ? <CreditCard className="w-3 h-3" /> : <Smartphone className="w-3 h-3" />}
+                {methodLabel}
+              </span>
+              <span className="opacity-40 hidden sm:inline">·</span>
+              <span className="hidden sm:inline opacity-70">{providerLabel}</span>
             </div>
           </div>
         </div>
@@ -836,7 +815,7 @@ function TopupHistoryItem({
 export default function WalletPage() {
   useMeta({
     title: "Portefeuille — Rechargez votre solde Texerra",
-    description: "Rechargez votre solde Texerra avec Orange Money, MTN Mobile Money, Airtel Money, Wave ou carte bancaire. Paiement rapide et sécurisé depuis le Cameroun, Côte d'Ivoire, Sénégal et toute l'Afrique.",
+    description: "Rechargez votre solde Texerra avec Orange Money, MTN Mobile Money, Airtel Money, Wave ou carte bancaire Visa/Mastercard. Paiement rapide et sécurisé depuis toute l'Afrique.",
     canonical: "https://texerra.site/wallet",
     noindex: true,
   });
@@ -871,7 +850,14 @@ export default function WalletPage() {
   });
 
   const initiateTopupMutation = useMutation({
-    mutationFn: async (data: { amountEur: number; name: string; email: string; mobile: string; countryIso: string }) => {
+    mutationFn: async (data: {
+      amountEur: number;
+      name: string;
+      email: string;
+      mobile: string;
+      countryIso: string;
+      paymentMethod: PaymentMethod;
+    }) => {
       const token = await auth.currentUser?.getIdToken().catch(() => null);
       const res = await fetch("/api/topups", {
         method: "POST",
@@ -885,7 +871,7 @@ export default function WalletPage() {
         const err = await res.json().catch(() => ({})) as { error?: string };
         throw new Error(err.error || "Erreur initialisation paiement");
       }
-      return res.json() as Promise<{ checkoutUrl: string; topupId: string }>;
+      return res.json() as Promise<{ checkoutUrl: string; topupId: string; provider: string }>;
     },
   });
 
@@ -897,6 +883,16 @@ export default function WalletPage() {
   const [forceChecking, setForceChecking] = useState(false);
   const [forceCheckMsg, setForceCheckMsg] = useState<{ type: "info" | "error"; text: string } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", mobile: "" });
+
+  /* ── Moyen de paiement ── */
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(() => {
+    const saved = localStorage.getItem(PAYMENT_METHOD_STORAGE_KEY);
+    return saved === "card" ? "card" : "mobile_money";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(PAYMENT_METHOD_STORAGE_KEY, paymentMethod);
+  }, [paymentMethod]);
 
   /* Vue liste / grille */
   const [view, setView] = useState<"list" | "grid">(() => {
@@ -979,8 +975,12 @@ export default function WalletPage() {
   const selectedCountry = ALLOWED_COUNTRIES.find(c => c.code === countryIso) ?? null;
   const payCurrency = selectedCountry?.currency ?? null;
 
+  /* ── Conversion affichée ── */
   const localCurrency = payCurrency ? getCurrency(payCurrency) : null;
   const showConversion = !!(localCurrency && localCurrency.code !== "EUR" && amount && amount > 0);
+
+  /* ── Pour carte bancaire, on affiche la conversion en XAF (taux Texerra) ── */
+  const cardConversionXaf = amount && amount > 0 ? Math.round(amount * TEXERRA_FX.EUR_TO_XAF) : 0;
 
   const { data: topupStatus } = useQuery<{ status: string }>({
     queryKey: ["/api/topups", pendingTopupId, "status"],
@@ -1013,9 +1013,20 @@ export default function WalletPage() {
   }, [topupStatus?.status, queryClient]);
 
   const handleInitiate = () => {
-    if (!amount || amount < MIN_AMOUNT || !form.name || !form.email || !form.mobile || !countryIso) return;
+    if (!amount || amount < MIN_AMOUNT || !form.name || !form.email || !form.mobile) return;
+
+    // Pour Mobile Money, le pays est requis
+    if (paymentMethod === "mobile_money" && !countryIso) return;
+
     initiateTopupMutation.mutate(
-      { amountEur: amount, name: form.name, email: form.email, mobile: form.mobile, countryIso },
+      {
+        amountEur: amount,
+        name: form.name,
+        email: form.email,
+        mobile: form.mobile,
+        countryIso: paymentMethod === "mobile_money" ? countryIso : "",
+        paymentMethod,
+      },
       {
         onSuccess: (data) => {
           if (data.checkoutUrl) {
@@ -1198,7 +1209,7 @@ export default function WalletPage() {
           </div>
         </motion.div>
 
-        {/* Barre d'étapes (masquée en succès/failed pour clarté) */}
+        {/* Barre d'étapes */}
         {step !== "success" && step !== "failed" && <StepBar step={step} />}
 
         {/* Conteneur animé des étapes */}
@@ -1228,7 +1239,93 @@ export default function WalletPage() {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-foreground">Recharger votre solde</h2>
-                    <p className="text-xs text-muted-foreground">Sélectionnez un montant ou saisissez-le manuellement</p>
+                    <p className="text-xs text-muted-foreground">Sélectionnez un montant et votre moyen de paiement</p>
+                  </div>
+                </div>
+
+                {/* ── CHOIX DU MOYEN DE PAIEMENT ── */}
+                <div className="mb-5">
+                  <label className="text-sm font-medium text-muted-foreground block mb-2">
+                    Moyen de paiement
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <motion.button
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setPaymentMethod("mobile_money")}
+                      className="relative py-4 px-3 rounded-2xl font-bold text-sm transition-all text-left overflow-hidden"
+                      style={
+                        paymentMethod === "mobile_money"
+                          ? {
+                              background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
+                              color: "#ffffff",
+                              boxShadow: `0 8px 24px ${BRAND.primary}44`,
+                              border: `1px solid ${BRAND.primaryDark}`
+                            }
+                          : {
+                              background: "#ffffff",
+                              border: "1px solid #E7E2D9",
+                              color: "#1f2937"
+                            }
+                      }
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          style={{
+                            background: paymentMethod === "mobile_money" ? "rgba(255,255,255,0.2)" : BRAND.primarySoft,
+                            color: paymentMethod === "mobile_money" ? "#fff" : BRAND.primary
+                          }}
+                        >
+                          <Smartphone className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm">Mobile Money</div>
+                          <div className={`text-[10px] font-medium mt-0.5 ${paymentMethod === "mobile_money" ? "text-white/80" : "text-muted-foreground"}`}>
+                            Orange, MTN, Wave…
+                          </div>
+                        </div>
+                      </div>
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setPaymentMethod("card")}
+                      className="relative py-4 px-3 rounded-2xl font-bold text-sm transition-all text-left overflow-hidden"
+                      style={
+                        paymentMethod === "card"
+                          ? {
+                              background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
+                              color: "#ffffff",
+                              boxShadow: `0 8px 24px ${BRAND.primary}44`,
+                              border: `1px solid ${BRAND.primaryDark}`
+                            }
+                          : {
+                              background: "#ffffff",
+                              border: "1px solid #E7E2D9",
+                              color: "#1f2937"
+                            }
+                      }
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          style={{
+                            background: paymentMethod === "card" ? "rgba(255,255,255,0.2)" : BRAND.primarySoft,
+                            color: paymentMethod === "card" ? "#fff" : BRAND.primary
+                          }}
+                        >
+                          <CreditCard className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm">Carte Visa / Mastercard</div>
+                          <div className={`text-[10px] font-medium mt-0.5 ${paymentMethod === "card" ? "text-white/80" : "text-muted-foreground"}`}>
+                            Paiement sécurisé
+                          </div>
+                        </div>
+                      </div>
+                    </motion.button>
                   </div>
                 </div>
 
@@ -1261,36 +1358,40 @@ export default function WalletPage() {
                   </div>
                 </motion.div>
 
-                {/* Sélecteur de pays */}
-                <div className="mb-5">
-                  <label className="text-sm font-medium text-muted-foreground block mb-2">
-                    Pays de paiement
-                  </label>
-                  <select
-                    value={countryIso}
-                    onChange={e => handleCountryChange(e.target.value)}
-                    className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-sm text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
-                    style={{ borderColor: countryIso ? `${BRAND.primary}66` : undefined }}
-                  >
-                    <option value="">— Sélectionnez votre pays —</option>
-                    {ALLOWED_COUNTRIES.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.name} ({c.currency})
-                      </option>
-                    ))}
-                  </select>
-                  {!countryIso && (
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      Sélectionnez votre pays de paiement pour continuer.
-                    </p>
-                  )}
-                </div>
+                {/* Sélecteur de pays — uniquement pour Mobile Money */}
+                {paymentMethod === "mobile_money" && (
+                  <div className="mb-5">
+                    <label className="text-sm font-medium text-muted-foreground block mb-2">
+                      Pays de paiement
+                    </label>
+                    <select
+                      value={countryIso}
+                      onChange={e => handleCountryChange(e.target.value)}
+                      className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-2xl text-sm text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                      style={{ borderColor: countryIso ? `${BRAND.primary}66` : undefined }}
+                    >
+                      <option value="">— Sélectionnez votre pays —</option>
+                      {ALLOWED_COUNTRIES.map(c => (
+                        <option key={c.code} value={c.code}>
+                          {c.name} ({c.currency})
+                        </option>
+                      ))}
+                    </select>
+                    {!countryIso && (
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Sélectionnez votre pays de paiement pour continuer.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Tiles présélectionnées */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   {PRESET_AMOUNTS.map((a, idx) => {
                     const isSelected = selectedAmount === a;
-                    const localA = payCurrency ? formatLocalAmount(a, payCurrency) : null;
+                    const localA = paymentMethod === "card"
+                      ? `${Math.round(a * TEXERRA_FX.EUR_TO_XAF).toLocaleString("fr-FR")} FCFA`
+                      : payCurrency ? formatLocalAmount(a, payCurrency) : null;
                     return (
                       <motion.button
                         key={a}
@@ -1365,7 +1466,17 @@ export default function WalletPage() {
                     </div>
                   )}
 
-                  {payCurrency && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
+                  {paymentMethod === "card" && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-xs text-muted-foreground mt-1.5"
+                    >
+                      ≈ {Math.round(parseFloat(customAmount) * TEXERRA_FX.EUR_TO_XAF).toLocaleString("fr-FR")} FCFA
+                    </motion.p>
+                  )}
+
+                  {paymentMethod === "mobile_money" && payCurrency && customAmount && parseFloat(customAmount) >= MIN_AMOUNT && !selectedAmount && (
                     <motion.p
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -1376,8 +1487,8 @@ export default function WalletPage() {
                   )}
                 </div>
 
-                {/* Récapitulatif de conversion (sans frais) */}
-                {amount && amount >= MIN_AMOUNT && payCurrency && (
+                {/* Récapitulatif de conversion */}
+                {amount && amount >= MIN_AMOUNT && (
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1387,30 +1498,42 @@ export default function WalletPage() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-semibold text-muted-foreground">Montant converti</span>
                       <span className="font-bold" style={{ color: BRAND.primaryDark }}>
-                        ≈ {formatLocalAmount(amount, payCurrency)}
+                        {paymentMethod === "card"
+                          ? `≈ ${cardConversionXaf.toLocaleString("fr-FR")} FCFA`
+                          : payCurrency ? `≈ ${formatLocalAmount(amount, payCurrency)}` : "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
+                      <span>Taux appliqué</span>
+                      <span>
+                        {paymentMethod === "card"
+                          ? `1 € = ${TEXERRA_FX.EUR_TO_XAF} FCFA`
+                          : payCurrency ? `1 € ≈ ${payCurrency}` : "—"}
                       </span>
                     </div>
                   </motion.div>
                 )}
 
-                {!countryIso && (
-                  <p className="text-xs text-muted-foreground mb-5 text-center">
-                    Sélectionnez votre pays de paiement ci-dessus pour voir l'équivalent local.
-                  </p>
-                )}
-
                 <motion.button
-                  onClick={() => amount && amount >= MIN_AMOUNT && countryIso && setStep("details")}
-                  disabled={!amount || amount < MIN_AMOUNT || !countryIso}
-                  whileHover={amount && amount >= MIN_AMOUNT && countryIso ? { y: -2 } : undefined}
+                  onClick={() => {
+                    if (!amount || amount < MIN_AMOUNT) return;
+                    if (paymentMethod === "mobile_money" && !countryIso) return;
+                    setStep("details");
+                  }}
+                  disabled={
+                    !amount ||
+                    amount < MIN_AMOUNT ||
+                    (paymentMethod === "mobile_money" && !countryIso)
+                  }
+                  whileHover={amount && amount >= MIN_AMOUNT ? { y: -2 } : undefined}
                   whileTap={{ scale: 0.98 }}
                   className="relative w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden group"
                   style={{
                     background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                    boxShadow: amount && amount >= MIN_AMOUNT && countryIso ? `0 8px 24px ${BRAND.primary}44` : "none"
+                    boxShadow: `0 8px 24px ${BRAND.primary}44`
                   }}
                 >
-                  {amount && amount >= MIN_AMOUNT && countryIso && (
+                  {amount && amount >= MIN_AMOUNT && (
                     <motion.span
                       className="absolute inset-0 -translate-x-full"
                       style={{
@@ -1453,18 +1576,24 @@ export default function WalletPage() {
                   <div className="flex-1">
                     <h2 className="text-lg font-bold text-foreground">Vos coordonnées</h2>
                     <p className="text-xs text-muted-foreground">
-                      {selectedCountry ? `Paiement depuis ${selectedCountry.name}` : "Pour la confirmation de votre paiement"}
+                      {paymentMethod === "card"
+                        ? "Pour le paiement par carte bancaire"
+                        : selectedCountry ? `Paiement depuis ${selectedCountry.name}` : "Pour la confirmation de votre paiement"}
                     </p>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-black" style={{ color: BRAND.primaryDark }}>
                       {amount?.toFixed(2)} €
                     </div>
-                    {showConversion && localCurrency && (
+                    {paymentMethod === "card" ? (
+                      <div className="text-xs text-muted-foreground">
+                        ≈ {cardConversionXaf.toLocaleString("fr-FR")} FCFA
+                      </div>
+                    ) : showConversion && localCurrency ? (
                       <div className="text-xs text-muted-foreground">
                         ≈ {formatLocalAmount(amount!, localCurrency.code)}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -1512,7 +1641,13 @@ export default function WalletPage() {
 
                 <motion.button
                   onClick={handleInitiate}
-                  disabled={!form.name || !form.email || !form.mobile || !countryIso || initiateTopupMutation.isPending}
+                  disabled={
+                    !form.name ||
+                    !form.email ||
+                    !form.mobile ||
+                    (paymentMethod === "mobile_money" && !countryIso) ||
+                    initiateTopupMutation.isPending
+                  }
                   whileHover={!initiateTopupMutation.isPending ? { y: -2 } : undefined}
                   whileTap={{ scale: 0.98 }}
                   className="w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1524,7 +1659,9 @@ export default function WalletPage() {
                   {initiateTopupMutation.isPending ? (
                     <><Loader2 className="w-5 h-5 animate-spin" /> Préparation du paiement…</>
                   ) : (
-                    <>Payer {amount?.toFixed(2)} € <ArrowRight className="w-5 h-5" /></>
+                    <>
+                      {paymentMethod === "card" ? "Payer par carte" : "Payer"} {amount?.toFixed(2)} € <ArrowRight className="w-5 h-5" />
+                    </>
                   )}
                 </motion.button>
                 {initiateTopupMutation.isError && (
@@ -1573,7 +1710,9 @@ export default function WalletPage() {
 
                 <h2 className="text-xl font-bold mb-2 text-foreground">Paiement en attente</h2>
                 <p className="text-muted-foreground mb-2 text-sm leading-relaxed max-w-md mx-auto">
-                  Complétez le paiement dans la fenêtre ouverte, puis revenez ici.
+                  {paymentMethod === "card"
+                    ? "Complétez le paiement par carte dans la fenêtre ouverte, puis revenez ici."
+                    : "Complétez le paiement Mobile Money dans la fenêtre ouverte, puis revenez ici."}
                 </p>
                 <p className="text-xs text-muted-foreground mb-6">
                   La vérification est automatique. Si vous avez déjà payé, cliquez sur le bouton ci-dessous.
