@@ -1,26 +1,54 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMeta } from "../lib/use-meta";
 import { auth } from "../lib/firebase";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Clock, XCircle, Loader2, Copy, RefreshCw, Plus, Wallet,
-  ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard, TrendingUp,
+  ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard,
   Filter, MessageCircle, Search, Sparkles, Receipt, Calendar, BadgeCheck,
-  Activity, BarChart3
+  Activity, ChevronDown, ChevronUp, HelpCircle, Info, ShoppingCart,
+  TrendingUp, AlertCircle, ArrowUpRight
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { CURRENCIES, getCurrency } from "../lib/currencies";
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Couleur signature TEXERRA SMS (extraite du logo)                   */
+/* Palette stricte — chaque couleur reste dans SA famille            */
 /* ────────────────────────────────────────────────────────────────── */
 
 const BRAND = {
+  /* Orange — marque & actions principales */
   primary: "#C55A34",
   primaryDark: "#A84A28",
+  primaryDeep: "#7C2D12",
   primaryLight: "#E8A47F",
   primarySoft: "#FBEEE7",
+
+  /* Bleu — commandes actives / info */
+  cool: "#2563EB",
+  coolDark: "#1D4ED8",
+  coolSoft: "#EFF6FF",
+  coolBorder: "#BFDBFE",
+
+  /* Sémantiques */
+  success: "#16A34A",
+  successSoft: "#DCFCE7",
+  successBorder: "#86EFAC",
+  warn: "#D97706",
+  warnSoft: "#FEF3C7",
+  warnBorder: "#FCD34D",
+  danger: "#DC2626",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+
+  /* Neutres */
+  ink: "#111827",
+  inkMuted: "#6B7280",
+  border: "#E5E7EB",
+  borderSoft: "#F3F4F6",
+  surface: "#FFFFFF",
+  canvas: "#F9FAFB",
 };
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -49,10 +77,6 @@ const ICON_COLORS: Record<string, string> = {
   wechat: "07C160", vk: "0077FF", yandex: "FC3F1D", aliexpress: "FF4747",
   ebay: "E43137", etsy: "F16521", coinbase: "0052FF",
 };
-
-/* ────────────────────────────────────────────────────────────────── */
-/* Mapping service → nom complet affiché                              */
-/* ────────────────────────────────────────────────────────────────── */
 
 const SERVICE_DISPLAY: Record<string, string> = {
   wa: "WhatsApp", wb: "WhatsApp Business", fb: "Facebook", ig: "Instagram",
@@ -98,7 +122,7 @@ function svcIconUrl(code: string | null | undefined, overrideUrl?: string | null
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Résolution pays                                                    */
+/* Pays                                                               */
 /* ────────────────────────────────────────────────────────────────── */
 
 type CountryInfo = { name: string; iso: string; callingCode: string };
@@ -126,29 +150,18 @@ const PHONE_PREFIX_MAP: Array<{ prefix: string; info: CountryInfo }> = [
   { prefix: "212", info: { name: "Maroc", iso: "MA", callingCode: "+212" } },
   { prefix: "213", info: { name: "Algérie", iso: "DZ", callingCode: "+213" } },
   { prefix: "216", info: { name: "Tunisie", iso: "TN", callingCode: "+216" } },
-  { prefix: "218", info: { name: "Libye", iso: "LY", callingCode: "+218" } },
-  { prefix: "591", info: { name: "Bolivie", iso: "BO", callingCode: "+591" } },
-  { prefix: "593", info: { name: "Équateur", iso: "EC", callingCode: "+593" } },
-  { prefix: "595", info: { name: "Paraguay", iso: "PY", callingCode: "+595" } },
-  { prefix: "598", info: { name: "Uruguay", iso: "UY", callingCode: "+598" } },
   { prefix: "20", info: { name: "Égypte", iso: "EG", callingCode: "+20" } },
   { prefix: "27", info: { name: "Afrique du Sud", iso: "ZA", callingCode: "+27" } },
   { prefix: "971", info: { name: "Émirats arabes unis", iso: "AE", callingCode: "+971" } },
   { prefix: "966", info: { name: "Arabie saoudite", iso: "SA", callingCode: "+966" } },
-  { prefix: "972", info: { name: "Israël", iso: "IL", callingCode: "+972" } },
   { prefix: "90", info: { name: "Turquie", iso: "TR", callingCode: "+90" } },
   { prefix: "86", info: { name: "Chine", iso: "CN", callingCode: "+86" } },
   { prefix: "91", info: { name: "Inde", iso: "IN", callingCode: "+91" } },
   { prefix: "92", info: { name: "Pakistan", iso: "PK", callingCode: "+92" } },
-  { prefix: "93", info: { name: "Afghanistan", iso: "AF", callingCode: "+93" } },
-  { prefix: "94", info: { name: "Sri Lanka", iso: "LK", callingCode: "+94" } },
-  { prefix: "95", info: { name: "Myanmar", iso: "MM", callingCode: "+95" } },
-  { prefix: "98", info: { name: "Iran", iso: "IR", callingCode: "+98" } },
   { prefix: "60", info: { name: "Malaisie", iso: "MY", callingCode: "+60" } },
   { prefix: "61", info: { name: "Australie", iso: "AU", callingCode: "+61" } },
   { prefix: "62", info: { name: "Indonésie", iso: "ID", callingCode: "+62" } },
   { prefix: "63", info: { name: "Philippines", iso: "PH", callingCode: "+63" } },
-  { prefix: "64", info: { name: "Nouvelle-Zélande", iso: "NZ", callingCode: "+64" } },
   { prefix: "65", info: { name: "Singapour", iso: "SG", callingCode: "+65" } },
   { prefix: "66", info: { name: "Thaïlande", iso: "TH", callingCode: "+66" } },
   { prefix: "81", info: { name: "Japon", iso: "JP", callingCode: "+81" } },
@@ -166,9 +179,7 @@ const PHONE_PREFIX_MAP: Array<{ prefix: string; info: CountryInfo }> = [
   { prefix: "32", info: { name: "Belgique", iso: "BE", callingCode: "+32" } },
   { prefix: "33", info: { name: "France", iso: "FR", callingCode: "+33" } },
   { prefix: "34", info: { name: "Espagne", iso: "ES", callingCode: "+34" } },
-  { prefix: "36", info: { name: "Hongrie", iso: "HU", callingCode: "+36" } },
   { prefix: "39", info: { name: "Italie", iso: "IT", callingCode: "+39" } },
-  { prefix: "40", info: { name: "Roumanie", iso: "RO", callingCode: "+40" } },
   { prefix: "41", info: { name: "Suisse", iso: "CH", callingCode: "+41" } },
   { prefix: "43", info: { name: "Autriche", iso: "AT", callingCode: "+43" } },
   { prefix: "44", info: { name: "Royaume-Uni", iso: "GB", callingCode: "+44" } },
@@ -178,8 +189,6 @@ const PHONE_PREFIX_MAP: Array<{ prefix: string; info: CountryInfo }> = [
   { prefix: "48", info: { name: "Pologne", iso: "PL", callingCode: "+48" } },
   { prefix: "49", info: { name: "Allemagne", iso: "DE", callingCode: "+49" } },
   { prefix: "351", info: { name: "Portugal", iso: "PT", callingCode: "+351" } },
-  { prefix: "353", info: { name: "Irlande", iso: "IE", callingCode: "+353" } },
-  { prefix: "380", info: { name: "Ukraine", iso: "UA", callingCode: "+380" } },
   { prefix: "7", info: { name: "Russie / Kazakhstan", iso: "RU", callingCode: "+7" } },
   { prefix: "1", info: { name: "États-Unis / Canada", iso: "US", callingCode: "+1" } },
 ];
@@ -209,25 +218,87 @@ function isoToFlagEmoji(iso: string): string {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Statuts                                                            */
+/* Statuts — libellés explicites + description                        */
 /* ────────────────────────────────────────────────────────────────── */
 
-const STATUS_CONFIG = {
-  pending_payment: { label: "En attente", color: "text-amber-700 bg-amber-50 ring-1 ring-amber-200", icon: Clock },
-  active: { label: "En attente SMS", color: "text-blue-700 bg-blue-50 ring-1 ring-blue-200", icon: RefreshCw },
-  completed: { label: "SMS reçu", color: "text-green-700 bg-green-50 ring-1 ring-green-200", icon: CheckCircle2 },
-  cancelled: { label: "Annulée", color: "text-muted-foreground bg-muted/50 ring-1 ring-border", icon: XCircle },
-  expired: { label: "Expirée", color: "text-destructive bg-destructive/10 ring-1 ring-destructive/20", icon: XCircle },
+type StatusKey = "pending_payment" | "active" | "completed" | "cancelled" | "expired";
+
+interface StatusMeta {
+  label: string;
+  shortLabel: string;
+  description: string;
+  fg: string;
+  bg: string;
+  border: string;
+  dot: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}
+
+const STATUS_CONFIG: Record<StatusKey, StatusMeta> = {
+  pending_payment: {
+    label: "Paiement en attente",
+    shortLabel: "Paiement",
+    description: "Votre commande a bien été enregistrée. Le paiement n'a pas encore été confirmé par notre prestataire. Dès validation, le numéro sera automatiquement attribué.",
+    fg: "#92400E",
+    bg: BRAND.warnSoft,
+    border: BRAND.warnBorder,
+    dot: BRAND.warn,
+    Icon: Clock,
+  },
+  active: {
+    label: "En attente du SMS",
+    shortLabel: "En attente",
+    description: "Le numéro vous est réservé. Utilisez-le dès maintenant sur le service concerné. Le code de vérification apparaîtra automatiquement sur cette page dès sa réception (2 à 7 minutes en moyenne).",
+    fg: "#1E40AF",
+    bg: BRAND.coolSoft,
+    border: BRAND.coolBorder,
+    dot: BRAND.cool,
+    Icon: RefreshCw,
+  },
+  completed: {
+    label: "SMS reçu",
+    shortLabel: "Reçu",
+    description: "Le code de vérification est arrivé. Copiez-le et utilisez-le pour finaliser votre inscription. La commande est considérée comme terminée.",
+    fg: "#166534",
+    bg: BRAND.successSoft,
+    border: BRAND.successBorder,
+    dot: BRAND.success,
+    Icon: CheckCircle2,
+  },
+  cancelled: {
+    label: "Commande annulée",
+    shortLabel: "Annulée",
+    description: "Cette commande a été annulée avant l'attribution d'un numéro. Aucun montant n'a été débité de votre solde.",
+    fg: "#374151",
+    bg: BRAND.borderSoft,
+    border: BRAND.border,
+    dot: "#9CA3AF",
+    Icon: XCircle,
+  },
+  expired: {
+    label: "Numéro expiré",
+    shortLabel: "Expirée",
+    description: "Le délai de réception est écoulé et aucun SMS n'est arrivé. Le montant a automatiquement été recrédité sur votre solde.",
+    fg: "#991B1B",
+    bg: BRAND.dangerSoft,
+    border: BRAND.dangerBorder,
+    dot: BRAND.danger,
+    Icon: XCircle,
+  },
 };
+
+function getStatusMeta(status: string): StatusMeta {
+  return STATUS_CONFIG[status as StatusKey] ?? STATUS_CONFIG.cancelled;
+}
 
 const listContainer = {
   hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } }
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } }
 };
 
 const listItem = {
-  hidden: { opacity: 0, y: 15 },
-  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 320, damping: 26 } }
 };
 
 function timeRemaining(expiresAt: string | null | undefined): string | null {
@@ -270,7 +341,7 @@ export interface UserProfile {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Salutations personnalisées                                         */
+/* Salutations                                                        */
 /* ────────────────────────────────────────────────────────────────── */
 
 type TimeSlot = "night" | "morning" | "afternoon" | "evening";
@@ -289,7 +360,6 @@ function getGreeting(name?: string | null): { greeting: string; subline: string;
   const hour = now.getHours();
   const day = now.getDay();
   const slot = getTimeSlot();
-
   const firstName = (name ?? "").trim().split(" ")[0] || "";
 
   let greeting = "Bonjour";
@@ -301,23 +371,21 @@ function getGreeting(name?: string | null): { greeting: string; subline: string;
   const withName = firstName ? `${greeting}, ${firstName}` : greeting;
 
   let subline = "";
-  if (day === 1 && hour < 12) subline = "Bonne semaine ! Prêt à démarrer ?";
-  else if (day === 5) subline = "Bon vendredi — bon week-end en avance !";
+  if (day === 1 && hour < 12) subline = "Bonne semaine !";
+  else if (day === 5) subline = "Bon vendredi !";
   else if (day === 6) subline = "Bon week-end !";
   else if (day === 0) subline = "Bon dimanche !";
-  else if (slot === "night") subline = "La nuit porte conseil, reposez-vous bien.";
-  else subline = "";
 
   return { greeting: withName, subline, slot };
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Illustrations SVG animées contextuelles                            */
+/* SVG Illustrations (conservées)                                     */
 /* ────────────────────────────────────────────────────────────────── */
 
 function SleepingCatSVG() {
   return (
-    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <radialGradient id="nightSky" cx="0.5" cy="0.5" r="0.7">
@@ -349,22 +417,15 @@ function SleepingCatSVG() {
           .starC { animation: twinkle 2.2s ease-in-out infinite 1.5s; }
           .moon { animation: moonGlow 4s ease-in-out infinite; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#nightSky)" />
-
         <circle className="starA" cx="24" cy="28" r="1.2" fill="#fef3c7" />
         <circle className="starB" cx="92" cy="22" r="1.5" fill="#fef3c7" />
         <circle className="starC" cx="98" cy="52" r="1" fill="#fef3c7" />
-        <circle className="starA" cx="18" cy="52" r="0.9" fill="#fef3c7" />
-        <circle className="starB" cx="80" cy="14" r="1" fill="#fef3c7" />
-
         <g className="moon">
           <circle cx="94" cy="32" r="8" fill="#fef3c7" />
           <circle cx="97" cy="29" r="7" fill="#1a2547" />
         </g>
-
         <ellipse cx="60" cy="98" rx="42" ry="8" fill="#0f1833" opacity="0.7" />
-
         <g className="catBody">
           <ellipse cx="58" cy="82" rx="32" ry="18" fill="url(#catFur)" />
           <path d="M38 76 Q44 82 40 88" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
@@ -378,12 +439,7 @@ function SleepingCatSVG() {
           <path d="M38 84 L37 86 L39 86 Z" fill="#d98848" />
           <path d="M38 86 Q36 88 34 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
           <path d="M38 86 Q40 88 42 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M24 82 L16 80" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M24 85 L16 86" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <ellipse cx="30" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
-          <ellipse cx="46" cy="84" rx="3" ry="1.8" fill="#f4a76b" opacity="0.6" />
         </g>
-
         <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
           <text className="z1" x="72" y="60" fontSize="11">Z</text>
           <text className="z2" x="78" y="58" fontSize="13">Z</text>
@@ -396,7 +452,7 @@ function SleepingCatSVG() {
 
 function MorningCatSVG() {
   return (
-    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <radialGradient id="mornSky" cx="0.5" cy="0.4" r="0.7">
@@ -413,37 +469,16 @@ function MorningCatSVG() {
           </linearGradient>
         </defs>
         <style>{`
-          @keyframes sunRise { 0%{transform:translateY(8px);opacity:.6} 100%{transform:translateY(0);opacity:1} }
           @keyframes catStretch { 0%,100%{transform:scale(1) rotate(0)} 50%{transform:scale(1.02,1.03) rotate(-1deg)} }
           @keyframes tailWag { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-6deg)} }
           @keyframes blink { 0%,92%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
-          @keyframes rayRotate { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
-          .sun { animation: sunRise 1.4s ease-out; transform-origin: 60px 78px; }
           .catStretch { animation: catStretch 3s ease-in-out infinite; transform-origin: 60px 82px; }
           .tail { animation: tailWag 1.8s ease-in-out infinite; transform-origin: 88px 84px; }
           .eye { animation: blink 5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
-          .rays { animation: rayRotate 30s linear infinite; transform-origin: 60px 78px; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#mornSky)" />
-
-        <g className="rays" opacity="0.35">
-          <line x1="60" y1="78" x2="60" y2="30" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="82" y2="40" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="38" y2="40" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="90" y2="70" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-          <line x1="60" y1="78" x2="30" y2="70" stroke="#fff7ed" strokeWidth="2" strokeLinecap="round" />
-        </g>
-
-        <g className="sun">
-          <circle cx="60" cy="78" r="24" fill="url(#sunGrad)" />
-        </g>
-
-        <path d="M22 26 Q25 23 28 26" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
-        <path d="M32 20 Q35 17 38 20" stroke="#7c2d12" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
-
+        <circle cx="60" cy="78" r="24" fill="url(#sunGrad)" />
         <ellipse cx="60" cy="100" rx="46" ry="6" fill="#7c2d12" opacity="0.25" />
-
         <g className="catStretch">
           <path className="tail" d="M88 84 Q100 80 102 88" stroke="url(#mornFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M30 88 Q40 70 60 74 Q78 78 88 86 L88 94 Q60 96 30 94 Z" fill="url(#mornFur)" />
@@ -455,10 +490,6 @@ function MorningCatSVG() {
           <ellipse className="eye" cx="36" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
           <ellipse className="eye" cx="48" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
           <path d="M42 78 L41 80 L43 80 Z" fill="#d98848" />
-          <ellipse cx="34" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
-          <ellipse cx="50" cy="78" rx="2.5" ry="1.5" fill="#fb923c" opacity="0.5" />
-          <path d="M28 76 L20 74" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M28 80 L20 81" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
         </g>
       </svg>
     </div>
@@ -467,7 +498,7 @@ function MorningCatSVG() {
 
 function AfternoonCatSVG() {
   return (
-    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <linearGradient id="aftSky" x1="0" y1="0" x2="0" y2="1">
@@ -480,49 +511,19 @@ function AfternoonCatSVG() {
           </linearGradient>
         </defs>
         <style>{`
-          @keyframes pawPlay { 0%,100%{transform:translate(0,0) rotate(0)} 50%{transform:translate(2px,-6px) rotate(-8deg)} }
           @keyframes ballBounce { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-3px,-5px)} }
           @keyframes tailIdle { 0%,100%{transform:rotate(0)} 40%{transform:rotate(-8deg)} 70%{transform:rotate(5deg)} }
-          @keyframes cloudDrift { 0%{transform:translateX(0)} 100%{transform:translateX(15px)} }
-          @keyframes sunWarm { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-          .paw { animation: pawPlay 1.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
           .ball { animation: ballBounce 1.6s ease-in-out infinite; }
           .tailIdle { animation: tailIdle 2.4s ease-in-out infinite; transform-origin: 88px 88px; }
-          .cloud { animation: cloudDrift 6s ease-in-out infinite alternate; }
-          .sunWarm { animation: sunWarm 4s ease-in-out infinite; transform-origin: 90px 28px; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#aftSky)" />
-
-        <g className="cloud" opacity="0.85">
-          <ellipse cx="30" cy="30" rx="12" ry="5" fill="#ffffff" />
-          <ellipse cx="38" cy="28" rx="9" ry="6" fill="#ffffff" />
-          <ellipse cx="24" cy="29" rx="7" ry="4.5" fill="#ffffff" />
-        </g>
-
-        <g className="sunWarm">
-          <circle cx="90" cy="28" r="10" fill="#fbbf24" />
-          <circle cx="90" cy="28" r="7" fill="#fcd34d" />
-        </g>
-
         <ellipse cx="60" cy="100" rx="46" ry="6" fill="#78716c" opacity="0.2" />
-
         <g className="ball">
           <circle cx="26" cy="90" r="7" fill="#ef4444" />
-          <path d="M26 84 Q32 90 26 96" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
-          <path d="M20 90 Q26 88 32 90" stroke="#ffffff" strokeWidth="0.8" fill="none" opacity="0.7" />
         </g>
-
         <g>
           <path className="tailIdle" d="M86 88 Q98 82 100 92" stroke="url(#aftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M52 92 Q48 74 62 68 Q80 66 84 84 Q86 92 84 96 L52 96 Z" fill="url(#aftFur)" />
-          <ellipse cx="80" cy="94" rx="9" ry="4" fill="url(#aftFur)" />
-          <rect x="56" y="88" width="6" height="10" rx="3" fill="url(#aftFur)" />
-          <rect x="66" y="88" width="6" height="10" rx="3" fill="url(#aftFur)" />
-          <g className="paw">
-            <path d="M52 90 Q40 84 34 88" stroke="url(#aftFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
-            <ellipse cx="34" cy="88" rx="3.5" ry="3" fill="url(#aftFur)" />
-          </g>
           <ellipse cx="58" cy="58" rx="16" ry="15" fill="url(#aftFur)" />
           <path d="M46 48 L44 38 L54 46 Z" fill="url(#aftFur)" />
           <path d="M68 48 L74 38 L70 50 Z" fill="url(#aftFur)" />
@@ -530,17 +531,7 @@ function AfternoonCatSVG() {
           <ellipse cx="64" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
           <circle cx="52.5" cy="58.5" r="1.6" fill="#1f2937" />
           <circle cx="64.5" cy="58.5" r="1.6" fill="#1f2937" />
-          <circle cx="53" cy="57.5" r="0.5" fill="#ffffff" />
-          <circle cx="65" cy="57.5" r="0.5" fill="#ffffff" />
           <path d="M57 66 L56 68 L59 68 Z" fill="#d98848" />
-          <path d="M58 68 Q55 71 53 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M58 68 Q61 71 63 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <ellipse cx="46" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
-          <ellipse cx="70" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.5" />
-          <path d="M42 64 L32 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M42 67 L32 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M74 64 L84 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-          <path d="M74 67 L84 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
         </g>
       </svg>
     </div>
@@ -549,7 +540,7 @@ function AfternoonCatSVG() {
 
 function EveningCatSVG() {
   return (
-    <div className="relative w-[88px] h-[88px] sm:w-[104px] sm:h-[104px] shrink-0">
+    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <linearGradient id="eveSky" x1="0" y1="0" x2="0" y2="1">
@@ -567,52 +558,28 @@ function EveningCatSVG() {
           </radialGradient>
         </defs>
         <style>{`
-          @keyframes sunSet { 0%,100%{transform:translateY(0)} 50%{transform:translateY(2px)} }
           @keyframes tailSway { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-5deg)} }
           @keyframes headNod { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
           @keyframes starFade { 0%,100%{opacity:0} 40%,60%{opacity:.9} }
-          @keyframes birdFly { 0%{transform:translate(0,0)} 100%{transform:translate(20px,-4px)} }
-          .sunSet { animation: sunSet 5s ease-in-out infinite; transform-origin: 60px 78px; }
           .tailSway { animation: tailSway 3s ease-in-out infinite; transform-origin: 84px 90px; }
           .headNod { animation: headNod 3s ease-in-out infinite; }
           .star { animation: starFade 5s ease-in-out infinite; }
-          .bird1 { animation: birdFly 4s ease-in-out infinite alternate; }
         `}</style>
-
         <circle cx="60" cy="60" r="52" fill="url(#eveSky)" />
-
         <circle className="star" cx="22" cy="22" r="1.2" fill="#ffffff" />
         <circle className="star" cx="98" cy="30" r="1" fill="#ffffff" />
-
-        <g className="bird1" opacity="0.75">
-          <path d="M30 24 Q33 21 36 24" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-          <path d="M40 18 Q43 15 46 18" stroke="#7c2d12" strokeWidth="1.1" fill="none" strokeLinecap="round" />
-        </g>
-
-        <g className="sunSet">
-          <circle cx="60" cy="78" r="22" fill="url(#eveSun)" />
-        </g>
-
+        <circle cx="60" cy="78" r="22" fill="url(#eveSun)" />
         <ellipse cx="60" cy="100" rx="46" ry="8" fill="#7c2d12" opacity="0.35" />
-
         <g>
           <path className="tailSway" d="M84 92 Q96 88 98 96" stroke="url(#eveFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M56 94 Q54 76 66 70 Q82 68 84 88 Q84 94 82 98 L56 98 Z" fill="url(#eveFur)" />
-          <ellipse cx="80" cy="96" rx="8" ry="3.5" fill="url(#eveFur)" />
-          <rect x="58" y="90" width="5" height="8" rx="2.5" fill="url(#eveFur)" />
           <g className="headNod">
             <ellipse cx="62" cy="60" rx="15" ry="14" fill="url(#eveFur)" />
             <path d="M50 50 L48 40 L58 48 Z" fill="url(#eveFur)" />
             <path d="M72 50 L78 40 L74 52 Z" fill="url(#eveFur)" />
             <ellipse cx="56" cy="60" rx="2.4" ry="3" fill="#ffffff" />
             <circle cx="56.3" cy="60.5" r="1.5" fill="#1f2937" />
-            <circle cx="56.6" cy="59.7" r="0.45" fill="#ffffff" />
-            <circle cx="55.4" cy="60" r="0.4" fill="#fbbf24" />
             <path d="M60 66 L59 68 L62 68 Z" fill="#d98848" />
-            <path d="M61 68 Q58 70 56 69" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-            <ellipse cx="58" cy="66" rx="3" ry="1.8" fill="#fb923c" opacity="0.55" />
-            <path d="M48 64 L38 62" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
-            <path d="M48 67 L38 68" stroke="#3a2417" strokeWidth="0.8" opacity="0.6" strokeLinecap="round" />
           </g>
         </g>
       </svg>
@@ -625,6 +592,262 @@ function TimeIllustration({ slot }: { slot: TimeSlot }) {
   if (slot === "morning") return <MorningCatSVG />;
   if (slot === "afternoon") return <AfternoonCatSVG />;
   return <EveningCatSVG />;
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Chip EMV                                                          */
+/* ────────────────────────────────────────────────────────────────── */
+
+function ChipSVG({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 42 32" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="dbChipGold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#FDE68A" />
+          <stop offset="0.5" stopColor="#FBBF24" />
+          <stop offset="1" stopColor="#B45309" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="42" height="32" rx="5" fill="url(#dbChipGold)" />
+      <path d="M0 11 H42 M0 21 H42 M14 0 V32 M28 0 V32" stroke="#78350F" strokeWidth="0.7" opacity="0.55" />
+      <rect x="15" y="11" width="12" height="10" rx="2" fill="#FCD34D" opacity="0.55" />
+      <rect x="0.5" y="0.5" width="41" height="31" rx="4.5" stroke="#78350F" strokeOpacity="0.35" fill="none" />
+    </svg>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* BalanceFlipCard — Carte solde avec animation flip 3D              */
+/* ────────────────────────────────────────────────────────────────── */
+
+function BalanceFlipCard({
+  balance,
+  name,
+  loading,
+  balanceLocal,
+}: {
+  balance: number;
+  name: string;
+  loading: boolean;
+  balanceLocal: string | null;
+}) {
+  const [flipped, setFlipped] = useState(false);
+
+  const holder = (name || "UTILISATEUR").toUpperCase();
+  const customerId = useMemo(
+    () => `TX-${Math.abs(hashString(holder)).toString(36).toUpperCase().padStart(6, "0").slice(0, 6)}`,
+    [holder]
+  );
+
+  return (
+    <div
+      className="relative w-full cursor-pointer select-none"
+      style={{ perspective: 1400, aspectRatio: "1.75 / 1", maxHeight: 240 }}
+      onClick={() => setFlipped(f => !f)}
+      role="button"
+      aria-label={flipped ? "Voir le solde" : "Voir les informations du compte"}
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
+    >
+      <motion.div
+        className="absolute inset-0"
+        style={{ transformStyle: "preserve-3d" }}
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.75, ease: [0.2, 0.8, 0.2, 1] }}
+      >
+        {/* ═══════════ FRONT ═══════════ */}
+        <div
+          className="absolute inset-0 rounded-3xl overflow-hidden shadow-lg"
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.primaryDeep} 100%)`,
+          }}
+        >
+          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full pointer-events-none" style={{ background: "rgba(255,255,255,0.08)" }} />
+          <div className="absolute -bottom-32 -left-24 w-80 h-80 rounded-full pointer-events-none" style={{ background: "rgba(255,255,255,0.06)" }} />
+
+          <div className="relative h-full flex flex-col p-5 sm:p-6">
+            {/* Top : wordmark + puce */}
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-white font-black text-sm tracking-[0.28em] leading-none">TEXERRA</div>
+                <div className="text-white/60 text-[9px] font-semibold tracking-widest uppercase mt-1">Portefeuille</div>
+              </div>
+              <ChipSVG className="w-9 h-7 drop-shadow-md" />
+            </div>
+
+            {/* Solde au centre */}
+            <div className="flex-1 flex flex-col justify-center py-2">
+              <div className="text-white/60 text-[9px] font-semibold tracking-widest uppercase mb-1">Solde disponible</div>
+              {loading ? (
+                <div className="h-10 w-36 bg-white/15 rounded-lg animate-pulse" />
+              ) : (
+                <div className="text-white text-3xl sm:text-4xl font-black tabular-nums leading-none" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.18)" }}>
+                  {balance.toFixed(2)}
+                  <span className="text-xl sm:text-2xl ml-1.5 font-bold">€</span>
+                </div>
+              )}
+              {balanceLocal && (
+                <div className="text-white/75 text-xs font-semibold mt-1.5">≈ {balanceLocal}</div>
+              )}
+            </div>
+
+            {/* Bas : titulaire + devise */}
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-white/55 text-[8px] font-bold tracking-widest uppercase mb-0.5">Titulaire</div>
+                <div className="text-white font-bold text-xs sm:text-sm tracking-wider uppercase truncate max-w-[180px]">{holder}</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-white/55 text-[8px] font-bold tracking-widest uppercase mb-0.5">Devise</div>
+                <div className="text-white font-bold text-xs sm:text-sm tracking-wider">EUR</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Hint discret */}
+          <div className="absolute top-3 right-14 text-white/50 text-[9px] font-bold tracking-widest uppercase pointer-events-none">
+            Cliquer ↻
+          </div>
+        </div>
+
+        {/* ═══════════ BACK ═══════════ */}
+        <div
+          className="absolute inset-0 rounded-3xl overflow-hidden shadow-lg"
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+            background: `linear-gradient(135deg, ${BRAND.primaryDeep} 0%, #4A1E0F 100%)`,
+          }}
+        >
+          {/* Bande magnétique */}
+          <div className="absolute top-6 left-0 right-0 h-8 bg-black/85" />
+
+          <div className="relative h-full flex flex-col p-5 sm:p-6 pt-16">
+            {/* Zone signature + bandeau d'info */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1 h-8 rounded bg-white/85 flex items-center justify-end px-3">
+                <span className="font-mono text-[10px] text-gray-500 tracking-widest">•••</span>
+              </div>
+              <div className="text-white/70 text-[10px] font-mono tracking-widest">ID: {customerId}</div>
+            </div>
+
+            {/* Bloc informations */}
+            <div className="flex-1 flex flex-col justify-center">
+              <div className="grid grid-cols-3 gap-3 text-white/90">
+                <div>
+                  <div className="text-white/50 text-[8px] font-bold tracking-widest uppercase mb-0.5">Type</div>
+                  <div className="text-xs font-bold">Compte Standard</div>
+                </div>
+                <div>
+                  <div className="text-white/50 text-[8px] font-bold tracking-widest uppercase mb-0.5">Statut</div>
+                  <div className="text-xs font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                    Actif
+                  </div>
+                </div>
+                <div>
+                  <div className="text-white/50 text-[8px] font-bold tracking-widest uppercase mb-0.5">Expiration</div>
+                  <div className="text-xs font-bold">Permanent</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bas : mentions */}
+            <div className="flex items-end justify-between gap-3">
+              <div className="text-white/55 text-[9px] font-medium leading-tight max-w-[70%]">
+                Cette carte n'est pas un instrument de paiement bancaire. Elle représente votre solde virtuel Texerra.
+              </div>
+              <div className="text-white/40 text-[9px] font-bold tracking-widest">TEXERRA</div>
+            </div>
+          </div>
+
+          {/* Hint discret */}
+          <div className="absolute top-3 right-4 text-white/50 text-[9px] font-bold tracking-widest uppercase pointer-events-none">
+            Cliquer ↻
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* simple stable hash pour générer un ID visuel */
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* StatusBadge — avec description dépliable                           */
+/* ────────────────────────────────────────────────────────────────── */
+
+function StatusBadge({
+  status,
+  expandable = true,
+  size = "md",
+}: {
+  status: string;
+  expandable?: boolean;
+  size?: "sm" | "md";
+}) {
+  const [open, setOpen] = useState(false);
+  const meta = getStatusMeta(status);
+  const Icon = meta.Icon;
+
+  const padding = size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]";
+  const iconSize = size === "sm" ? "w-3 h-3" : "w-3.5 h-3.5";
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          if (!expandable) return;
+          e.stopPropagation();
+          setOpen(o => !o);
+        }}
+        className={`inline-flex items-center gap-1.5 rounded-full font-bold whitespace-nowrap transition-all ${padding}`}
+        style={{
+          background: meta.bg,
+          border: `1px solid ${meta.border}`,
+          color: meta.fg,
+          cursor: expandable ? "help" : "default",
+        }}
+        aria-expanded={open}
+      >
+        <Icon className={`${iconSize} ${status === "active" ? "animate-spin" : ""}`} />
+        {meta.label}
+        {expandable && (open ? <ChevronUp className="w-3 h-3 opacity-70" /> : <ChevronDown className="w-3 h-3 opacity-70" />)}
+      </button>
+
+      <AnimatePresence>
+        {open && expandable && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto" }}
+            exit={{ opacity: 0, y: -4, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mt-2 overflow-hidden"
+          >
+            <div
+              className="rounded-xl px-3 py-2 text-[11px] leading-relaxed flex items-start gap-2"
+              style={{ background: meta.bg, border: `1px solid ${meta.border}`, color: meta.fg }}
+            >
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>{meta.description}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -669,10 +892,25 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
     return () => clearInterval(timer);
   }, [order?.expiresAt, order?.status]);
 
-  if (!order) return <div className="h-40 bg-secondary/50 animate-pulse rounded-2xl" />;
+  if (!order) {
+    return (
+      <div className="bg-white border rounded-2xl p-5 shadow-sm" style={{ borderColor: BRAND.border }}>
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-3 w-24 bg-gray-100 animate-pulse rounded" />
+              <div className="h-2 w-32 bg-gray-100 animate-pulse rounded" />
+            </div>
+          </div>
+          <div className="h-6 w-24 bg-gray-100 animate-pulse rounded-full" />
+        </div>
+        <div className="h-14 bg-gray-50 animate-pulse rounded-xl" />
+      </div>
+    );
+  }
 
-  const cfg = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.active;
-  const StatusIcon = cfg.icon;
+  const meta = getStatusMeta(order.status);
   const iconUrl = svcIconUrl(order.serviceCode, order.serviceIcon);
   const country = resolveCountryFromPhone(order.phoneNumber, order.countryCode);
   const displayService = serviceDisplayName(order.serviceCode);
@@ -685,76 +923,106 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
   };
 
   return (
-    <motion.div variants={listItem} className="bg-white border border-border/80 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group">
-      <div
-        className="absolute top-0 left-0 h-1 w-full opacity-60 group-hover:opacity-100 transition-opacity"
-        style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
-      />
+    <motion.div
+      variants={listItem}
+      className="bg-white rounded-2xl shadow-sm overflow-hidden"
+      style={{ border: `1px solid ${BRAND.border}` }}
+    >
+      {/* Bandeau statut — couleur selon statut, pas de gradient */}
+      <div className="h-1 w-full" style={{ background: meta.dot }} />
 
-      <div className="flex items-start justify-between gap-4 mb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
-            {!imageError && iconUrl ? (
-              <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-7 h-7 object-contain drop-shadow-sm" />
-            ) : (
-              <span className="text-sm font-bold text-muted-foreground uppercase">{order.serviceCode?.slice(0, 2)}</span>
-            )}
-          </div>
-          <div>
-            <div className="font-bold text-base text-foreground">{displayService}</div>
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-              <span className="text-base leading-none">{isoToFlagEmoji(country.iso)}</span>
-              <span>{country.name}</span>
-              {order.price !== undefined && (
-                <>
-                  <span className="w-1 h-1 rounded-full bg-border" />
-                  <span className="font-medium">{Number(order.price).toFixed(2)} €</span>
-                  {localPrice && (
-                    <>
-                      <span className="w-1 h-1 rounded-full bg-border" />
-                      <span className="font-medium" style={{ color: BRAND.primaryDark }}>≈ {localPrice}</span>
-                    </>
-                  )}
-                </>
+      <div className="p-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
+              style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+            >
+              {!imageError && iconUrl ? (
+                <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-7 h-7 object-contain" />
+              ) : (
+                <span className="text-sm font-bold text-gray-400 uppercase">{order.serviceCode?.slice(0, 2)}</span>
               )}
             </div>
+            <div className="min-w-0">
+              <div className="font-bold text-base text-gray-900 truncate">{displayService}</div>
+              <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 truncate">
+                <span className="text-base leading-none">{isoToFlagEmoji(country.iso)}</span>
+                <span className="truncate">{country.name}</span>
+                {order.price !== undefined && (
+                  <>
+                    <span className="opacity-40">·</span>
+                    <span className="font-medium">{Number(order.price).toFixed(2)} €</span>
+                    {localPrice && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span className="font-medium" style={{ color: BRAND.primaryDark }}>≈ {localPrice}</span>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <StatusBadge status={order.status} size="sm" />
           </div>
         </div>
-        <div className="text-right flex flex-col items-end">
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide shadow-sm ${cfg.color}`}>
-            <StatusIcon className={`w-3.5 h-3.5 ${order.status === "active" ? "animate-spin" : ""}`} />
-            {cfg.label}
+
+        {/* Numéro attribué */}
+        {order.phoneNumber && (
+          <div
+            className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-3"
+            style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+          >
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-0.5">Numéro attribué</span>
+              <span className="font-mono font-bold text-base tracking-wide text-gray-900 truncate">{order.phoneNumber}</span>
+            </div>
+            <button
+              onClick={() => copyText(order.phoneNumber!, "phone")}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border transition-all active:scale-95"
+              style={{ borderColor: BRAND.border }}
+              aria-label="Copier le numéro"
+            >
+              {copied === "phone" ? <CheckCircle2 className="w-4 h-4" style={{ color: BRAND.success }} /> : <Copy className="w-4 h-4 text-gray-500" />}
+            </button>
           </div>
-          {remaining && order.status === "active" && (
-            <div className="text-xs text-muted-foreground mt-2 font-mono bg-secondary/80 px-2 py-0.5 rounded-md border border-border/50">{remaining}</div>
-          )}
-        </div>
+        )}
+
+        {/* Code SMS reçu */}
+        {order.smsCode && (
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-3"
+            style={{ background: BRAND.successSoft, border: `1px solid ${BRAND.successBorder}` }}
+          >
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase font-bold tracking-wider mb-0.5" style={{ color: "#166534" }}>Code de vérification</div>
+              <span className="font-mono font-black text-xl tracking-[0.15em]" style={{ color: "#166534" }}>{order.smsCode}</span>
+            </div>
+            <button
+              onClick={() => copyText(order.smsCode!, "code")}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm transition-all active:scale-95"
+              style={{ border: `1px solid ${BRAND.successBorder}`, color: BRAND.success }}
+              aria-label="Copier le code"
+            >
+              {copied === "code" ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
+          </motion.div>
+        )}
+
+        {/* Compte à rebours */}
+        {remaining && order.status === "active" && (
+          <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Expire dans</span>
+            <span className="font-mono font-bold text-gray-700 bg-gray-50 px-2 py-0.5 rounded">{remaining}</span>
+          </div>
+        )}
       </div>
-
-      {order.phoneNumber && (
-        <div className="flex items-center justify-between gap-3 mb-4 bg-secondary/40 rounded-xl px-4 py-3 border border-border/50 group-hover:bg-secondary/60 transition-colors">
-          <div className="flex flex-col">
-            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Numéro attribué</span>
-            <span className="font-mono font-bold text-base tracking-wide text-foreground">{order.phoneNumber}</span>
-          </div>
-          <button onClick={() => copyText(order.phoneNumber!, "phone")} className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border border-border text-muted-foreground hover:border-primary/30 transition-all active:scale-95">
-            {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-          </button>
-        </div>
-      )}
-
-      {order.smsCode && (
-        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex items-center justify-between gap-3 mb-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-full -mr-8 -mt-8 blur-xl" />
-          <div className="relative z-10">
-            <div className="text-[10px] uppercase font-bold text-green-700 tracking-wider mb-0.5">Code de vérification</div>
-            <span className="font-mono font-black text-xl tracking-[0.15em] text-green-800 drop-shadow-sm">{order.smsCode}</span>
-          </div>
-          <button onClick={() => copyText(order.smsCode!, "code")} className="relative z-10 w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border border-green-200 text-green-600 hover:bg-green-600 hover:text-white transition-all active:scale-95">
-            {copied === "code" ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          </button>
-        </motion.div>
-      )}
     </motion.div>
   );
 }
@@ -767,17 +1035,15 @@ function PastOrderCard({ order, currency }: { order: Order; currency?: string | 
   const [copied, setCopied] = useState<string>("");
   const [imageError, setImageError] = useState(false);
 
-  const cfg = STATUS_CONFIG[order.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.cancelled;
-  const StatusIcon = cfg.icon;
+  const meta = getStatusMeta(order.status);
   const date = new Date(order.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
   const iconUrl = svcIconUrl(order.serviceCode, order.serviceIcon);
   const country = resolveCountryFromPhone(order.phoneNumber, order.countryCode);
   const displayService = serviceDisplayName(order.serviceCode);
+  const localPrice = order.price !== undefined ? formatLocalPrice(order.price, currency) : null;
 
   const phoneWithPrefix = order.phoneNumber ?? "";
   const phoneWithoutPrefix = phoneWithPrefix.replace(/^\+\d{1,4}/, "").replace(/\D/g, "");
-
-  const localPrice = order.price !== undefined ? formatLocalPrice(order.price, currency) : null;
 
   const copyText = (text: string, key: string) => {
     if (!text) return;
@@ -786,136 +1052,132 @@ function PastOrderCard({ order, currency }: { order: Order; currency?: string | 
     setTimeout(() => setCopied(""), 2000);
   };
 
-  const hasSmsCode = !!order.smsCode;
-
   return (
     <motion.div
       variants={listItem}
-      className="bg-white border border-border/80 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
+      className="bg-white rounded-2xl shadow-sm overflow-hidden"
+      style={{ border: `1px solid ${BRAND.border}` }}
     >
-      <div
-        className="h-1 w-full"
-        style={{
-          background: order.status === "completed"
-            ? "linear-gradient(90deg, #16a34a, #4ade80)"
-            : order.status === "cancelled" || order.status === "expired"
-            ? "linear-gradient(90deg, #94a3b8, #cbd5e1)"
-            : `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})`
-        }}
-      />
+      <div className="h-1 w-full" style={{ background: meta.dot }} />
 
       <div className="p-5">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide shadow-sm ${cfg.color}`}>
-            <StatusIcon className="w-3.5 h-3.5" />
-            {cfg.label}
+        {/* Header : service + statut + date */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
+              style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+            >
+              {!imageError && iconUrl ? (
+                <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-6 h-6 object-contain" />
+              ) : (
+                <span className="text-sm font-bold text-gray-400 uppercase">{order.serviceCode?.slice(0, 2)}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-sm text-gray-900 truncate">{displayService}</div>
+              <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+                <span className="text-base leading-none">{isoToFlagEmoji(country.iso)}</span>
+                <span className="truncate">{country.name}</span>
+                <span className="opacity-40">·</span>
+                <span>{date}</span>
+              </div>
+            </div>
           </div>
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <Clock className="w-3 h-3" />
-            <span>{date}</span>
+          <div className="shrink-0">
+            <StatusBadge status={order.status} size="sm" />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-secondary/80 flex items-center justify-center shrink-0 overflow-hidden">
-                {!imageError && iconUrl ? (
-                  <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-6 h-6 object-contain" />
-                ) : (
-                  <span className="text-sm font-bold text-muted-foreground uppercase">{order.serviceCode?.slice(0, 2)}</span>
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="font-bold text-sm text-foreground truncate">{displayService}</div>
-                <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                  <span className="text-base leading-none">{isoToFlagEmoji(country.iso)}</span>
-                  <span className="truncate">{country.name}</span>
-                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-secondary border border-border/50">{country.callingCode}</span>
-                </div>
-              </div>
-            </div>
-
+        {/* Corps : 3 colonnes en desktop, empilées en mobile */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Colonne 1 : numéro */}
+          <div
+            className="rounded-xl p-3"
+            style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+          >
+            <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1">Numéro utilisé</div>
             {order.phoneNumber ? (
-              <div className="bg-secondary/40 rounded-xl p-3 border border-border/50">
-                <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Numéro utilisé</div>
-                <div className="font-mono font-bold text-sm text-foreground mb-2 break-all">{order.phoneNumber}</div>
+              <>
+                <div className="font-mono font-bold text-xs text-gray-900 mb-2 break-all">{order.phoneNumber}</div>
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     onClick={() => copyText(phoneWithPrefix, "phone-with")}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-border text-[10px] font-semibold text-foreground hover:border-primary/40 hover:shadow-sm transition-all"
-                    title="Copier avec indicatif"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border text-[10px] font-semibold text-gray-700 hover:shadow-sm transition-all"
+                    style={{ borderColor: BRAND.border }}
                   >
-                    {copied === "phone-with" ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                    {copied === "phone-with" ? <CheckCircle2 className="w-3 h-3" style={{ color: BRAND.success }} /> : <Copy className="w-3 h-3" />}
                     Avec {country.callingCode}
                   </button>
                   <button
                     onClick={() => copyText(phoneWithoutPrefix, "phone-without")}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-border text-[10px] font-semibold text-muted-foreground hover:border-primary/40 hover:shadow-sm transition-all"
-                    title="Copier sans indicatif"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border text-[10px] font-semibold text-gray-500 hover:shadow-sm transition-all"
+                    style={{ borderColor: BRAND.border }}
                   >
-                    {copied === "phone-without" ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                    {copied === "phone-without" ? <CheckCircle2 className="w-3 h-3" style={{ color: BRAND.success }} /> : <Copy className="w-3 h-3" />}
                     Sans indicatif
                   </button>
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="bg-secondary/30 rounded-xl p-3 border border-dashed border-border/60 text-center">
-                <span className="text-[11px] text-muted-foreground italic">Numéro indisponible</span>
+              <div className="text-[11px] text-gray-400 italic">Indisponible</div>
+            )}
+          </div>
+
+          {/* Colonne 2 : code SMS */}
+          <div
+            className="rounded-xl p-3"
+            style={{
+              background: order.smsCode ? BRAND.successSoft : BRAND.borderSoft,
+              border: `1px solid ${order.smsCode ? BRAND.successBorder : BRAND.border}`,
+            }}
+          >
+            <div className="text-[10px] uppercase font-bold tracking-wider mb-1" style={{ color: order.smsCode ? "#166534" : "#6B7280" }}>
+              {order.smsCode ? "Code reçu" : "Code SMS"}
+            </div>
+            {order.smsCode ? (
+              <>
+                <div className="font-mono font-black text-base tracking-wider mb-2" style={{ color: "#166534" }}>{order.smsCode}</div>
+                <button
+                  onClick={() => copyText(order.smsCode!, "code")}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border text-[10px] font-bold transition-all"
+                  style={{ borderColor: BRAND.successBorder, color: BRAND.success }}
+                >
+                  {copied === "code" ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  Copier
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-gray-500">
+                <MessageCircle className="w-4 h-4 opacity-60" />
+                <span className="text-[11px] font-semibold">Aucun code</span>
               </div>
             )}
           </div>
 
-          <div className="flex flex-col justify-center">
-            {hasSmsCode ? (
-              <div className="bg-green-50/80 rounded-xl p-4 border border-green-200 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/10 rounded-full -mr-8 -mt-8 blur-xl" />
-                <div className="relative z-10">
-                  <div className="text-[10px] uppercase font-bold text-green-700 tracking-wider mb-1">Code SMS reçu</div>
-                  <div className="font-mono font-black text-xl tracking-[0.1em] text-green-800 mb-3">{order.smsCode}</div>
-                  <button
-                    onClick={() => copyText(order.smsCode!, "code")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-green-200 text-xs font-bold text-green-700 hover:bg-green-600 hover:text-white transition-all active:scale-95"
-                  >
-                    {copied === "code" ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    Copier le code
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-secondary/30 rounded-xl p-4 border border-dashed border-border/60 text-center">
-                <MessageCircle className="w-6 h-6 text-muted-foreground/50 mx-auto mb-2" />
-                <div className="text-[11px] font-semibold text-muted-foreground">Aucun code reçu</div>
-                <div className="text-[10px] text-muted-foreground/80 mt-1">
-                  {order.status === "cancelled" ? "Commande annulée" : order.status === "expired" ? "Commande expirée" : "SMS non reçu"}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col justify-center gap-3">
-            <div className="bg-white border border-border/60 rounded-xl p-4">
-              <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">Prix payé</div>
-              <div className="font-black text-2xl text-foreground">
+          {/* Colonne 3 : prix + CTA */}
+          <div
+            className="rounded-xl p-3 flex flex-col justify-between"
+            style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+          >
+            <div>
+              <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1">Montant payé</div>
+              <div className="font-black text-lg text-gray-900 leading-tight">
                 {order.price !== undefined ? `${Number(order.price).toFixed(2)} €` : "—"}
               </div>
               {localPrice && (
-                <div className="text-xs font-bold mt-1 flex items-center gap-1" style={{ color: BRAND.primaryDark }}>
-                  <span className="opacity-70">≈</span> {localPrice}
+                <div className="text-[11px] font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
+                  ≈ {localPrice}
                 </div>
               )}
             </div>
-
             <Link
               href={`/order?service=${order.serviceCode}&country=${order.countryCode}`}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:shadow-lg active:scale-95"
-              style={{
-                background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`,
-                boxShadow: `0 4px 12px ${BRAND.primary}33`
-              }}
+              className="mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all hover:opacity-90 active:scale-95"
+              style={{ background: BRAND.primary }}
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Recommander ce numéro
+              <RefreshCw className="w-3 h-3" />
+              Recommander
             </Link>
           </div>
         </div>
@@ -925,17 +1187,17 @@ function PastOrderCard({ order, currency }: { order: Order; currency?: string | 
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Barre de filtres                                                   */
+/* Filtres                                                            */
 /* ────────────────────────────────────────────────────────────────── */
 
 type OrderFilter = "all" | "completed" | "active" | "cancelled" | "expired";
 
 const FILTER_OPTIONS: { value: OrderFilter; label: string; dotColor: string }[] = [
-  { value: "all", label: "Toutes", dotColor: "#64748b" },
-  { value: "completed", label: "Réussies", dotColor: "#16a34a" },
-  { value: "active", label: "En cours", dotColor: "#2563eb" },
-  { value: "cancelled", label: "Annulées", dotColor: "#94a3b8" },
-  { value: "expired", label: "Expirées", dotColor: "#dc2626" },
+  { value: "all", label: "Toutes", dotColor: "#6B7280" },
+  { value: "completed", label: "Réussies", dotColor: BRAND.success },
+  { value: "active", label: "En cours", dotColor: BRAND.cool },
+  { value: "cancelled", label: "Annulées", dotColor: "#9CA3AF" },
+  { value: "expired", label: "Expirées", dotColor: BRAND.danger },
 ];
 
 function OrderFilters({
@@ -948,8 +1210,11 @@ function OrderFilters({
   counts: Record<OrderFilter, number>;
 }) {
   return (
-    <div className="bg-white/80 backdrop-blur-sm border border-border/60 rounded-2xl p-2 flex items-center gap-1.5 overflow-x-auto scrollbar-hide shadow-sm">
-      <div className="pl-2 pr-1 text-muted-foreground shrink-0">
+    <div
+      className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide p-1.5 rounded-2xl"
+      style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+    >
+      <div className="pl-2 pr-1 text-gray-400 shrink-0">
         <Filter className="w-4 h-4" />
       </div>
       {FILTER_OPTIONS.map(f => {
@@ -959,19 +1224,24 @@ function OrderFilters({
           <button
             key={f.value}
             onClick={() => onChange(f.value)}
-            className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+            className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all"
+            style={
               active
-                ? "text-white shadow-md"
-                : "text-foreground/70 hover:bg-secondary/60"
-            }`}
-            style={active ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
+                ? { background: BRAND.ink, color: "#ffffff" }
+                : { color: BRAND.inkMuted }
+            }
           >
             <span
-              className="w-2 h-2 rounded-full shrink-0"
+              className="w-1.5 h-1.5 rounded-full shrink-0"
               style={{ background: active ? "#ffffff" : f.dotColor }}
             />
             {f.label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${active ? "bg-white/25" : "bg-secondary/80"}`}>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-md font-mono"
+              style={{
+                background: active ? "rgba(255,255,255,0.2)" : BRAND.borderSoft,
+              }}
+            >
               {count}
             </span>
           </button>
@@ -982,7 +1252,7 @@ function OrderFilters({
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* RechargesTab — Design timeline/reçu unique                         */
+/* RechargesTab                                                       */
 /* ────────────────────────────────────────────────────────────────── */
 
 function RechargesTab({ currency }: { currency?: string | null }) {
@@ -999,34 +1269,16 @@ function RechargesTab({ currency }: { currency?: string | null }) {
   });
 
   const topupStatusConfig = {
-    pending: {
-      label: "En attente",
-      color: "text-amber-700",
-      ring: "ring-amber-200",
-      bg: "bg-amber-50",
-      dot: "#f59e0b",
-    },
-    completed: {
-      label: "Crédité",
-      color: "text-green-700",
-      ring: "ring-green-200",
-      bg: "bg-green-50",
-      dot: "#16a34a",
-    },
-    failed: {
-      label: "Échoué",
-      color: "text-red-700",
-      ring: "ring-red-200",
-      bg: "bg-red-50",
-      dot: "#dc2626",
-    },
+    pending: { label: "En attente", fg: "#92400E", bg: BRAND.warnSoft, border: BRAND.warnBorder, dot: BRAND.warn },
+    completed: { label: "Crédité", fg: "#166534", bg: BRAND.successSoft, border: BRAND.successBorder, dot: BRAND.success },
+    failed: { label: "Échoué", fg: "#991B1B", bg: BRAND.dangerSoft, border: BRAND.dangerBorder, dot: BRAND.danger },
   };
 
   if (isLoading) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-24 bg-secondary/50 animate-pulse rounded-2xl" />
+          <div key={i} className="h-24 rounded-2xl animate-pulse" style={{ background: BRAND.borderSoft }} />
         ))}
       </div>
     );
@@ -1034,17 +1286,27 @@ function RechargesTab({ currency }: { currency?: string | null }) {
 
   if (!topups || topups.length === 0) {
     return (
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-20 bg-white border border-border/80 rounded-3xl shadow-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="text-center py-16 rounded-3xl"
+        style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+      >
         <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner"
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
           style={{ background: BRAND.primarySoft }}
         >
           <Receipt className="w-8 h-8" style={{ color: BRAND.primary }} />
         </div>
-        <h3 className="text-lg font-bold mb-2 text-foreground">Aucune recharge effectuée</h3>
-        <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">Votre historique de recharges financières apparaîtra ici une fois que vous aurez approvisionné votre compte.</p>
-        <Link href="/wallet" className="inline-flex items-center gap-2 px-6 py-3 text-white font-semibold rounded-xl transition-all active:scale-95 text-sm"
-          style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}>
+        <h3 className="text-lg font-bold mb-2 text-gray-900">Aucune recharge effectuée</h3>
+        <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
+          Rechargez votre solde pour pouvoir commander des numéros virtuels. Toutes vos recharges apparaîtront ici.
+        </p>
+        <Link
+          href="/wallet"
+          className="inline-flex items-center gap-2 px-6 py-3 text-white font-bold rounded-xl text-sm transition-all hover:opacity-90 active:scale-95"
+          style={{ background: BRAND.primary }}
+        >
           Recharger mon solde <ArrowRight className="w-4 h-4" />
         </Link>
       </motion.div>
@@ -1059,116 +1321,101 @@ function RechargesTab({ currency }: { currency?: string | null }) {
 
   return (
     <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-5">
+      {/* Résumé */}
       <motion.div
         variants={listItem}
-        className="relative overflow-hidden bg-white border border-border/80 rounded-2xl p-5 shadow-sm"
+        className="rounded-2xl p-5"
+        style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
       >
-        <div
-          className="absolute top-0 left-0 h-1 w-full"
-          style={{ background: `linear-gradient(90deg, ${BRAND.primary}, ${BRAND.primaryLight})` }}
-        />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm"
-              style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, color: "#ffffff" }}
+              className="w-12 h-12 rounded-xl flex items-center justify-center"
+              style={{ background: BRAND.primarySoft, color: BRAND.primary }}
             >
-              <Receipt className="w-6 h-6" />
+              <TrendingUp className="w-6 h-6" />
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground">Historique des recharges</div>
-              <div className="text-2xl font-black text-foreground">{totalCredited.toFixed(2)} €</div>
+              <div className="text-[11px] uppercase tracking-wider font-bold text-gray-500">Total crédité</div>
+              <div className="text-2xl font-black text-gray-900">{totalCredited.toFixed(2)} €</div>
               {totalLocal && (
-                <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
-                  ≈ {totalLocal} crédités
-                </div>
+                <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>≈ {totalLocal}</div>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/60 border border-border/60">
-            <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-xs font-bold text-foreground">{topups.length} opération{topups.length > 1 ? "s" : ""}</span>
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+            style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+          >
+            <Calendar className="w-3.5 h-3.5 text-gray-500" />
+            <span className="text-xs font-bold text-gray-700">{topups.length} opération{topups.length > 1 ? "s" : ""}</span>
           </div>
         </div>
       </motion.div>
 
-      <div className="relative pl-6 sm:pl-8">
-        <div
-          className="absolute left-[10px] sm:left-[14px] top-3 bottom-3 w-[2px] rounded-full"
-          style={{ background: `linear-gradient(180deg, ${BRAND.primary}55, ${BRAND.primary}15)` }}
-        />
+      {/* Liste */}
+      <div className="space-y-3">
+        {topups.map(t => {
+          const cfg = topupStatusConfig[t.status as keyof typeof topupStatusConfig] ?? topupStatusConfig.pending;
+          const date = new Date(t.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+          const time = new Date(t.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+          const localAmount = formatLocalPrice(Number(t.amountEur), currency);
 
-        <div className="space-y-3">
-          {topups.map((t, idx) => {
-            const cfg = topupStatusConfig[t.status as keyof typeof topupStatusConfig] ?? topupStatusConfig.pending;
-            const date = new Date(t.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
-            const time = new Date(t.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-            const localAmount = formatLocalPrice(Number(t.amountEur), currency);
-            const isCompleted = t.status === "completed";
-
-            return (
-              <motion.div
-                key={t.id}
-                variants={listItem}
-                className="relative"
-              >
-                <div
-                  className="absolute -left-6 sm:-left-8 top-5 w-3 h-3 rounded-full border-2 border-white shadow-sm z-10"
-                  style={{ background: cfg.dot }}
-                />
-
-                <div className="bg-white border border-border/80 rounded-2xl p-4 hover:shadow-md transition-all duration-300 relative overflow-hidden group">
+          return (
+            <motion.div
+              key={t.id}
+              variants={listItem}
+              className="rounded-2xl p-4 transition-shadow hover:shadow-md"
+              style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
                   <div
-                    className="absolute left-0 top-0 bottom-0 w-1 opacity-80"
-                    style={{ background: cfg.dot }}
-                  />
-
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ring-1 ${cfg.bg} ${cfg.ring}`}>
-                        {isCompleted ? (
-                          <BadgeCheck className={`w-5 h-5 ${cfg.color}`} />
-                        ) : t.status === "failed" ? (
-                          <XCircle className={`w-5 h-5 ${cfg.color}`} />
-                        ) : (
-                          <Clock className={`w-5 h-5 ${cfg.color}`} />
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Recharge</div>
-                        <div className="text-xl font-black text-foreground leading-tight">
-                          +{Number(t.amountEur).toFixed(2)} €
-                        </div>
-                        {localAmount && (
-                          <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
-                            ≈ {localAmount}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ring-1 ${cfg.bg} ${cfg.color} ${cfg.ring}`}>
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
-                      {cfg.label}
-                    </span>
+                    className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
+                  >
+                    {t.status === "completed" ? (
+                      <BadgeCheck className="w-5 h-5" style={{ color: cfg.fg }} />
+                    ) : t.status === "failed" ? (
+                      <XCircle className="w-5 h-5" style={{ color: cfg.fg }} />
+                    ) : (
+                      <Clock className="w-5 h-5" style={{ color: cfg.fg }} />
+                    )}
                   </div>
-
-                  <div className="flex items-center gap-3 mt-3 pt-3 border-t border-dashed border-border/60 text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {date}
-                    </span>
-                    <span className="w-1 h-1 rounded-full bg-border" />
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {time}
-                    </span>
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Recharge</div>
+                    <div className="text-xl font-black text-gray-900 leading-tight">
+                      +{Number(t.amountEur).toFixed(2)} €
+                    </div>
+                    {localAmount && (
+                      <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
+                        ≈ {localAmount}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </motion.div>
-            );
-          })}
-        </div>
+
+                <span
+                  className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide"
+                  style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.fg }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dot }} />
+                  {cfg.label}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3 mt-3 pt-3 text-[11px] text-gray-500" style={{ borderTop: `1px dashed ${BRAND.border}` }}>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" /> {date}
+                </span>
+                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> {time}
+                </span>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
     </motion.div>
   );
@@ -1243,114 +1490,160 @@ function ProfileTab({ me }: { me: UserProfile }) {
   const localCurrency = getCurrency(me.currency ?? "EUR");
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-xl mx-auto sm:mx-0">
-      <div className="bg-white border border-border/80 rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" style={{ background: `${BRAND.primary}0d` }} />
-
-        <div className="flex flex-col sm:flex-row sm:items-center gap-5 relative z-10">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-2xl">
+      <div
+        className="rounded-3xl p-6 sm:p-8 space-y-6"
+        style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+      >
+        {/* Avatar + identité */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
           {me.avatarUrl ? (
             <img src={me.avatarUrl} alt={me.name ?? ""} className="w-20 h-20 rounded-2xl object-cover border-2 border-white shadow-md" />
           ) : (
             <div
-              className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-extrabold shadow-inner"
-              style={{ background: `linear-gradient(135deg, ${BRAND.primary}33, ${BRAND.primary}0a)`, color: BRAND.primary }}
+              className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-extrabold"
+              style={{ background: BRAND.primarySoft, color: BRAND.primary }}
             >
               {initials}
             </div>
           )}
-          <div>
-            <div className="font-extrabold text-xl text-foreground mb-1">{me.name ?? "Mon Profil"}</div>
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-secondary text-sm text-muted-foreground font-medium">
-              {me.email}
+          <div className="min-w-0">
+            <div className="font-extrabold text-xl text-gray-900 mb-1 truncate">{me.name ?? "Mon Profil"}</div>
+            <div
+              className="inline-flex items-center px-3 py-1 rounded-full text-sm text-gray-600 font-medium max-w-full"
+              style={{ background: BRAND.borderSoft }}
+            >
+              <span className="truncate">{me.email}</span>
             </div>
           </div>
         </div>
 
-        <hr className="border-border/60" />
+        <hr style={{ borderColor: BRAND.border }} />
 
-        <div className="space-y-6 relative z-10">
-          <div className="group">
-            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 block">Nom affiché</label>
+        <div className="space-y-6">
+          {/* Nom */}
+          <div>
+            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Nom affiché</label>
             {editing === "name" ? (
               <div className="space-y-3">
-                <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus
-                  className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-4 transition-all shadow-sm"
-                  style={{ borderColor: `${BRAND.primary}55` }}
-                  placeholder="Votre nom" />
-                {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  autoFocus
+                  className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none"
+                  style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.primary}` }}
+                  placeholder="Votre nom"
+                />
+                {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <button onClick={handleSaveName} disabled={updateMutation.isPending}
+                  <button
+                    onClick={handleSaveName}
+                    disabled={updateMutation.isPending}
                     className="flex-1 flex items-center justify-center gap-2 py-3 text-white font-bold rounded-xl text-sm transition-all active:scale-95 disabled:opacity-50"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}>
+                    style={{ background: BRAND.primary }}
+                  >
                     {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                     Enregistrer
                   </button>
-                  <button onClick={handleCancel}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-colors active:scale-95">
+                  <button
+                    onClick={handleCancel}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-colors active:scale-95"
+                    style={{ border: `1px solid ${BRAND.border}`, color: BRAND.inkMuted }}
+                  >
                     <X className="w-4 h-4" /> Annuler
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-secondary/30 border border-transparent group-hover:border-border/50 group-hover:bg-secondary/50 rounded-xl transition-all">
-                <span className="text-sm font-medium">{me.name ?? <span className="text-muted-foreground italic">Non défini</span>}</span>
-                <button onClick={() => { setEditing("name"); setError(""); }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm border border-border/50">
+              <div
+                className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl transition-colors"
+                style={{ background: BRAND.borderSoft }}
+              >
+                <span className="text-sm font-medium text-gray-900">{me.name ?? <span className="text-gray-400 italic">Non défini</span>}</span>
+                <button
+                  onClick={() => { setEditing("name"); setError(""); }}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm"
+                  style={{ border: `1px solid ${BRAND.border}` }}
+                >
                   <Pencil className="w-3.5 h-3.5" /> Modifier
                 </button>
               </div>
             )}
           </div>
 
-          <div className="group">
-            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5">
+          {/* Téléphone */}
+          <div>
+            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5" /> Numéro de téléphone
             </label>
-            <p className="text-[11px] text-muted-foreground mb-2">Utilisé automatiquement pour vos recharges.</p>
+            <p className="text-[11px] text-gray-500 mb-2">Utilisé automatiquement pour vos recharges Mobile Money.</p>
             {editing === "phone" ? (
               <div className="space-y-3">
-                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} autoFocus
-                  className="w-full px-4 py-3.5 bg-secondary/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-4 transition-all shadow-sm"
-                  style={{ borderColor: `${BRAND.primary}55` }}
-                  placeholder="+237 6 XX XX XX XX" />
-                {error && <p className="text-xs text-destructive font-medium">{error}</p>}
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  autoFocus
+                  className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none"
+                  style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.primary}` }}
+                  placeholder="+237 6 XX XX XX XX"
+                />
+                {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <button onClick={handleSavePhone} disabled={updateMutation.isPending}
+                  <button
+                    onClick={handleSavePhone}
+                    disabled={updateMutation.isPending}
                     className="flex-1 flex items-center justify-center gap-2 py-3 text-white font-bold rounded-xl text-sm transition-all active:scale-95 disabled:opacity-50"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` }}>
+                    style={{ background: BRAND.primary }}
+                  >
                     {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                     Enregistrer
                   </button>
-                  <button onClick={handleCancel}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-colors active:scale-95">
+                  <button
+                    onClick={handleCancel}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-colors active:scale-95"
+                    style={{ border: `1px solid ${BRAND.border}`, color: BRAND.inkMuted }}
+                  >
                     <X className="w-4 h-4" /> Annuler
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-secondary/30 border border-transparent group-hover:border-border/50 group-hover:bg-secondary/50 rounded-xl transition-all">
+              <div
+                className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl transition-colors"
+                style={{ background: BRAND.borderSoft }}
+              >
                 {me.phone ? (
-                  <span className="text-sm font-mono font-bold tracking-wide">{me.phone}</span>
+                  <span className="text-sm font-mono font-bold tracking-wide text-gray-900">{me.phone}</span>
                 ) : (
-                  <span className="text-sm text-muted-foreground italic">Non renseigné</span>
+                  <span className="text-sm text-gray-400 italic">Non renseigné</span>
                 )}
-                <button onClick={() => { setEditing("phone"); setError(""); }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm border border-border/50">
+                <button
+                  onClick={() => { setEditing("phone"); setError(""); }}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm"
+                  style={{ border: `1px solid ${BRAND.border}` }}
+                >
                   <Pencil className="w-3.5 h-3.5" /> {me.phone ? "Modifier" : "Ajouter"}
                 </button>
               </div>
             )}
           </div>
 
+          {/* Devise */}
           <div>
-            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5">
+            <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
               <Globe className="w-3.5 h-3.5" /> Devise locale
             </label>
-            <p className="text-[11px] text-muted-foreground mb-2">Affiche l'équivalent dans votre monnaie lors des recharges.</p>
+            <p className="text-[11px] text-gray-500 mb-2">Affiche l'équivalent dans votre monnaie lors des recharges.</p>
             <div className="relative">
-              <select value={me.currency ?? "EUR"} onChange={e => handleCurrencyChange(e.target.value)}
+              <select
+                value={me.currency ?? "EUR"}
+                onChange={e => handleCurrencyChange(e.target.value)}
                 disabled={savingCurrency}
-                className="w-full px-5 py-3.5 bg-secondary/50 border border-border/80 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 appearance-none cursor-pointer disabled:opacity-60 transition-all shadow-sm hover:border-border">
+                className="w-full px-5 py-3.5 rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer disabled:opacity-60 transition-all"
+                style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+              >
                 {CURRENCIES.map(c => (
                   <option key={c.code} value={c.code}>{c.symbol} — {c.name} ({c.code})</option>
                 ))}
@@ -1358,15 +1651,16 @@ function ProfileTab({ me }: { me: UserProfile }) {
               {savingCurrency ? (
                 <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin" style={{ color: BRAND.primary }} />
               ) : (
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground bg-secondary/50 pl-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronDown className="w-5 h-5" />
                 </div>
               )}
             </div>
             {localCurrency && localCurrency.code !== "EUR" && (
-              <p className="text-xs font-medium text-muted-foreground mt-2 bg-secondary/40 inline-block px-2.5 py-1 rounded-md">
+              <p
+                className="text-xs font-medium text-gray-600 mt-2 inline-block px-2.5 py-1 rounded-md"
+                style={{ background: BRAND.borderSoft }}
+              >
                 Taux indicatif : 1 € ≈ {localCurrency.rateFromEur.toLocaleString("fr-FR")} {localCurrency.symbol}
               </p>
             )}
@@ -1378,17 +1672,18 @@ function ProfileTab({ me }: { me: UserProfile }) {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Encart d'information                                               */
+/* ImportantNotice — texte professionnel                             */
 /* ────────────────────────────────────────────────────────────────── */
 
 function ImportantNotice() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-10 rounded-2xl border overflow-hidden"
-      style={{ borderColor: `${BRAND.primary}33`, background: `linear-gradient(135deg, ${BRAND.primarySoft}, #ffffff)` }}
+      className="rounded-2xl overflow-hidden"
+      style={{ border: `1px solid ${BRAND.primary}33`, background: BRAND.primarySoft }}
     >
       <button
         onClick={() => setOpen(o => !o)}
@@ -1396,17 +1691,24 @@ function ImportantNotice() {
       >
         <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
+            className="w-9 h-9 rounded-xl flex items-center justify-center"
             style={{ background: BRAND.primary, color: "#ffffff" }}
           >
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <div className="font-extrabold text-sm" style={{ color: BRAND.primaryDark }}>Important !</div>
-            <div className="text-[11px] text-muted-foreground">À lire pour maximiser vos chances de recevoir un SMS</div>
+            <div className="font-extrabold text-sm" style={{ color: BRAND.primaryDark }}>
+              Comment recevoir un SMS&nbsp;?
+            </div>
+            <div className="text-[11px] text-gray-600">
+              Conseils pratiques pour maximiser vos chances de réception.
+            </div>
           </div>
         </div>
-        <div className="text-xs font-bold" style={{ color: BRAND.primary }}>{open ? "Masquer" : "Afficher"}</div>
+        <div className="flex items-center gap-1 text-xs font-bold" style={{ color: BRAND.primary }}>
+          {open ? "Masquer" : "Lire"}
+          {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </div>
       </button>
 
       <AnimatePresence initial={false}>
@@ -1415,30 +1717,37 @@ function ImportantNotice() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.22 }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 pt-1 text-sm text-foreground/85 space-y-3">
-              <p>
-                Envoyez le numéro reçu via le formulaire dans l'application sélectionnée, messager, service, etc.
-                Le code du SMS apparaîtra à côté du numéro de téléphone sur cette page.
-                <strong className="font-semibold text-foreground"> Temps moyen de livraison : 2 à 7 minutes.</strong>
-              </p>
-              <p>
-                Si le SMS n'est pas reçu, l'argent pour le numéro sera retourné sur le solde.
-              </p>
-              <p>
-                Nous ne garantissons pas une livraison SMS à 100 % à chaque numéro acheté. Les algorithmes côté service peuvent bloquer la livraison de SMS vers des numéros virtuels pour diverses raisons.
-                Parfois, il y a un seul accouchement réussi pour 15 à 20 tentatives, c'est normal.
-              </p>
-              <div className="pt-2 border-t border-dashed" style={{ borderColor: `${BRAND.primary}33` }}>
-                <div className="font-bold text-xs mb-2" style={{ color: BRAND.primaryDark }}>Comment augmenter les chances d'accouchement ?</div>
-                <ul className="space-y-1.5 text-[13px] pl-1">
+            <div className="px-5 pb-5 pt-1 text-sm text-gray-700 space-y-4">
+              <div>
+                <div className="font-bold text-xs mb-1.5" style={{ color: BRAND.primaryDark }}>Procédure</div>
+                <ol className="space-y-1.5 text-[13px] list-decimal pl-5">
+                  <li>Copiez le numéro virtuel attribué dans votre commande.</li>
+                  <li>Collez-le dans le formulaire d'inscription du service concerné (WhatsApp, Telegram, Google, etc.).</li>
+                  <li>Le code de vérification s'affichera automatiquement ici dès sa réception.</li>
+                </ol>
+                <p className="text-xs text-gray-500 mt-2">
+                  Délai moyen de réception&nbsp;: <strong className="text-gray-700">2 à 7 minutes</strong>.
+                </p>
+              </div>
+
+              <div>
+                <div className="font-bold text-xs mb-1.5" style={{ color: BRAND.primaryDark }}>Si aucun SMS n'arrive</div>
+                <p className="text-[13px]">
+                  Le montant de la commande sera automatiquement recrédité sur votre solde à l'expiration du numéro. Vous ne perdez donc rien.
+                </p>
+              </div>
+
+              <div className="pt-3" style={{ borderTop: `1px dashed ${BRAND.primary}33` }}>
+                <div className="font-bold text-xs mb-2" style={{ color: BRAND.primaryDark }}>Conseils pour améliorer la réception</div>
+                <ul className="space-y-1.5 text-[13px]">
                   {[
-                    "Essaie de nouveaux chiffres ;",
-                    "Essayer dans d'autres pays ;",
-                    "Changer l'adresse IP ;",
-                    "Se déconnecter des autres comptes sur l'appareil.",
+                    "Essayez un autre numéro ou un autre pays.",
+                    "Changez de réseau (Wi-Fi / données mobiles) ou utilisez un VPN.",
+                    "Déconnectez-vous des autres comptes sur le même appareil avant l'inscription.",
+                    "Attendez la fin du compte à rebours avant de relancer une nouvelle commande.",
                   ].map((line, i) => (
                     <li key={i} className="flex items-start gap-2">
                       <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: BRAND.primary }} />
@@ -1446,6 +1755,16 @@ function ImportantNotice() {
                     </li>
                   ))}
                 </ul>
+              </div>
+
+              <div
+                className="rounded-xl px-3 py-2 text-[12px] flex items-start gap-2"
+                style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+              >
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: BRAND.primary }} />
+                <span className="text-gray-600">
+                  Aucun système ne garantit une réception à 100 %. Certains services bloquent les numéros virtuels. Si cela arrive, essayez un autre fournisseur ou un autre pays.
+                </span>
               </div>
             </div>
           </motion.div>
@@ -1456,10 +1775,136 @@ function ImportantNotice() {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
+/* Skeletons                                                          */
+/* ────────────────────────────────────────────────────────────────── */
+
+function StatCardSkeleton() {
+  return (
+    <div
+      className="rounded-2xl p-5 h-full"
+      style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="h-3 w-20 bg-gray-100 animate-pulse rounded" />
+        <div className="w-8 h-8 rounded-lg bg-gray-100 animate-pulse" />
+      </div>
+      <div className="h-8 w-16 bg-gray-100 animate-pulse rounded mb-2" />
+      <div className="h-3 w-24 bg-gray-100 animate-pulse rounded" />
+    </div>
+  );
+}
+
+function OrderCardSkeleton() {
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-gray-100 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-3 w-24 bg-gray-100 animate-pulse rounded" />
+            <div className="h-2 w-32 bg-gray-100 animate-pulse rounded" />
+          </div>
+        </div>
+        <div className="h-6 w-20 bg-gray-100 animate-pulse rounded-full" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="h-20 bg-gray-50 animate-pulse rounded-xl" />
+        <div className="h-20 bg-gray-50 animate-pulse rounded-xl" />
+        <div className="h-20 bg-gray-50 animate-pulse rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Barre d'action mobile fixe                                        */
+/* ────────────────────────────────────────────────────────────────── */
+
+function MobileActionBar() {
+  return (
+    <div
+      className="fixed bottom-0 inset-x-0 z-40 sm:hidden px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-3"
+      style={{ background: "linear-gradient(180deg, rgba(249,250,251,0) 0%, rgba(249,250,251,0.95) 30%, rgba(249,250,251,1) 100%)" }}
+    >
+      <div className="flex items-center gap-2">
+        <Link
+          href="/wallet"
+          className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 shrink-0"
+          style={{ background: BRAND.surface, color: BRAND.ink, border: `1px solid ${BRAND.border}`, boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}
+        >
+          <Wallet className="w-4 h-4" style={{ color: BRAND.primary }} />
+          Recharger
+        </Link>
+        <Link
+          href="/order"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-white text-sm transition-all active:scale-95"
+          style={{ background: BRAND.primary, boxShadow: "0 8px 20px rgba(197,90,52,0.28)" }}
+        >
+          <ShoppingCart className="w-4 h-4" />
+          Nouveau numéro
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* StatCard — propre, sans gradient                                   */
+/* ────────────────────────────────────────────────────────────────── */
+
+function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+  accentColor,
+  accentSoft,
+  loading = false,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  icon: React.ReactNode;
+  accentColor: string;
+  accentSoft: string;
+  loading?: boolean;
+}) {
+  return (
+    <motion.div
+      variants={listItem}
+      className="rounded-2xl p-5 transition-shadow hover:shadow-md"
+      style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{label}</div>
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: accentSoft, color: accentColor }}
+        >
+          {icon}
+        </div>
+      </div>
+      {loading ? (
+        <div className="h-8 w-20 bg-gray-100 animate-pulse rounded mb-1" />
+      ) : (
+        <div className="text-2xl font-black text-gray-900 leading-tight">{value}</div>
+      )}
+      {hint && <div className="text-[11px] text-gray-500 mt-1">{hint}</div>}
+    </motion.div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
 /* Dashboard principal                                                */
 /* ────────────────────────────────────────────────────────────────── */
 
 type DashTab = "orders" | "topups" | "profile";
+
+const TAB_STORAGE_KEY = "texerra:dashboard:tab";
+const FILTER_STORAGE_KEY = "texerra:dashboard:filter";
 
 export default function Dashboard() {
   useMeta({
@@ -1495,8 +1940,21 @@ export default function Dashboard() {
     },
   });
 
-  const [tab, setTab] = useState<DashTab>("orders");
-  const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
+  /* Préférences persistantes */
+  const [tab, setTab] = useState<DashTab>(() => {
+    const saved = localStorage.getItem(TAB_STORAGE_KEY);
+    if (saved === "orders" || saved === "topups" || saved === "profile") return saved;
+    return "orders";
+  });
+
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>(() => {
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (saved === "all" || saved === "completed" || saved === "active" || saved === "cancelled" || saved === "expired") return saved;
+    return "all";
+  });
+
+  useEffect(() => { localStorage.setItem(TAB_STORAGE_KEY, tab); }, [tab]);
+  useEffect(() => { localStorage.setItem(FILTER_STORAGE_KEY, orderFilter); }, [orderFilter]);
 
   const activeOrders = orders?.filter(o => o.status === "active" || o.status === "pending_payment") ?? [];
   const pastOrders = orders?.filter(o => o.status !== "active" && o.status !== "pending_payment") ?? [];
@@ -1519,55 +1977,129 @@ export default function Dashboard() {
   const tabs: { id: DashTab; label: string; icon: React.ReactNode }[] = [
     { id: "orders", label: "Commandes", icon: <ShoppingBag className="w-4 h-4" /> },
     { id: "topups", label: "Recharges", icon: <CreditCard className="w-4 h-4" /> },
-    { id: "profile", label: "Mon Profil", icon: <User className="w-4 h-4" /> },
+    { id: "profile", label: "Profil", icon: <User className="w-4 h-4" /> },
   ];
 
   const { greeting, subline, slot } = getGreeting(me?.name);
   const balanceLocal = me && me.balance !== undefined ? formatLocalPrice(me.balance, me.currency) : null;
 
   return (
-    <div
-      className="min-h-screen w-full"
-      style={{ background: "linear-gradient(180deg, #FAF7F2 0%, #F2EDE4 100%)" }}
-    >
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        {/* Header avec salutation + illustration animée */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-5">
-          <div className="flex items-center gap-4 sm:gap-5">
+    <div className="min-h-screen w-full" style={{ background: BRAND.canvas }}>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-28 sm:pb-10">
+        {/* Header salutation */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+          <div className="flex items-center gap-4">
             <TimeIllustration slot={slot} />
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight">
                 {greeting}
               </h1>
-              {subline ? (
-                <p className="text-sm font-medium mt-1" style={{ color: BRAND.primaryDark }}>{subline}</p>
-              ) : (
-                <p className="text-muted-foreground text-sm sm:text-base mt-1">Gérez vos commandes, votre solde et votre compte avec simplicité.</p>
-              )}
+              <p className="text-sm text-gray-500 mt-0.5">
+                {subline || "Gérez vos numéros, votre solde et vos commandes."}
+              </p>
             </div>
-          </div>
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
-            {/* ⚠️ CARTE SOLDE — INCHANGÉE */}
-            <Link href="/wallet" className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-border/80 px-5 py-3 rounded-2xl text-sm font-bold hover:border-primary/50 hover:shadow-md hover:shadow-primary/5 transition-all active:scale-95">
-              <Wallet className="w-4 h-4 text-primary" />
-              {loadingMe ? "—" : `${me?.balance?.toFixed(2) ?? "0.00"} €`}
-              <Plus className="w-4 h-4 text-muted-foreground" />
-            </Link>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+        {/* ═══════════ CARTE SOLDE + ACTION PRINCIPALE ═══════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 mb-6">
+          {/* Carte solde flippable */}
+          <BalanceFlipCard
+            balance={me?.balance ?? 0}
+            name={me?.name || "Utilisateur"}
+            loading={loadingMe}
+            balanceLocal={balanceLocal}
+          />
+
+          {/* Panneau actions — rappel du solde + CTA principal */}
+          <div
+            className="rounded-3xl p-5 sm:p-6 flex flex-col justify-between"
+            style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+          >
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+                Prochaine étape
+              </div>
+              <h2 className="text-lg font-extrabold text-gray-900 mb-1.5">
+                Commander un nouveau numéro
+              </h2>
+              <p className="text-sm text-gray-500 leading-relaxed mb-4">
+                Choisissez un service, un pays, et recevez votre code de vérification en quelques minutes.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Link
+                href="/order"
+                className="group w-full flex items-center justify-center gap-2 py-3.5 text-white font-bold rounded-2xl text-sm transition-all hover:opacity-95 active:scale-[0.98]"
+                style={{ background: BRAND.primary, boxShadow: "0 8px 20px rgba(197,90,52,0.28)" }}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Acheter un numéro
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
+              <Link
+                href="/wallet"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm transition-all active:scale-[0.98]"
+                style={{ background: BRAND.surface, color: BRAND.ink, border: `1px solid ${BRAND.border}` }}
+              >
+                <Plus className="w-4 h-4" style={{ color: BRAND.primary }} />
+                Recharger mon solde
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══════════ STATS — réduits à 3 cartes sobres ═══════════ */}
+        <motion.div
+          variants={listContainer}
+          initial="hidden"
+          animate="show"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8"
+        >
+          <StatCard
+            label="Solde actuel"
+            value={loadingMe ? "—" : `${(me?.balance ?? 0).toFixed(2)} €`}
+            hint={balanceLocal ? `≈ ${balanceLocal}` : "Disponible immédiatement"}
+            icon={<Wallet className="w-4 h-4" />}
+            accentColor={BRAND.primary}
+            accentSoft={BRAND.primarySoft}
+            loading={loadingMe}
+          />
+          <StatCard
+            label="Commandes en cours"
+            value={activeOrders.length}
+            hint={activeOrders.length > 0 ? "Suivi automatique activé" : "Aucune en cours"}
+            icon={<Activity className="w-4 h-4" />}
+            accentColor={BRAND.cool}
+            accentSoft={BRAND.coolSoft}
+            loading={loadingOrders}
+          />
+          <StatCard
+            label="Total commandes"
+            value={allOrders.length}
+            hint={allOrders.length > 0 ? `${filterCounts.completed} réussie${filterCounts.completed > 1 ? "s" : ""}` : "Historique vide"}
+            icon={<ShoppingBag className="w-4 h-4" />}
+            accentColor="#0D9488"
+            accentSoft="#CCFBF1"
+            loading={loadingOrders}
+          />
+        </motion.div>
+
+        {/* ═══════════ TABS ═══════════ */}
+        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 scrollbar-hide">
           {tabs.map(t => {
             const isActive = tab === t.id;
             return (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${
-                  isActive ? "text-white shadow-md" : "bg-white/60 text-muted-foreground hover:bg-white hover:text-foreground border border-transparent hover:border-border/50"
-                }`}
-                style={isActive ? { background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})` } : undefined}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap"
+                style={
+                  isActive
+                    ? { background: BRAND.ink, color: "#ffffff", boxShadow: "0 4px 12px rgba(17,24,39,0.15)" }
+                    : { background: BRAND.surface, color: BRAND.inkMuted, border: `1px solid ${BRAND.border}` }
+                }
               >
                 {t.icon} {t.label}
               </button>
@@ -1578,158 +2110,139 @@ export default function Dashboard() {
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
           >
             {tab === "profile" ? (
-              loadingMe ? <div className="h-72 bg-secondary/50 animate-pulse rounded-3xl" /> : me ? <ProfileTab me={me} /> : null
+              loadingMe ? (
+                <div className="space-y-4">
+                  <div className="h-24 rounded-3xl animate-pulse" style={{ background: BRAND.borderSoft }} />
+                  <div className="h-64 rounded-3xl animate-pulse" style={{ background: BRAND.borderSoft }} />
+                </div>
+              ) : me ? <ProfileTab me={me} /> : null
             ) : tab === "topups" ? (
               <RechargesTab currency={me?.currency} />
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
-                  {/* ⚠️ CARTE SOLDE (STAT) — INCHANGÉE + ajout conversion */}
-                  <div className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-3xl p-6 shadow-sm group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                      <Wallet size={80} className="text-primary" />
-                    </div>
-                    <div className="relative z-10">
-                      <div className="text-[11px] font-bold text-primary uppercase tracking-widest mb-2">Solde Actuel</div>
-                      {loadingMe ? (
-                        <div className="h-10 w-24 bg-primary/10 animate-pulse rounded-lg" />
-                      ) : (
-                        <div className="text-4xl font-black text-foreground drop-shadow-sm">{me?.balance?.toFixed(2) ?? "0.00"} €</div>
-                      )}
-                      {!loadingMe && balanceLocal && (
-                        <div className="text-sm font-bold mt-1 flex items-center gap-1" style={{ color: BRAND.primaryDark }}>
-                          <span className="opacity-70">≈</span> {balanceLocal}
-                        </div>
-                      )}
-                      <Link href="/wallet" className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary bg-white/60 hover:bg-white px-3 py-1.5 rounded-lg font-bold transition-colors shadow-sm backdrop-blur-sm border border-primary/10">
-                        Recharger le compte <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Carte "En cours" — nouvelle palette bleu ciel + icône */}
-                  <div
-                    className="relative overflow-hidden rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow group"
-                    style={{
-                      background: "linear-gradient(135deg, #EFF5FB 0%, #DCE9F3 100%)",
-                      border: "1px solid #C8DBEC"
-                    }}
-                  >
-                    <div className="absolute top-0 right-0 p-4 opacity-15 group-hover:scale-110 transition-transform duration-500">
-                      <Activity size={80} style={{ color: "#0369A1" }} />
-                    </div>
-                    <div className="relative">
-                      <div className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#0C4A6E" }}>
-                        En cours
-                      </div>
-                      <div className="text-4xl font-black" style={{ color: "#0C4A6E" }}>
-                        {activeOrders.length}
-                      </div>
-                      <div className="text-[11px] mt-1" style={{ color: "#0369A1", opacity: 0.9 }}>
-                        Commande{activeOrders.length > 1 ? "s" : ""} active{activeOrders.length > 1 ? "s" : ""}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Carte "Historique Total" — nouvelle palette sauge + icône */}
-                  <div
-                    className="relative overflow-hidden rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow group"
-                    style={{
-                      background: "linear-gradient(135deg, #F3F5EE 0%, #E5EBD9 100%)",
-                      border: "1px solid #D2DBC5"
-                    }}
-                  >
-                    <div className="absolute top-0 right-0 p-4 opacity-15 group-hover:scale-110 transition-transform duration-500">
-                      <BarChart3 size={80} style={{ color: "#3F6212" }} />
-                    </div>
-                    <div className="relative">
-                      <div className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: "#365314" }}>
-                        Historique Total
-                      </div>
-                      <div className="text-4xl font-black" style={{ color: "#365314" }}>
-                        {orders?.length ?? 0}
-                      </div>
-                      <div className="text-[11px] mt-1" style={{ color: "#4D7C0F", opacity: 0.9 }}>
-                        Commandes passées
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+                {/* ═══════════ COMMANDES ACTIVES (priorité) ═══════════ */}
                 {activeOrders.length > 0 && (
-                  <div className="mb-12">
-                    <h2 className="text-lg font-extrabold mb-5 flex items-center gap-2 text-foreground">
-                      <div className="p-2 rounded-lg" style={{ background: BRAND.primarySoft }}>
-                        <RefreshCw className="w-5 h-5 animate-spin" style={{ color: BRAND.primary }} />
-                      </div>
-                      Commandes en cours d'activation
-                    </h2>
-                    <motion.div variants={listContainer} initial="hidden" animate="show" className="grid gap-5 sm:grid-cols-2">
-                      {activeOrders.map(o => <ActiveOrderCard key={o.id} orderId={o.id} currency={me?.currency} />)}
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
+                        <span className="relative flex w-2 h-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: BRAND.cool }} />
+                          <span className="relative inline-flex rounded-full w-2 h-2" style={{ background: BRAND.cool }} />
+                        </span>
+                        En cours d'activation
+                      </h2>
+                      <span
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+                        style={{ background: BRAND.coolSoft, color: BRAND.cool }}
+                      >
+                        {activeOrders.length} active{activeOrders.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <motion.div
+                      variants={listContainer}
+                      initial="hidden"
+                      animate="show"
+                      className="grid gap-4 sm:grid-cols-2"
+                    >
+                      {activeOrders.map(o => (
+                        <ActiveOrderCard key={o.id} orderId={o.id} currency={me?.currency} />
+                      ))}
                     </motion.div>
                   </div>
                 )}
 
+                {/* ═══════════ HISTORIQUE ═══════════ */}
                 <div>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-                    <h2 className="text-lg font-extrabold text-foreground flex items-center gap-2">
-                      <div className="p-2 bg-secondary rounded-lg">
-                        <ShoppingBag className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                      Toutes les commandes
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-gray-500" />
+                      Historique des commandes
                     </h2>
                   </div>
 
                   {orders && orders.length > 0 && (
-                    <div className="mb-5">
+                    <div className="mb-4">
                       <OrderFilters value={orderFilter} onChange={setOrderFilter} counts={filterCounts} />
                     </div>
                   )}
 
                   {loadingOrders ? (
                     <div className="space-y-4">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="h-28 bg-secondary/50 animate-pulse rounded-2xl" />
-                      ))}
+                      {Array.from({ length: 3 }).map((_, i) => <OrderCardSkeleton key={i} />)}
                     </div>
-                  ) : filteredPastOrders.length === 0 && activeOrders.length === 0 ? (
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-24 bg-white border border-border/80 rounded-3xl shadow-sm">
-                      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner" style={{ background: BRAND.primarySoft }}>
+                  ) : allOrders.length === 0 ? (
+                    /* État vide global */
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.97 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="text-center py-16 rounded-3xl"
+                      style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+                    >
+                      <div
+                        className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
+                        style={{ background: BRAND.primarySoft }}
+                      >
                         <ShoppingBag className="w-8 h-8" style={{ color: BRAND.primary }} />
                       </div>
-                      <h3 className="text-xl font-bold mb-2 text-foreground">Votre historique est vide</h3>
-                      <p className="text-muted-foreground text-sm mb-8 max-w-sm mx-auto">Toutes vos commandes et réceptions de codes SMS seront conservées ici.</p>
-                      <Link href="/order" className="inline-flex items-center gap-2 px-8 py-3.5 text-white font-bold rounded-xl transition-all hover:-translate-y-1 hover:shadow-xl active:translate-y-0 text-sm"
-                        style={{ background: `linear-gradient(135deg, ${BRAND.primary}, ${BRAND.primaryDark})`, boxShadow: `0 8px 24px ${BRAND.primary}33` }}>
-                        Démarrer une commande <ArrowRight className="w-4 h-4" />
+                      <h3 className="text-lg font-bold mb-2 text-gray-900">Votre historique est vide</h3>
+                      <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
+                        Aucune commande pour l'instant. Commandez votre premier numéro pour recevoir un code de vérification.
+                      </p>
+                      <Link
+                        href="/order"
+                        className="inline-flex items-center gap-2 px-6 py-3 text-white font-bold rounded-xl text-sm transition-all hover:opacity-90 active:scale-95"
+                        style={{ background: BRAND.primary }}
+                      >
+                        Commander un numéro <ArrowRight className="w-4 h-4" />
                       </Link>
                     </motion.div>
                   ) : filteredPastOrders.length === 0 ? (
-                    <div className="text-center py-12 bg-white border border-dashed border-border/60 rounded-2xl">
-                      <Search className="w-6 h-6 text-muted-foreground/60 mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Aucune commande dans cette catégorie</p>
+                    /* Filtre sans résultat */
+                    <div
+                      className="text-center py-12 rounded-2xl"
+                      style={{ background: BRAND.surface, border: `1px dashed ${BRAND.border}` }}
+                    >
+                      <Search className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500 mb-3">Aucune commande dans cette catégorie</p>
+                      <button
+                        onClick={() => setOrderFilter("all")}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                        style={{ background: BRAND.borderSoft, color: BRAND.ink }}
+                      >
+                        Voir toutes les commandes
+                      </button>
                     </div>
                   ) : (
-                    <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-4">
+                    <motion.div
+                      variants={listContainer}
+                      initial="hidden"
+                      animate="show"
+                      className="space-y-4"
+                    >
                       {filteredPastOrders.map(o => (
                         <PastOrderCard key={o.id} order={o} currency={me?.currency} />
                       ))}
                     </motion.div>
                   )}
 
-                  <ImportantNotice />
+                  <div className="mt-8">
+                    <ImportantNotice />
+                  </div>
                 </div>
               </>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Barre d'action mobile fixe */}
+      <MobileActionBar />
     </div>
   );
 }
