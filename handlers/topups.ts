@@ -43,15 +43,22 @@ function getServerUrl(): string {
 
 const PAYMENT_FEE_RATE = 1.015;
 
+/** Marques de paiement carte acceptées (métadonnée UX uniquement) */
+const ALLOWED_BRANDS = ["visa", "mastercard", "paypal"] as const;
+type AllowedBrand = (typeof ALLOWED_BRANDS)[number];
+
+function sanitizeBrand(input: unknown): AllowedBrand | undefined {
+  if (typeof input !== "string") return undefined;
+  const v = input.trim().toLowerCase();
+  return (ALLOWED_BRANDS as readonly string[]).includes(v)
+    ? (v as AllowedBrand)
+    : undefined;
+}
+
 /* ────────────────────────────────────────────────────────────────── */
-/* Devises / pays                                                    */
+/* Devises / pays (AccountPe)                                        */
 /* ────────────────────────────────────────────────────────────────── */
 
-/**
- * Devises locales pour AccountPe.
- * ⚠️  Ces taux ne concernent QUE AccountPe (Mobile Money).
- *     NelsiusPay utilise NELSIUS_FX_RATES (EUR→XAF, USD→XAF) — voir lib/nelsiuspay.ts.
- */
 const BUYER_CURRENCY: Record<string, { currency: string; eurRate: number }> = {
   CM: { currency: "XAF", eurRate: 655.96 },
   CG: { currency: "XAF", eurRate: 655.96 },
@@ -84,13 +91,9 @@ function formatTopup(t: any) {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Crédit atomique                                                   */
+/* Crédit atomique (inchangé)                                        */
 /* ────────────────────────────────────────────────────────────────── */
 
-/**
- * Crédite atomiquement le solde de l'utilisateur pour une recharge.
- * IDEMPOTENT : si la recharge est déjà "completed", ne fait rien.
- */
 async function atomicCredit(
   topupId: string,
   userId: string,
@@ -109,7 +112,6 @@ async function atomicCredit(
       if (!topupDoc.exists) return false;
       const topupData = topupDoc.data();
 
-      // Idempotence : si déjà completed, on ne crédite pas
       if (topupData?.status !== "pending") return false;
 
       let currentBalance = 0;
@@ -146,7 +148,7 @@ async function atomicCredit(
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* GET /api/topups — Liste l'historique                              */
+/* GET /api/topups                                                   */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.get("/", requireAuth, async (req, res) => {
@@ -179,7 +181,7 @@ router.get("/", requireAuth, async (req, res) => {
 });
 
 /* ────────────────────────────────────────────────────────────────── */
-/* POST /api/topups — Création du paiement                           */
+/* POST /api/topups — création du paiement                           */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.post("/", requireAuth, async (req, res) => {
@@ -191,6 +193,7 @@ router.post("/", requireAuth, async (req, res) => {
     mobile,
     countryIso,
     paymentMethod = "mobile_money",
+    brand,
   } = req.body as {
     amountEur?: number;
     name?: string;
@@ -198,6 +201,7 @@ router.post("/", requireAuth, async (req, res) => {
     mobile?: string;
     countryIso?: string;
     paymentMethod?: "mobile_money" | "card";
+    brand?: string;
   };
 
   if (!amountEur || amountEur < 0.5 || amountEur > 500) {
@@ -212,7 +216,6 @@ router.post("/", requireAuth, async (req, res) => {
     return;
   }
 
-  /* ── Validation du pays ── */
   const isoRaw =
     typeof countryIso === "string" ? countryIso.trim().toUpperCase() : "";
 
@@ -224,8 +227,10 @@ router.post("/", requireAuth, async (req, res) => {
     return;
   }
 
+  const safeBrand = sanitizeBrand(brand);
+
   /* ═══════════════════════════════════════════════════════════════
-   * PAYMENT METHOD : CARTE BANCAIRE → NelsiusPay
+   * CARTE / PAYPAL → NelsiusPay
    * ═══════════════════════════════════════════════════════════════ */
   if (paymentMethod === "card") {
     const topupId = crypto.randomUUID();
@@ -235,9 +240,7 @@ router.post("/", requireAuth, async (req, res) => {
       .toUpperCase()}`;
 
     try {
-      // Conversion EUR → XAF avec les taux Texerra centralisés
       const providerAmount = convertToXaf(amountEur, "EUR");
-
       const appUrl = getAppBaseUrl();
 
       const checkout = await createCheckout({
@@ -252,7 +255,7 @@ router.post("/", requireAuth, async (req, res) => {
         description: `Texerra — recharge solde ${amountEur.toFixed(2)}€`,
       });
 
-      const topupData = {
+      const topupData: Record<string, unknown> = {
         id: topupId,
         userId,
         amountEur: amountEur.toFixed(4),
@@ -270,6 +273,9 @@ router.post("/", requireAuth, async (req, res) => {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+
+      /* Métadonnée UX : marque choisie côté client (visa/mc/paypal) */
+      if (safeBrand) topupData.brand = safeBrand;
 
       await firestoreDb.collection("topups").doc(topupId).set(topupData);
 
@@ -291,7 +297,7 @@ router.post("/", requireAuth, async (req, res) => {
   }
 
   /* ═══════════════════════════════════════════════════════════════
-   * PAYMENT METHOD : MOBILE MONEY → AccountPe (existant)
+   * MOBILE MONEY → AccountPe (inchangé)
    * ═══════════════════════════════════════════════════════════════ */
 
   const currencyInfo = BUYER_CURRENCY[isoRaw];
@@ -356,7 +362,7 @@ router.post("/", requireAuth, async (req, res) => {
 });
 
 /* ────────────────────────────────────────────────────────────────── */
-/* POST /api/topups/webhook — Callback AccountPe                     */
+/* POST /api/topups/webhook — AccountPe                              */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.post("/webhook", async (req, res) => {
@@ -408,7 +414,7 @@ router.post("/webhook", async (req, res) => {
 });
 
 /* ────────────────────────────────────────────────────────────────── */
-/* POST /api/topups/webhook/nelsiuspay — Callback NelsiusPay         */
+/* POST /api/topups/webhook/nelsiuspay                               */
 /* ────────────────────────────────────────────────────────────────── */
 
 router.post("/webhook/nelsiuspay", async (req, res) => {
@@ -424,7 +430,6 @@ router.post("/webhook/nelsiuspay", async (req, res) => {
   if (!reference) return;
 
   try {
-    // Retrouver la recharge par référence
     const snapshot = await firestoreDb
       .collection("topups")
       .where("reference", "==", reference)
@@ -438,10 +443,8 @@ router.post("/webhook/nelsiuspay", async (req, res) => {
 
     if (topup.provider !== "nelsiuspay") return;
 
-    // Vérification du statut auprès de NelsiusPay (source de vérité)
     const details = await getPaymentStatus(reference);
 
-    // Vérifier le montant et la devise
     if (details.currency !== "XAF") {
       console.warn(
         `NelsiusPay webhook: devise inattendue ${details.currency} pour ${reference}`
@@ -557,7 +560,6 @@ router.get("/return", async (req, res) => {
       return;
     }
 
-    // Si déjà completed, on redirige directement
     if (topup.status === "completed") {
       res.redirect(
         `${frontendBase}/wallet?topup=${topup.id}&result=credited`
@@ -572,7 +574,6 @@ router.get("/return", async (req, res) => {
       return;
     }
 
-    /* ── Vérification selon le provider ── */
     if (topup.provider === "nelsiuspay") {
       const ref = topup.reference ?? (transaction_id as string | undefined);
       if (!ref) {
@@ -646,7 +647,6 @@ router.get("/return", async (req, res) => {
       return;
     }
 
-    /* ── AccountPe (existant) ── */
     const txId = topup.externalId ?? (transaction_id as string | undefined);
     if (!txId) {
       res.redirect(`${frontendBase}/wallet?topup=${topup.id}`);
@@ -751,7 +751,6 @@ router.get("/:id/status", requireAuth, async (req, res) => {
 
   if (shouldCheck) {
     try {
-      /* ── Vérification NelsiusPay ── */
       if (topup.provider === "nelsiuspay") {
         const details = await getPaymentStatus(topup.reference);
 
@@ -781,12 +780,10 @@ router.get("/:id/status", requireAuth, async (req, res) => {
           return;
         }
 
-        // pending → on renvoie l'état actuel
         res.json(formatTopup(topup));
         return;
       }
 
-      /* ── Vérification AccountPe (existant) ── */
       const { isPaid, status: providerStatus } = await verifyPayment(
         topup.externalId!
       );
