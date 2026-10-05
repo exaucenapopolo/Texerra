@@ -1,37 +1,34 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useMeta } from "../lib/use-meta";
 import { auth } from "../lib/firebase";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Clock, XCircle, Loader2, Copy, RefreshCw, Plus, Wallet,
   ArrowRight, ShoppingBag, User, Pencil, X, Phone, Globe, CreditCard,
-  Filter, MessageCircle, Search, Sparkles, Receipt, Calendar, BadgeCheck,
-  Activity, ChevronDown, ChevronUp, HelpCircle, Info, ShoppingCart,
-  TrendingUp, AlertCircle, ArrowUpRight
+  Filter, Search, Sparkles, Receipt, Calendar, BadgeCheck, Activity,
+  ChevronDown, ChevronUp, Info, ShoppingCart, TrendingUp, ArrowLeft,
+  ArrowUpDown, LayoutList, GalleryHorizontal, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { CURRENCIES, getCurrency } from "../lib/currencies";
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Palette stricte — chaque couleur reste dans SA famille            */
+/* Palette stricte                                                    */
 /* ────────────────────────────────────────────────────────────────── */
 
 const BRAND = {
-  /* Orange — marque & actions principales */
   primary: "#C55A34",
   primaryDark: "#A84A28",
   primaryDeep: "#7C2D12",
   primaryLight: "#E8A47F",
   primarySoft: "#FBEEE7",
 
-  /* Bleu — commandes actives / info */
   cool: "#2563EB",
   coolDark: "#1D4ED8",
   coolSoft: "#EFF6FF",
   coolBorder: "#BFDBFE",
 
-  /* Sémantiques */
   success: "#16A34A",
   successSoft: "#DCFCE7",
   successBorder: "#86EFAC",
@@ -42,7 +39,6 @@ const BRAND = {
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
 
-  /* Neutres */
   ink: "#111827",
   inkMuted: "#6B7280",
   border: "#E5E7EB",
@@ -52,7 +48,27 @@ const BRAND = {
 };
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Conversion devise locale                                           */
+/* Hook localStorage robuste                                          */
+/* ────────────────────────────────────────────────────────────────── */
+
+function useLocalStorage<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return initial;
+      return JSON.parse(raw) as T;
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+  }, [key, value]);
+  return [value, setValue];
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Formatage / helpers                                                */
 /* ────────────────────────────────────────────────────────────────── */
 
 function formatLocalPrice(amountEur: number, currencyCode: string | null | undefined): string | null {
@@ -218,14 +234,13 @@ function isoToFlagEmoji(iso: string): string {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Statuts — libellés explicites + description                        */
+/* Statuts                                                            */
 /* ────────────────────────────────────────────────────────────────── */
 
 type StatusKey = "pending_payment" | "active" | "completed" | "cancelled" | "expired";
 
 interface StatusMeta {
   label: string;
-  shortLabel: string;
   description: string;
   fg: string;
   bg: string;
@@ -237,7 +252,6 @@ interface StatusMeta {
 const STATUS_CONFIG: Record<StatusKey, StatusMeta> = {
   pending_payment: {
     label: "Paiement en attente",
-    shortLabel: "Paiement",
     description: "Votre commande a bien été enregistrée. Le paiement n'a pas encore été confirmé par notre prestataire. Dès validation, le numéro sera automatiquement attribué.",
     fg: "#92400E",
     bg: BRAND.warnSoft,
@@ -247,7 +261,6 @@ const STATUS_CONFIG: Record<StatusKey, StatusMeta> = {
   },
   active: {
     label: "En attente du SMS",
-    shortLabel: "En attente",
     description: "Le numéro vous est réservé. Utilisez-le dès maintenant sur le service concerné. Le code de vérification apparaîtra automatiquement sur cette page dès sa réception (2 à 7 minutes en moyenne).",
     fg: "#1E40AF",
     bg: BRAND.coolSoft,
@@ -257,7 +270,6 @@ const STATUS_CONFIG: Record<StatusKey, StatusMeta> = {
   },
   completed: {
     label: "SMS reçu",
-    shortLabel: "Reçu",
     description: "Le code de vérification est arrivé. Copiez-le et utilisez-le pour finaliser votre inscription. La commande est considérée comme terminée.",
     fg: "#166534",
     bg: BRAND.successSoft,
@@ -267,7 +279,6 @@ const STATUS_CONFIG: Record<StatusKey, StatusMeta> = {
   },
   cancelled: {
     label: "Commande annulée",
-    shortLabel: "Annulée",
     description: "Cette commande a été annulée avant l'attribution d'un numéro. Aucun montant n'a été débité de votre solde.",
     fg: "#374151",
     bg: BRAND.borderSoft,
@@ -277,7 +288,6 @@ const STATUS_CONFIG: Record<StatusKey, StatusMeta> = {
   },
   expired: {
     label: "Numéro expiré",
-    shortLabel: "Expirée",
     description: "Le délai de réception est écoulé et aucun SMS n'est arrivé. Le montant a automatiquement été recrédité sur votre solde.",
     fg: "#991B1B",
     bg: BRAND.dangerSoft,
@@ -298,7 +308,7 @@ const listContainer = {
 
 const listItem = {
   hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 320, damping: 26 } }
+  show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 320, damping: 26 } }
 };
 
 function timeRemaining(expiresAt: string | null | undefined): string | null {
@@ -341,7 +351,7 @@ export interface UserProfile {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Salutations                                                        */
+/* Greeting                                                           */
 /* ────────────────────────────────────────────────────────────────── */
 
 type TimeSlot = "night" | "morning" | "afternoon" | "evening";
@@ -380,12 +390,12 @@ function getGreeting(name?: string | null): { greeting: string; subline: string;
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* SVG Illustrations (conservées)                                     */
+/* SVG cats                                                           */
 /* ────────────────────────────────────────────────────────────────── */
 
 function SleepingCatSVG() {
   return (
-    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
+    <div className="relative w-[64px] h-[64px] sm:w-[80px] sm:h-[80px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <radialGradient id="nightSky" cx="0.5" cy="0.5" r="0.7">
@@ -396,31 +406,21 @@ function SleepingCatSVG() {
             <stop offset="0" stopColor="#ffd4a8" />
             <stop offset="1" stopColor="#f4a76b" />
           </linearGradient>
-          <linearGradient id="catEar" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#f4a76b" />
-            <stop offset="1" stopColor="#d98848" />
-          </linearGradient>
         </defs>
         <style>{`
           @keyframes catBreathe { 0%,100%{transform:scale(1) translateY(0)} 50%{transform:scale(1.025,1.015) translateY(-1px)} }
-          @keyframes floatZ1 { 0%{opacity:0;transform:translate(0,0) scale(.5)} 25%{opacity:1;transform:translate(4px,-14px) scale(.8)} 100%{opacity:0;transform:translate(10px,-34px) scale(1.1)} }
-          @keyframes floatZ2 { 0%{opacity:0;transform:translate(0,0) scale(.5)} 25%{opacity:1;transform:translate(6px,-16px) scale(.9)} 100%{opacity:0;transform:translate(14px,-38px) scale(1.2)} }
-          @keyframes floatZ3 { 0%{opacity:0;transform:translate(0,0) scale(.6)} 25%{opacity:1;transform:translate(8px,-18px) scale(1)} 100%{opacity:0;transform:translate(18px,-42px) scale(1.35)} }
+          @keyframes floatZ { 0%{opacity:0;transform:translate(0,0) scale(.5)} 25%{opacity:1;transform:translate(4px,-14px) scale(.8)} 100%{opacity:0;transform:translate(10px,-34px) scale(1.1)} }
           @keyframes twinkle { 0%,100%{opacity:.25} 50%{opacity:1} }
           @keyframes moonGlow { 0%,100%{opacity:.7} 50%{opacity:1} }
           .catBody { animation: catBreathe 3.4s ease-in-out infinite; transform-origin: 60px 76px; }
-          .z1 { animation: floatZ1 3s ease-out infinite; }
-          .z2 { animation: floatZ2 3s ease-out infinite .9s; }
-          .z3 { animation: floatZ3 3s ease-out infinite 1.8s; }
-          .starA { animation: twinkle 2.2s ease-in-out infinite; }
-          .starB { animation: twinkle 2.2s ease-in-out infinite .8s; }
-          .starC { animation: twinkle 2.2s ease-in-out infinite 1.5s; }
+          .z1 { animation: floatZ 3s ease-out infinite; }
+          .z2 { animation: floatZ 3s ease-out infinite .9s; }
+          .star { animation: twinkle 2.2s ease-in-out infinite; }
           .moon { animation: moonGlow 4s ease-in-out infinite; }
         `}</style>
         <circle cx="60" cy="60" r="52" fill="url(#nightSky)" />
-        <circle className="starA" cx="24" cy="28" r="1.2" fill="#fef3c7" />
-        <circle className="starB" cx="92" cy="22" r="1.5" fill="#fef3c7" />
-        <circle className="starC" cx="98" cy="52" r="1" fill="#fef3c7" />
+        <circle className="star" cx="24" cy="28" r="1.2" fill="#fef3c7" />
+        <circle className="star" cx="92" cy="22" r="1.5" fill="#fef3c7" />
         <g className="moon">
           <circle cx="94" cy="32" r="8" fill="#fef3c7" />
           <circle cx="97" cy="29" r="7" fill="#1a2547" />
@@ -428,22 +428,16 @@ function SleepingCatSVG() {
         <ellipse cx="60" cy="98" rx="42" ry="8" fill="#0f1833" opacity="0.7" />
         <g className="catBody">
           <ellipse cx="58" cy="82" rx="32" ry="18" fill="url(#catFur)" />
-          <path d="M38 76 Q44 82 40 88" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
-          <path d="M48 74 Q54 82 48 90" stroke="#c9723a" strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
           <path d="M88 82 Q98 80 100 88 Q98 94 92 92" stroke="url(#catFur)" strokeWidth="6" fill="none" strokeLinecap="round" />
           <ellipse cx="38" cy="78" rx="16" ry="14" fill="url(#catFur)" />
-          <path d="M28 68 L26 60 L34 66 Z" fill="url(#catEar)" />
-          <path d="M46 68 L52 60 L48 70 Z" fill="url(#catEar)" />
+          <path d="M28 68 L26 60 L34 66 Z" fill="url(#catFur)" />
+          <path d="M46 68 L52 60 L48 70 Z" fill="url(#catFur)" />
           <path d="M31 78 Q34 81 37 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
           <path d="M41 78 Q44 81 47 78" stroke="#3a2417" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-          <path d="M38 84 L37 86 L39 86 Z" fill="#d98848" />
-          <path d="M38 86 Q36 88 34 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
-          <path d="M38 86 Q40 88 42 87" stroke="#3a2417" strokeWidth="1" fill="none" strokeLinecap="round" />
         </g>
         <g fontFamily="ui-rounded, system-ui" fontWeight="900" fill="#fbbf24">
           <text className="z1" x="72" y="60" fontSize="11">Z</text>
-          <text className="z2" x="78" y="58" fontSize="13">Z</text>
-          <text className="z3" x="86" y="56" fontSize="15">Z</text>
+          <text className="z1" x="78" y="58" fontSize="13" style={{ animationDelay: "0.9s" }}>Z</text>
         </g>
       </svg>
     </div>
@@ -452,7 +446,7 @@ function SleepingCatSVG() {
 
 function MorningCatSVG() {
   return (
-    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
+    <div className="relative w-[64px] h-[64px] sm:w-[80px] sm:h-[80px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <radialGradient id="mornSky" cx="0.5" cy="0.4" r="0.7">
@@ -469,12 +463,10 @@ function MorningCatSVG() {
           </linearGradient>
         </defs>
         <style>{`
-          @keyframes catStretch { 0%,100%{transform:scale(1) rotate(0)} 50%{transform:scale(1.02,1.03) rotate(-1deg)} }
+          @keyframes catStretch { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02,1.03)} }
           @keyframes tailWag { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-6deg)} }
-          @keyframes blink { 0%,92%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
           .catStretch { animation: catStretch 3s ease-in-out infinite; transform-origin: 60px 82px; }
           .tail { animation: tailWag 1.8s ease-in-out infinite; transform-origin: 88px 84px; }
-          .eye { animation: blink 5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
         `}</style>
         <circle cx="60" cy="60" r="52" fill="url(#mornSky)" />
         <circle cx="60" cy="78" r="24" fill="url(#sunGrad)" />
@@ -482,14 +474,11 @@ function MorningCatSVG() {
         <g className="catStretch">
           <path className="tail" d="M88 84 Q100 80 102 88" stroke="url(#mornFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M30 88 Q40 70 60 74 Q78 78 88 86 L88 94 Q60 96 30 94 Z" fill="url(#mornFur)" />
-          <rect x="26" y="86" width="14" height="4" rx="2" fill="url(#mornFur)" />
-          <rect x="26" y="90" width="14" height="4" rx="2" fill="#e89456" />
           <ellipse cx="42" cy="72" rx="14" ry="12" fill="url(#mornFur)" />
           <path d="M32 62 L30 54 L38 60 Z" fill="url(#mornFur)" />
           <path d="M50 62 L56 54 L52 64 Z" fill="url(#mornFur)" />
-          <ellipse className="eye" cx="36" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
-          <ellipse className="eye" cx="48" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
-          <path d="M42 78 L41 80 L43 80 Z" fill="#d98848" />
+          <ellipse cx="36" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
+          <ellipse cx="48" cy="72" rx="1.8" ry="2.2" fill="#3a2417" />
         </g>
       </svg>
     </div>
@@ -498,7 +487,7 @@ function MorningCatSVG() {
 
 function AfternoonCatSVG() {
   return (
-    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
+    <div className="relative w-[64px] h-[64px] sm:w-[80px] sm:h-[80px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <linearGradient id="aftSky" x1="0" y1="0" x2="0" y2="1">
@@ -531,7 +520,6 @@ function AfternoonCatSVG() {
           <ellipse cx="64" cy="58" rx="2.6" ry="3.2" fill="#ffffff" />
           <circle cx="52.5" cy="58.5" r="1.6" fill="#1f2937" />
           <circle cx="64.5" cy="58.5" r="1.6" fill="#1f2937" />
-          <path d="M57 66 L56 68 L59 68 Z" fill="#d98848" />
         </g>
       </svg>
     </div>
@@ -540,7 +528,7 @@ function AfternoonCatSVG() {
 
 function EveningCatSVG() {
   return (
-    <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] shrink-0">
+    <div className="relative w-[64px] h-[64px] sm:w-[80px] sm:h-[80px] shrink-0">
       <svg viewBox="0 0 120 120" className="w-full h-full">
         <defs>
           <linearGradient id="eveSky" x1="0" y1="0" x2="0" y2="1">
@@ -559,28 +547,22 @@ function EveningCatSVG() {
         </defs>
         <style>{`
           @keyframes tailSway { 0%,100%{transform:rotate(0)} 50%{transform:rotate(-5deg)} }
-          @keyframes headNod { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
           @keyframes starFade { 0%,100%{opacity:0} 40%,60%{opacity:.9} }
           .tailSway { animation: tailSway 3s ease-in-out infinite; transform-origin: 84px 90px; }
-          .headNod { animation: headNod 3s ease-in-out infinite; }
           .star { animation: starFade 5s ease-in-out infinite; }
         `}</style>
         <circle cx="60" cy="60" r="52" fill="url(#eveSky)" />
         <circle className="star" cx="22" cy="22" r="1.2" fill="#ffffff" />
-        <circle className="star" cx="98" cy="30" r="1" fill="#ffffff" />
         <circle cx="60" cy="78" r="22" fill="url(#eveSun)" />
         <ellipse cx="60" cy="100" rx="46" ry="8" fill="#7c2d12" opacity="0.35" />
         <g>
           <path className="tailSway" d="M84 92 Q96 88 98 96" stroke="url(#eveFur)" strokeWidth="5" fill="none" strokeLinecap="round" />
           <path d="M56 94 Q54 76 66 70 Q82 68 84 88 Q84 94 82 98 L56 98 Z" fill="url(#eveFur)" />
-          <g className="headNod">
-            <ellipse cx="62" cy="60" rx="15" ry="14" fill="url(#eveFur)" />
-            <path d="M50 50 L48 40 L58 48 Z" fill="url(#eveFur)" />
-            <path d="M72 50 L78 40 L74 52 Z" fill="url(#eveFur)" />
-            <ellipse cx="56" cy="60" rx="2.4" ry="3" fill="#ffffff" />
-            <circle cx="56.3" cy="60.5" r="1.5" fill="#1f2937" />
-            <path d="M60 66 L59 68 L62 68 Z" fill="#d98848" />
-          </g>
+          <ellipse cx="62" cy="60" rx="15" ry="14" fill="url(#eveFur)" />
+          <path d="M50 50 L48 40 L58 48 Z" fill="url(#eveFur)" />
+          <path d="M72 50 L78 40 L74 52 Z" fill="url(#eveFur)" />
+          <ellipse cx="56" cy="60" rx="2.4" ry="3" fill="#ffffff" />
+          <circle cx="56.3" cy="60.5" r="1.5" fill="#1f2937" />
         </g>
       </svg>
     </div>
@@ -595,7 +577,7 @@ function TimeIllustration({ slot }: { slot: TimeSlot }) {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Chip EMV                                                          */
+/* Chip EMV                                                           */
 /* ────────────────────────────────────────────────────────────────── */
 
 function ChipSVG({ className = "" }: { className?: string }) {
@@ -616,8 +598,17 @@ function ChipSVG({ className = "" }: { className?: string }) {
   );
 }
 
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+
 /* ────────────────────────────────────────────────────────────────── */
-/* BalanceFlipCard — Carte solde avec animation flip 3D              */
+/* BalanceFlipCard                                                    */
 /* ────────────────────────────────────────────────────────────────── */
 
 function BalanceFlipCard({
@@ -655,7 +646,7 @@ function BalanceFlipCard({
         animate={{ rotateY: flipped ? 180 : 0 }}
         transition={{ duration: 0.75, ease: [0.2, 0.8, 0.2, 1] }}
       >
-        {/* ═══════════ FRONT ═══════════ */}
+        {/* FRONT */}
         <div
           className="absolute inset-0 rounded-3xl overflow-hidden shadow-lg"
           style={{
@@ -668,7 +659,6 @@ function BalanceFlipCard({
           <div className="absolute -bottom-32 -left-24 w-80 h-80 rounded-full pointer-events-none" style={{ background: "rgba(255,255,255,0.06)" }} />
 
           <div className="relative h-full flex flex-col p-5 sm:p-6">
-            {/* Top : wordmark + puce */}
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-white font-black text-sm tracking-[0.28em] leading-none">TEXERRA</div>
@@ -677,7 +667,6 @@ function BalanceFlipCard({
               <ChipSVG className="w-9 h-7 drop-shadow-md" />
             </div>
 
-            {/* Solde au centre */}
             <div className="flex-1 flex flex-col justify-center py-2">
               <div className="text-white/60 text-[9px] font-semibold tracking-widest uppercase mb-1">Solde disponible</div>
               {loading ? (
@@ -693,7 +682,6 @@ function BalanceFlipCard({
               )}
             </div>
 
-            {/* Bas : titulaire + devise */}
             <div className="flex items-end justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-white/55 text-[8px] font-bold tracking-widest uppercase mb-0.5">Titulaire</div>
@@ -706,13 +694,12 @@ function BalanceFlipCard({
             </div>
           </div>
 
-          {/* Hint discret */}
           <div className="absolute top-3 right-14 text-white/50 text-[9px] font-bold tracking-widest uppercase pointer-events-none">
             Cliquer ↻
           </div>
         </div>
 
-        {/* ═══════════ BACK ═══════════ */}
+        {/* BACK */}
         <div
           className="absolute inset-0 rounded-3xl overflow-hidden shadow-lg"
           style={{
@@ -722,11 +709,9 @@ function BalanceFlipCard({
             background: `linear-gradient(135deg, ${BRAND.primaryDeep} 0%, #4A1E0F 100%)`,
           }}
         >
-          {/* Bande magnétique */}
           <div className="absolute top-6 left-0 right-0 h-8 bg-black/85" />
 
           <div className="relative h-full flex flex-col p-5 sm:p-6 pt-16">
-            {/* Zone signature + bandeau d'info */}
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-1 h-8 rounded bg-white/85 flex items-center justify-end px-3">
                 <span className="font-mono text-[10px] text-gray-500 tracking-widest">•••</span>
@@ -734,12 +719,11 @@ function BalanceFlipCard({
               <div className="text-white/70 text-[10px] font-mono tracking-widest">ID: {customerId}</div>
             </div>
 
-            {/* Bloc informations */}
             <div className="flex-1 flex flex-col justify-center">
               <div className="grid grid-cols-3 gap-3 text-white/90">
                 <div>
                   <div className="text-white/50 text-[8px] font-bold tracking-widest uppercase mb-0.5">Type</div>
-                  <div className="text-xs font-bold">Compte Standard</div>
+                  <div className="text-xs font-bold">Standard</div>
                 </div>
                 <div>
                   <div className="text-white/50 text-[8px] font-bold tracking-widest uppercase mb-0.5">Statut</div>
@@ -755,16 +739,14 @@ function BalanceFlipCard({
               </div>
             </div>
 
-            {/* Bas : mentions */}
             <div className="flex items-end justify-between gap-3">
               <div className="text-white/55 text-[9px] font-medium leading-tight max-w-[70%]">
-                Cette carte n'est pas un instrument de paiement bancaire. Elle représente votre solde virtuel Texerra.
+                Cette carte représente votre solde virtuel Texerra. Elle n'est pas un instrument bancaire.
               </div>
               <div className="text-white/40 text-[9px] font-bold tracking-widest">TEXERRA</div>
             </div>
           </div>
 
-          {/* Hint discret */}
           <div className="absolute top-3 right-4 text-white/50 text-[9px] font-bold tracking-widest uppercase pointer-events-none">
             Cliquer ↻
           </div>
@@ -774,18 +756,8 @@ function BalanceFlipCard({
   );
 }
 
-/* simple stable hash pour générer un ID visuel */
-function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h << 5) - h + s.charCodeAt(i);
-    h |= 0;
-  }
-  return h;
-}
-
 /* ────────────────────────────────────────────────────────────────── */
-/* StatusBadge — avec description dépliable                           */
+/* StatusBadge — la description s'affiche inline (wrap correct)      */
 /* ────────────────────────────────────────────────────────────────── */
 
 function StatusBadge({
@@ -805,7 +777,7 @@ function StatusBadge({
   const iconSize = size === "sm" ? "w-3 h-3" : "w-3.5 h-3.5";
 
   return (
-    <div className="relative">
+    <div className="inline-flex flex-col items-end max-w-full">
       <button
         type="button"
         onClick={(e) => {
@@ -827,21 +799,21 @@ function StatusBadge({
         {expandable && (open ? <ChevronUp className="w-3 h-3 opacity-70" /> : <ChevronDown className="w-3 h-3 opacity-70" />)}
       </button>
 
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {open && expandable && (
           <motion.div
-            initial={{ opacity: 0, y: -4, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: -4, height: 0 }}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="mt-2 overflow-hidden"
+            className="overflow-hidden w-full"
           >
             <div
-              className="rounded-xl px-3 py-2 text-[11px] leading-relaxed flex items-start gap-2"
+              className="mt-2 rounded-xl px-3 py-2 text-[11px] leading-relaxed flex items-start gap-2 text-left max-w-xs sm:max-w-sm"
               style={{ background: meta.bg, border: `1px solid ${meta.border}`, color: meta.fg }}
             >
               <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>{meta.description}</span>
+              <span className="break-words">{meta.description}</span>
             </div>
           </motion.div>
         )}
@@ -894,11 +866,11 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
 
   if (!order) {
     return (
-      <div className="bg-white border rounded-2xl p-5 shadow-sm" style={{ borderColor: BRAND.border }}>
+      <div className="bg-white rounded-2xl p-5 shadow-sm" style={{ border: `1px solid ${BRAND.border}` }}>
         <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gray-100 animate-pulse" />
-            <div className="space-y-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-12 h-12 rounded-xl bg-gray-100 animate-pulse shrink-0" />
+            <div className="space-y-2 min-w-0">
               <div className="h-3 w-24 bg-gray-100 animate-pulse rounded" />
               <div className="h-2 w-32 bg-gray-100 animate-pulse rounded" />
             </div>
@@ -928,13 +900,11 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
       className="bg-white rounded-2xl shadow-sm overflow-hidden"
       style={{ border: `1px solid ${BRAND.border}` }}
     >
-      {/* Bandeau statut — couleur selon statut, pas de gradient */}
       <div className="h-1 w-full" style={{ background: meta.dot }} />
 
       <div className="p-5">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
               style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
@@ -947,7 +917,7 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
             </div>
             <div className="min-w-0">
               <div className="font-bold text-base text-gray-900 truncate">{displayService}</div>
-              <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 truncate">
+              <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-base leading-none">{isoToFlagEmoji(country.iso)}</span>
                 <span className="truncate">{country.name}</span>
                 {order.price !== undefined && (
@@ -965,12 +935,9 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
               </div>
             </div>
           </div>
-          <div className="shrink-0">
-            <StatusBadge status={order.status} size="sm" />
-          </div>
+          <StatusBadge status={order.status} size="sm" />
         </div>
 
-        {/* Numéro attribué */}
         {order.phoneNumber && (
           <div
             className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-3"
@@ -978,11 +945,11 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
           >
             <div className="flex flex-col min-w-0">
               <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-0.5">Numéro attribué</span>
-              <span className="font-mono font-bold text-base tracking-wide text-gray-900 truncate">{order.phoneNumber}</span>
+              <span className="font-mono font-bold text-base tracking-wide text-gray-900 break-all">{order.phoneNumber}</span>
             </div>
             <button
               onClick={() => copyText(order.phoneNumber!, "phone")}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border transition-all active:scale-95"
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm border transition-all active:scale-95 shrink-0"
               style={{ borderColor: BRAND.border }}
               aria-label="Copier le numéro"
             >
@@ -991,7 +958,6 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
           </div>
         )}
 
-        {/* Code SMS reçu */}
         {order.smsCode && (
           <motion.div
             initial={{ scale: 0.96, opacity: 0 }}
@@ -1001,11 +967,11 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
           >
             <div className="min-w-0">
               <div className="text-[10px] uppercase font-bold tracking-wider mb-0.5" style={{ color: "#166534" }}>Code de vérification</div>
-              <span className="font-mono font-black text-xl tracking-[0.15em]" style={{ color: "#166534" }}>{order.smsCode}</span>
+              <span className="font-mono font-black text-xl tracking-[0.15em] break-all" style={{ color: "#166534" }}>{order.smsCode}</span>
             </div>
             <button
               onClick={() => copyText(order.smsCode!, "code")}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm transition-all active:scale-95"
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white shadow-sm transition-all active:scale-95 shrink-0"
               style={{ border: `1px solid ${BRAND.successBorder}`, color: BRAND.success }}
               aria-label="Copier le code"
             >
@@ -1014,7 +980,6 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
           </motion.div>
         )}
 
-        {/* Compte à rebours */}
         {remaining && order.status === "active" && (
           <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
             <Clock className="w-3.5 h-3.5" />
@@ -1028,10 +993,20 @@ function ActiveOrderCard({ orderId, currency }: { orderId: string; currency?: st
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* PastOrderCard                                                      */
+/* PastOrderCard — version dépliable                                  */
 /* ────────────────────────────────────────────────────────────────── */
 
-function PastOrderCard({ order, currency }: { order: Order; currency?: string | null }) {
+function PastOrderCard({
+  order,
+  currency,
+  expanded,
+  onToggleExpand,
+}: {
+  order: Order;
+  currency?: string | null;
+  expanded: boolean;
+  onToggleExpand: () => void;
+}) {
   const [copied, setCopied] = useState<string>("");
   const [imageError, setImageError] = useState(false);
 
@@ -1055,149 +1030,210 @@ function PastOrderCard({ order, currency }: { order: Order; currency?: string | 
   return (
     <motion.div
       variants={listItem}
-      className="bg-white rounded-2xl shadow-sm overflow-hidden"
+      layout
+      className="bg-white rounded-2xl overflow-hidden"
       style={{ border: `1px solid ${BRAND.border}` }}
     >
+      {/* Liseré statut */}
       <div className="h-1 w-full" style={{ background: meta.dot }} />
 
-      <div className="p-5">
-        {/* Header : service + statut + date */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
-              style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
-            >
-              {!imageError && iconUrl ? (
-                <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-6 h-6 object-contain" />
-              ) : (
-                <span className="text-sm font-bold text-gray-400 uppercase">{order.serviceCode?.slice(0, 2)}</span>
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="font-bold text-sm text-gray-900 truncate">{displayService}</div>
-              <div className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
-                <span className="text-base leading-none">{isoToFlagEmoji(country.iso)}</span>
-                <span className="truncate">{country.name}</span>
+      {/* Header cliquable pour déplier/replier */}
+      <button
+        type="button"
+        onClick={onToggleExpand}
+        className="w-full flex items-center gap-3 p-4 text-left transition-colors hover:bg-gray-50"
+        aria-expanded={expanded}
+      >
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
+          style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+        >
+          {!imageError && iconUrl ? (
+            <img src={iconUrl} alt={order.serviceCode} onError={() => setImageError(true)} className="w-6 h-6 object-contain" />
+          ) : (
+            <span className="text-xs font-bold text-gray-400 uppercase">{order.serviceCode?.slice(0, 2)}</span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-sm text-gray-900 truncate">{displayService}</span>
+            <span className="text-[11px] text-gray-500 flex items-center gap-1">
+              <span className="leading-none">{isoToFlagEmoji(country.iso)}</span>
+              <span className="truncate">{country.name}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-500 flex-wrap">
+            <span>{date}</span>
+            <span className="opacity-40">·</span>
+            <span className="font-bold text-gray-800">
+              {order.price !== undefined ? `${Number(order.price).toFixed(2)} €` : "—"}
+            </span>
+            {localPrice && (
+              <>
                 <span className="opacity-40">·</span>
-                <span>{date}</span>
-              </div>
-            </div>
-          </div>
-          <div className="shrink-0">
-            <StatusBadge status={order.status} size="sm" />
+                <span className="font-semibold" style={{ color: BRAND.primaryDark }}>≈ {localPrice}</span>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Corps : 3 colonnes en desktop, empilées en mobile */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Colonne 1 : numéro */}
-          <div
-            className="rounded-xl p-3"
-            style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide"
+            style={{ background: meta.bg, border: `1px solid ${meta.border}`, color: meta.fg }}
           >
-            <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1">Numéro utilisé</div>
-            {order.phoneNumber ? (
-              <>
-                <div className="font-mono font-bold text-xs text-gray-900 mb-2 break-all">{order.phoneNumber}</div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => copyText(phoneWithPrefix, "phone-with")}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border text-[10px] font-semibold text-gray-700 hover:shadow-sm transition-all"
-                    style={{ borderColor: BRAND.border }}
-                  >
-                    {copied === "phone-with" ? <CheckCircle2 className="w-3 h-3" style={{ color: BRAND.success }} /> : <Copy className="w-3 h-3" />}
-                    Avec {country.callingCode}
-                  </button>
-                  <button
-                    onClick={() => copyText(phoneWithoutPrefix, "phone-without")}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border text-[10px] font-semibold text-gray-500 hover:shadow-sm transition-all"
-                    style={{ borderColor: BRAND.border }}
-                  >
-                    {copied === "phone-without" ? <CheckCircle2 className="w-3 h-3" style={{ color: BRAND.success }} /> : <Copy className="w-3 h-3" />}
-                    Sans indicatif
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="text-[11px] text-gray-400 italic">Indisponible</div>
-            )}
-          </div>
-
-          {/* Colonne 2 : code SMS */}
-          <div
-            className="rounded-xl p-3"
-            style={{
-              background: order.smsCode ? BRAND.successSoft : BRAND.borderSoft,
-              border: `1px solid ${order.smsCode ? BRAND.successBorder : BRAND.border}`,
-            }}
-          >
-            <div className="text-[10px] uppercase font-bold tracking-wider mb-1" style={{ color: order.smsCode ? "#166534" : "#6B7280" }}>
-              {order.smsCode ? "Code reçu" : "Code SMS"}
-            </div>
-            {order.smsCode ? (
-              <>
-                <div className="font-mono font-black text-base tracking-wider mb-2" style={{ color: "#166534" }}>{order.smsCode}</div>
-                <button
-                  onClick={() => copyText(order.smsCode!, "code")}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border text-[10px] font-bold transition-all"
-                  style={{ borderColor: BRAND.successBorder, color: BRAND.success }}
-                >
-                  {copied === "code" ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  Copier
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2 text-gray-500">
-                <MessageCircle className="w-4 h-4 opacity-60" />
-                <span className="text-[11px] font-semibold">Aucun code</span>
-              </div>
-            )}
-          </div>
-
-          {/* Colonne 3 : prix + CTA */}
-          <div
-            className="rounded-xl p-3 flex flex-col justify-between"
-            style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
-          >
-            <div>
-              <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1">Montant payé</div>
-              <div className="font-black text-lg text-gray-900 leading-tight">
-                {order.price !== undefined ? `${Number(order.price).toFixed(2)} €` : "—"}
-              </div>
-              {localPrice && (
-                <div className="text-[11px] font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
-                  ≈ {localPrice}
-                </div>
-              )}
-            </div>
-            <Link
-              href={`/order?service=${order.serviceCode}&country=${order.countryCode}`}
-              className="mt-2 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all hover:opacity-90 active:scale-95"
-              style={{ background: BRAND.primary }}
-            >
-              <RefreshCw className="w-3 h-3" />
-              Recommander
-            </Link>
-          </div>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: meta.dot }} />
+            {meta.label}
+          </span>
         </div>
+
+        <div
+          className="w-7 h-7 flex items-center justify-center rounded-lg shrink-0 transition-transform"
+          style={{
+            background: BRAND.borderSoft,
+            color: BRAND.inkMuted,
+            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+          }}
+          aria-hidden
+        >
+          <ChevronDown className="w-4 h-4" />
+        </div>
+      </button>
+
+      {/* Statut mobile (pleine largeur, sous le header) */}
+      <div className="sm:hidden px-4 pb-3 -mt-1 flex justify-end">
+        <StatusBadge status={order.status} size="sm" />
       </div>
+
+      {/* Détails dépliés */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div
+              className="px-4 pb-4 pt-1 space-y-3"
+              style={{ borderTop: `1px dashed ${BRAND.border}` }}
+            >
+              {/* Statut desktop */}
+              <div className="hidden sm:flex justify-end pt-3">
+                <StatusBadge status={order.status} size="sm" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Numéro */}
+                <div
+                  className="rounded-xl p-3 min-w-0"
+                  style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+                >
+                  <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1">Numéro utilisé</div>
+                  {order.phoneNumber ? (
+                    <>
+                      <div className="font-mono font-bold text-xs text-gray-900 mb-2 break-all">{order.phoneNumber}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => copyText(phoneWithPrefix, "phone-with")}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border text-[10px] font-semibold text-gray-700 hover:shadow-sm transition-all"
+                          style={{ borderColor: BRAND.border }}
+                        >
+                          {copied === "phone-with" ? <CheckCircle2 className="w-3 h-3" style={{ color: BRAND.success }} /> : <Copy className="w-3 h-3" />}
+                          Avec {country.callingCode}
+                        </button>
+                        <button
+                          onClick={() => copyText(phoneWithoutPrefix, "phone-without")}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white border text-[10px] font-semibold text-gray-500 hover:shadow-sm transition-all"
+                          style={{ borderColor: BRAND.border }}
+                        >
+                          {copied === "phone-without" ? <CheckCircle2 className="w-3 h-3" style={{ color: BRAND.success }} /> : <Copy className="w-3 h-3" />}
+                          Sans indicatif
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-gray-400 italic">Indisponible</div>
+                  )}
+                </div>
+
+                {/* Code SMS */}
+                <div
+                  className="rounded-xl p-3 min-w-0"
+                  style={{
+                    background: order.smsCode ? BRAND.successSoft : BRAND.borderSoft,
+                    border: `1px solid ${order.smsCode ? BRAND.successBorder : BRAND.border}`,
+                  }}
+                >
+                  <div className="text-[10px] uppercase font-bold tracking-wider mb-1" style={{ color: order.smsCode ? "#166534" : "#6B7280" }}>
+                    {order.smsCode ? "Code reçu" : "Code SMS"}
+                  </div>
+                  {order.smsCode ? (
+                    <>
+                      <div className="font-mono font-black text-base tracking-wider mb-2 break-all" style={{ color: "#166534" }}>{order.smsCode}</div>
+                      <button
+                        onClick={() => copyText(order.smsCode!, "code")}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border text-[10px] font-bold transition-all"
+                        style={{ borderColor: BRAND.successBorder, color: BRAND.success }}
+                      >
+                        {copied === "code" ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        Copier
+                      </button>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Clock className="w-4 h-4 opacity-60" />
+                      <span className="text-[11px] font-semibold">Aucun code</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Prix + action */}
+                <div
+                  className="rounded-xl p-3 flex flex-col justify-between gap-2"
+                  style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+                >
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider mb-1">Montant payé</div>
+                    <div className="font-black text-lg text-gray-900 leading-tight">
+                      {order.price !== undefined ? `${Number(order.price).toFixed(2)} €` : "—"}
+                    </div>
+                    {localPrice && (
+                      <div className="text-[11px] font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>≈ {localPrice}</div>
+                    )}
+                  </div>
+                  <Link
+                    href={`/order?service=${order.serviceCode}&country=${order.countryCode}`}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                    style={{ background: BRAND.primary }}
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Recommander
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Filtres                                                            */
+/* Filtres — sobres, sans points colorés                             */
 /* ────────────────────────────────────────────────────────────────── */
 
 type OrderFilter = "all" | "completed" | "active" | "cancelled" | "expired";
 
-const FILTER_OPTIONS: { value: OrderFilter; label: string; dotColor: string }[] = [
-  { value: "all", label: "Toutes", dotColor: "#6B7280" },
-  { value: "completed", label: "Réussies", dotColor: BRAND.success },
-  { value: "active", label: "En cours", dotColor: BRAND.cool },
-  { value: "cancelled", label: "Annulées", dotColor: "#9CA3AF" },
-  { value: "expired", label: "Expirées", dotColor: BRAND.danger },
+const FILTER_OPTIONS: { value: OrderFilter; label: string }[] = [
+  { value: "all", label: "Toutes" },
+  { value: "completed", label: "Réussies" },
+  { value: "active", label: "En cours" },
+  { value: "cancelled", label: "Annulées" },
+  { value: "expired", label: "Expirées" },
 ];
 
 function OrderFilters({
@@ -1211,12 +1247,9 @@ function OrderFilters({
 }) {
   return (
     <div
-      className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide p-1.5 rounded-2xl"
+      className="flex items-center gap-1 overflow-x-auto scrollbar-hide p-1 rounded-xl"
       style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
     >
-      <div className="pl-2 pr-1 text-gray-400 shrink-0">
-        <Filter className="w-4 h-4" />
-      </div>
       {FILTER_OPTIONS.map(f => {
         const active = value === f.value;
         const count = counts[f.value] ?? 0;
@@ -1224,29 +1257,59 @@ function OrderFilters({
           <button
             key={f.value}
             onClick={() => onChange(f.value)}
-            className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all"
+            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all"
             style={
               active
                 ? { background: BRAND.ink, color: "#ffffff" }
-                : { color: BRAND.inkMuted }
+                : { color: BRAND.inkMuted, background: "transparent" }
             }
           >
-            <span
-              className="w-1.5 h-1.5 rounded-full shrink-0"
-              style={{ background: active ? "#ffffff" : f.dotColor }}
-            />
             {f.label}
             <span
-              className="text-[10px] px-1.5 py-0.5 rounded-md font-mono"
-              style={{
-                background: active ? "rgba(255,255,255,0.2)" : BRAND.borderSoft,
-              }}
+              className="text-[10px] font-mono tabular-nums"
+              style={{ opacity: active ? 0.7 : 0.5 }}
             >
               {count}
             </span>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Vue Toggle liste / carrousel                                       */
+/* ────────────────────────────────────────────────────────────────── */
+
+type ViewMode = "list" | "carousel";
+
+function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
+  return (
+    <div
+      className="inline-flex items-center rounded-lg p-0.5"
+      style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
+    >
+      <button
+        onClick={() => onChange("list")}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all"
+        style={value === "list" ? { background: BRAND.surface, color: BRAND.ink, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" } : { color: BRAND.inkMuted }}
+        title="Vue liste"
+        aria-label="Vue liste"
+      >
+        <LayoutList className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Liste</span>
+      </button>
+      <button
+        onClick={() => onChange("carousel")}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all"
+        style={value === "carousel" ? { background: BRAND.surface, color: BRAND.ink, boxShadow: "0 1px 2px rgba(0,0,0,0.05)" } : { color: BRAND.inkMuted }}
+        title="Vue carrousel"
+        aria-label="Vue carrousel"
+      >
+        <GalleryHorizontal className="w-3.5 h-3.5" />
+        <span className="hidden sm:inline">Carrousel</span>
+      </button>
     </div>
   );
 }
@@ -1321,21 +1384,20 @@ function RechargesTab({ currency }: { currency?: string | null }) {
 
   return (
     <motion.div variants={listContainer} initial="hidden" animate="show" className="space-y-5">
-      {/* Résumé */}
       <motion.div
         variants={listItem}
         className="rounded-2xl p-5"
         style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
       >
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center"
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: BRAND.primarySoft, color: BRAND.primary }}
             >
               <TrendingUp className="w-6 h-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-wider font-bold text-gray-500">Total crédité</div>
               <div className="text-2xl font-black text-gray-900">{totalCredited.toFixed(2)} €</div>
               {totalLocal && (
@@ -1353,7 +1415,6 @@ function RechargesTab({ currency }: { currency?: string | null }) {
         </div>
       </motion.div>
 
-      {/* Liste */}
       <div className="space-y-3">
         {topups.map(t => {
           const cfg = topupStatusConfig[t.status as keyof typeof topupStatusConfig] ?? topupStatusConfig.pending;
@@ -1368,8 +1429,8 @@ function RechargesTab({ currency }: { currency?: string | null }) {
               className="rounded-2xl p-4 transition-shadow hover:shadow-md"
               style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0">
                   <div
                     className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
                     style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
@@ -1382,15 +1443,13 @@ function RechargesTab({ currency }: { currency?: string | null }) {
                       <Clock className="w-5 h-5" style={{ color: cfg.fg }} />
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Recharge</div>
                     <div className="text-xl font-black text-gray-900 leading-tight">
                       +{Number(t.amountEur).toFixed(2)} €
                     </div>
                     {localAmount && (
-                      <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>
-                        ≈ {localAmount}
-                      </div>
+                      <div className="text-xs font-bold mt-0.5" style={{ color: BRAND.primaryDark }}>≈ {localAmount}</div>
                     )}
                   </div>
                 </div>
@@ -1404,7 +1463,7 @@ function RechargesTab({ currency }: { currency?: string | null }) {
                 </span>
               </div>
 
-              <div className="flex items-center gap-3 mt-3 pt-3 text-[11px] text-gray-500" style={{ borderTop: `1px dashed ${BRAND.border}` }}>
+              <div className="flex items-center gap-3 mt-3 pt-3 text-[11px] text-gray-500 flex-wrap" style={{ borderTop: `1px dashed ${BRAND.border}` }}>
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" /> {date}
                 </span>
@@ -1495,13 +1554,12 @@ function ProfileTab({ me }: { me: UserProfile }) {
         className="rounded-3xl p-6 sm:p-8 space-y-6"
         style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
       >
-        {/* Avatar + identité */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-5">
           {me.avatarUrl ? (
             <img src={me.avatarUrl} alt={me.name ?? ""} className="w-20 h-20 rounded-2xl object-cover border-2 border-white shadow-md" />
           ) : (
             <div
-              className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-extrabold"
+              className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-extrabold shrink-0"
               style={{ background: BRAND.primarySoft, color: BRAND.primary }}
             >
               {initials}
@@ -1557,13 +1615,13 @@ function ProfileTab({ me }: { me: UserProfile }) {
               </div>
             ) : (
               <div
-                className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl transition-colors"
+                className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl transition-colors flex-wrap"
                 style={{ background: BRAND.borderSoft }}
               >
-                <span className="text-sm font-medium text-gray-900">{me.name ?? <span className="text-gray-400 italic">Non défini</span>}</span>
+                <span className="text-sm font-medium text-gray-900 min-w-0 truncate">{me.name ?? <span className="text-gray-400 italic">Non défini</span>}</span>
                 <button
                   onClick={() => { setEditing("name"); setError(""); }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm shrink-0"
                   style={{ border: `1px solid ${BRAND.border}` }}
                 >
                   <Pencil className="w-3.5 h-3.5" /> Modifier
@@ -1611,17 +1669,17 @@ function ProfileTab({ me }: { me: UserProfile }) {
               </div>
             ) : (
               <div
-                className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl transition-colors"
+                className="flex items-center justify-between gap-3 px-5 py-3.5 rounded-xl transition-colors flex-wrap"
                 style={{ background: BRAND.borderSoft }}
               >
                 {me.phone ? (
-                  <span className="text-sm font-mono font-bold tracking-wide text-gray-900">{me.phone}</span>
+                  <span className="text-sm font-mono font-bold tracking-wide text-gray-900 break-all">{me.phone}</span>
                 ) : (
                   <span className="text-sm text-gray-400 italic">Non renseigné</span>
                 )}
                 <button
                   onClick={() => { setEditing("phone"); setError(""); }}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors bg-white px-3 py-1.5 rounded-lg shadow-sm shrink-0"
                   style={{ border: `1px solid ${BRAND.border}` }}
                 >
                   <Pencil className="w-3.5 h-3.5" /> {me.phone ? "Modifier" : "Ajouter"}
@@ -1641,7 +1699,7 @@ function ProfileTab({ me }: { me: UserProfile }) {
                 value={me.currency ?? "EUR"}
                 onChange={e => handleCurrencyChange(e.target.value)}
                 disabled={savingCurrency}
-                className="w-full px-5 py-3.5 rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer disabled:opacity-60 transition-all"
+                className="w-full px-5 py-3.5 rounded-xl text-sm font-medium focus:outline-none appearance-none cursor-pointer disabled:opacity-60 transition-all pr-10"
                 style={{ background: BRAND.borderSoft, border: `1px solid ${BRAND.border}` }}
               >
                 {CURRENCIES.map(c => (
@@ -1672,7 +1730,7 @@ function ProfileTab({ me }: { me: UserProfile }) {
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* ImportantNotice — texte professionnel                             */
+/* ImportantNotice                                                    */
 /* ────────────────────────────────────────────────────────────────── */
 
 function ImportantNotice() {
@@ -1689,23 +1747,23 @@ function ImportantNotice() {
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: BRAND.primary, color: "#ffffff" }}
           >
             <Sparkles className="w-4 h-4" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="font-extrabold text-sm" style={{ color: BRAND.primaryDark }}>
               Comment recevoir un SMS&nbsp;?
             </div>
-            <div className="text-[11px] text-gray-600">
+            <div className="text-[11px] text-gray-600 truncate">
               Conseils pratiques pour maximiser vos chances de réception.
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-xs font-bold" style={{ color: BRAND.primary }}>
+        <div className="flex items-center gap-1 text-xs font-bold shrink-0" style={{ color: BRAND.primary }}>
           {open ? "Masquer" : "Lire"}
           {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </div>
@@ -1778,133 +1836,108 @@ function ImportantNotice() {
 /* Skeletons                                                          */
 /* ────────────────────────────────────────────────────────────────── */
 
-function StatCardSkeleton() {
-  return (
-    <div
-      className="rounded-2xl p-5 h-full"
-      style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="h-3 w-20 bg-gray-100 animate-pulse rounded" />
-        <div className="w-8 h-8 rounded-lg bg-gray-100 animate-pulse" />
-      </div>
-      <div className="h-8 w-16 bg-gray-100 animate-pulse rounded mb-2" />
-      <div className="h-3 w-24 bg-gray-100 animate-pulse rounded" />
-    </div>
-  );
-}
-
 function OrderCardSkeleton() {
   return (
     <div
-      className="rounded-2xl p-5"
+      className="rounded-2xl p-4 flex items-center gap-3"
       style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
     >
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gray-100 animate-pulse" />
-          <div className="space-y-2">
-            <div className="h-3 w-24 bg-gray-100 animate-pulse rounded" />
-            <div className="h-2 w-32 bg-gray-100 animate-pulse rounded" />
-          </div>
-        </div>
-        <div className="h-6 w-20 bg-gray-100 animate-pulse rounded-full" />
+      <div className="w-10 h-10 rounded-xl bg-gray-100 animate-pulse shrink-0" />
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="h-3 w-28 bg-gray-100 animate-pulse rounded" />
+        <div className="h-2 w-40 bg-gray-100 animate-pulse rounded" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="h-20 bg-gray-50 animate-pulse rounded-xl" />
-        <div className="h-20 bg-gray-50 animate-pulse rounded-xl" />
-        <div className="h-20 bg-gray-50 animate-pulse rounded-xl" />
-      </div>
+      <div className="h-6 w-16 bg-gray-100 animate-pulse rounded-full shrink-0" />
     </div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Barre d'action mobile fixe                                        */
+/* Navigation mobile du bas                                           */
 /* ────────────────────────────────────────────────────────────────── */
 
-function MobileActionBar() {
-  return (
-    <div
-      className="fixed bottom-0 inset-x-0 z-40 sm:hidden px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-3"
-      style={{ background: "linear-gradient(180deg, rgba(249,250,251,0) 0%, rgba(249,250,251,0.95) 30%, rgba(249,250,251,1) 100%)" }}
-    >
-      <div className="flex items-center gap-2">
-        <Link
-          href="/wallet"
-          className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-sm transition-all active:scale-95 shrink-0"
-          style={{ background: BRAND.surface, color: BRAND.ink, border: `1px solid ${BRAND.border}`, boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}
-        >
-          <Wallet className="w-4 h-4" style={{ color: BRAND.primary }} />
-          Recharger
-        </Link>
-        <Link
-          href="/order"
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl font-bold text-white text-sm transition-all active:scale-95"
-          style={{ background: BRAND.primary, boxShadow: "0 8px 20px rgba(197,90,52,0.28)" }}
-        >
-          <ShoppingCart className="w-4 h-4" />
-          Nouveau numéro
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────── */
-/* StatCard — propre, sans gradient                                   */
-/* ────────────────────────────────────────────────────────────────── */
-
-function StatCard({
-  label,
-  value,
-  hint,
-  icon,
-  accentColor,
-  accentSoft,
-  loading = false,
+function MobileNav({
+  currentTab,
+  onSelectTab,
 }: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  icon: React.ReactNode;
-  accentColor: string;
-  accentSoft: string;
-  loading?: boolean;
+  currentTab: DashTab;
+  onSelectTab: (t: DashTab) => void;
 }) {
   return (
-    <motion.div
-      variants={listItem}
-      className="rounded-2xl p-5 transition-shadow hover:shadow-md"
-      style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+    <div
+      className="fixed bottom-0 inset-x-0 z-40 sm:hidden px-3 pb-[max(env(safe-area-inset-bottom),10px)] pt-2"
+      style={{
+        background: "linear-gradient(180deg, rgba(249,250,251,0) 0%, rgba(249,250,251,0.96) 25%, rgba(249,250,251,1) 100%)",
+      }}
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{label}</div>
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: accentSoft, color: accentColor }}
+      <div
+        className="flex items-center gap-2 rounded-3xl p-1.5"
+        style={{
+          background: BRAND.surface,
+          border: `1px solid ${BRAND.border}`,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.08)",
+        }}
+      >
+        {/* Recharges */}
+        <button
+          onClick={() => onSelectTab("topups")}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-2xl transition-all active:scale-95"
+          style={
+            currentTab === "topups"
+              ? { background: BRAND.primarySoft, color: BRAND.primaryDark }
+              : { color: BRAND.inkMuted }
+          }
+          aria-label="Historique des recharges"
         >
-          {icon}
-        </div>
+          <CreditCard className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Recharges</span>
+        </button>
+
+        {/* Nouveau numéro — action principale */}
+        <Link
+          href="/order"
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-2xl text-white transition-all active:scale-95"
+          style={{
+            background: BRAND.primary,
+            boxShadow: "0 6px 16px rgba(197,90,52,0.3)",
+          }}
+          aria-label="Commander un nouveau numéro"
+        >
+          <ShoppingCart className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Nouveau</span>
+        </Link>
+
+        {/* Profil */}
+        <button
+          onClick={() => onSelectTab("profile")}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-2xl transition-all active:scale-95"
+          style={
+            currentTab === "profile"
+              ? { background: BRAND.primarySoft, color: BRAND.primaryDark }
+              : { color: BRAND.inkMuted }
+          }
+          aria-label="Mon profil"
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[10px] font-bold">Profil</span>
+        </button>
       </div>
-      {loading ? (
-        <div className="h-8 w-20 bg-gray-100 animate-pulse rounded mb-1" />
-      ) : (
-        <div className="text-2xl font-black text-gray-900 leading-tight">{value}</div>
-      )}
-      {hint && <div className="text-[11px] text-gray-500 mt-1">{hint}</div>}
-    </motion.div>
+    </div>
   );
 }
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Dashboard principal                                                */
+/* Dashboard                                                          */
 /* ────────────────────────────────────────────────────────────────── */
 
 type DashTab = "orders" | "topups" | "profile";
+type ViewMode = "list" | "carousel";
 
-const TAB_STORAGE_KEY = "texerra:dashboard:tab";
-const FILTER_STORAGE_KEY = "texerra:dashboard:filter";
+const TAB_KEY = "texerra:dashboard:tab";
+const FILTER_KEY = "texerra:dashboard:filter";
+const VISIBLE_KEY = "texerra:dashboard:visible";
+const VIEW_KEY = "texerra:dashboard:view";
+const EXPANDED_KEY = "texerra:dashboard:expanded";
 
 export default function Dashboard() {
   useMeta({
@@ -1940,26 +1973,22 @@ export default function Dashboard() {
     },
   });
 
-  /* Préférences persistantes */
-  const [tab, setTab] = useState<DashTab>(() => {
-    const saved = localStorage.getItem(TAB_STORAGE_KEY);
-    if (saved === "orders" || saved === "topups" || saved === "profile") return saved;
-    return "orders";
-  });
+  /* Persistance */
+  const [tab, setTab] = useLocalStorage<DashTab>(TAB_KEY, "orders");
+  const [orderFilter, setOrderFilter] = useLocalStorage<OrderFilter>(FILTER_KEY, "all");
+  const [visibleCount, setVisibleCount] = useLocalStorage<number>(VISIBLE_KEY, 3);
+  const [viewMode, setViewMode] = useLocalStorage<ViewMode>(VIEW_KEY, "list");
+  const [expandedIds, setExpandedIds] = useLocalStorage<string[]>(EXPANDED_KEY, []);
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
-  const [orderFilter, setOrderFilter] = useState<OrderFilter>(() => {
-    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
-    if (saved === "all" || saved === "completed" || saved === "active" || saved === "cancelled" || saved === "expired") return saved;
-    return "all";
-  });
-
-  useEffect(() => { localStorage.setItem(TAB_STORAGE_KEY, tab); }, [tab]);
-  useEffect(() => { localStorage.setItem(FILTER_STORAGE_KEY, orderFilter); }, [orderFilter]);
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }, [setExpandedIds]);
 
   const activeOrders = orders?.filter(o => o.status === "active" || o.status === "pending_payment") ?? [];
   const pastOrders = orders?.filter(o => o.status !== "active" && o.status !== "pending_payment") ?? [];
-
   const allOrders = orders ?? [];
+
   const filterCounts: Record<OrderFilter, number> = {
     all: allOrders.length,
     completed: allOrders.filter(o => o.status === "completed").length,
@@ -1974,36 +2003,58 @@ export default function Dashboard() {
     return o.status === orderFilter;
   });
 
+  /* Limite d'affichage */
+  const totalFiltered = filteredPastOrders.length;
+  const visibleSlice = filteredPastOrders.slice(0, Math.max(visibleCount, 1));
+  const hasMore = totalFiltered > visibleSlice.length;
+  const canReduce = visibleCount > 3;
+
+  /* Reset carousel index when list changes */
+  useEffect(() => {
+    if (carouselIndex >= visibleSlice.length) setCarouselIndex(0);
+  }, [visibleSlice.length, carouselIndex]);
+
+  const { greeting, subline, slot } = getGreeting(me?.name);
+  const balanceLocal = me && me.balance !== undefined ? formatLocalPrice(me.balance, me.currency) : null;
+
   const tabs: { id: DashTab; label: string; icon: React.ReactNode }[] = [
     { id: "orders", label: "Commandes", icon: <ShoppingBag className="w-4 h-4" /> },
     { id: "topups", label: "Recharges", icon: <CreditCard className="w-4 h-4" /> },
     { id: "profile", label: "Profil", icon: <User className="w-4 h-4" /> },
   ];
 
-  const { greeting, subline, slot } = getGreeting(me?.name);
-  const balanceLocal = me && me.balance !== undefined ? formatLocalPrice(me.balance, me.currency) : null;
-
   return (
-    <div className="min-h-screen w-full" style={{ background: BRAND.canvas }}>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-28 sm:pb-10">
-        {/* Header salutation */}
+    <div className="min-h-screen w-full overflow-x-hidden" style={{ background: BRAND.canvas }}>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-32 sm:pb-10">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 min-w-0">
             <TimeIllustration slot={slot} />
-            <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight truncate">
                 {greeting}
               </h1>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <p className="text-sm text-gray-500 mt-0.5 truncate">
                 {subline || "Gérez vos numéros, votre solde et vos commandes."}
               </p>
             </div>
           </div>
+
+          {/* Retour aux commandes (mobile uniquement, quand on est sur un autre onglet) */}
+          {tab !== "orders" && (
+            <button
+              onClick={() => setTab("orders")}
+              className="sm:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 self-start"
+              style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.ink }}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Mes commandes
+            </button>
+          )}
         </div>
 
-        {/* ═══════════ CARTE SOLDE + ACTION PRINCIPALE ═══════════ */}
+        {/* Carte solde + panneau action */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 mb-6">
-          {/* Carte solde flippable */}
           <BalanceFlipCard
             balance={me?.balance ?? 0}
             name={me?.name || "Utilisateur"}
@@ -2011,7 +2062,6 @@ export default function Dashboard() {
             balanceLocal={balanceLocal}
           />
 
-          {/* Panneau actions — rappel du solde + CTA principal */}
           <div
             className="rounded-3xl p-5 sm:p-6 flex flex-col justify-between"
             style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
@@ -2050,44 +2100,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ═══════════ STATS — réduits à 3 cartes sobres ═══════════ */}
-        <motion.div
-          variants={listContainer}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8"
-        >
-          <StatCard
-            label="Solde actuel"
-            value={loadingMe ? "—" : `${(me?.balance ?? 0).toFixed(2)} €`}
-            hint={balanceLocal ? `≈ ${balanceLocal}` : "Disponible immédiatement"}
-            icon={<Wallet className="w-4 h-4" />}
-            accentColor={BRAND.primary}
-            accentSoft={BRAND.primarySoft}
-            loading={loadingMe}
-          />
-          <StatCard
-            label="Commandes en cours"
-            value={activeOrders.length}
-            hint={activeOrders.length > 0 ? "Suivi automatique activé" : "Aucune en cours"}
-            icon={<Activity className="w-4 h-4" />}
-            accentColor={BRAND.cool}
-            accentSoft={BRAND.coolSoft}
-            loading={loadingOrders}
-          />
-          <StatCard
-            label="Total commandes"
-            value={allOrders.length}
-            hint={allOrders.length > 0 ? `${filterCounts.completed} réussie${filterCounts.completed > 1 ? "s" : ""}` : "Historique vide"}
-            icon={<ShoppingBag className="w-4 h-4" />}
-            accentColor="#0D9488"
-            accentSoft="#CCFBF1"
-            loading={loadingOrders}
-          />
-        </motion.div>
-
-        {/* ═══════════ TABS ═══════════ */}
-        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 scrollbar-hide">
+        {/* Tabs desktop */}
+        <div className="hidden sm:flex items-center gap-2 mb-6">
           {tabs.map(t => {
             const isActive = tab === t.id;
             return (
@@ -2126,7 +2140,7 @@ export default function Dashboard() {
               <RechargesTab currency={me?.currency} />
             ) : (
               <>
-                {/* ═══════════ COMMANDES ACTIVES (priorité) ═══════════ */}
+                {/* Commandes actives */}
                 {activeOrders.length > 0 && (
                   <div className="mb-8">
                     <div className="flex items-center justify-between mb-4">
@@ -2157,13 +2171,16 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* ═══════════ HISTORIQUE ═══════════ */}
+                {/* Historique */}
                 <div>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                     <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
                       <Receipt className="w-4 h-4 text-gray-500" />
                       Historique des commandes
                     </h2>
+                    {allOrders.length > 0 && (
+                      <ViewToggle value={viewMode} onChange={setViewMode} />
+                    )}
                   </div>
 
                   {orders && orders.length > 0 && (
@@ -2173,11 +2190,10 @@ export default function Dashboard() {
                   )}
 
                   {loadingOrders ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {Array.from({ length: 3 }).map((_, i) => <OrderCardSkeleton key={i} />)}
                     </div>
                   ) : allOrders.length === 0 ? (
-                    /* État vide global */
                     <motion.div
                       initial={{ opacity: 0, scale: 0.97 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -2203,7 +2219,6 @@ export default function Dashboard() {
                       </Link>
                     </motion.div>
                   ) : filteredPastOrders.length === 0 ? (
-                    /* Filtre sans résultat */
                     <div
                       className="text-center py-12 rounded-2xl"
                       style={{ background: BRAND.surface, border: `1px dashed ${BRAND.border}` }}
@@ -2218,17 +2233,152 @@ export default function Dashboard() {
                         Voir toutes les commandes
                       </button>
                     </div>
+                  ) : viewMode === "carousel" ? (
+                    /* ═══════════ VUE CARROUSEL ═══════════ */
+                    <div className="relative">
+                      <div
+                        className="rounded-2xl overflow-hidden"
+                        style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+                      >
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={visibleSlice[carouselIndex]?.id ?? "empty"}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.18 }}
+                            drag="x"
+                            dragConstraints={{ left: 0, right: 0 }}
+                            dragElastic={0.18}
+                            onDragEnd={(_, info) => {
+                              if (info.offset.x < -60 && carouselIndex < visibleSlice.length - 1) {
+                                setCarouselIndex(i => i + 1);
+                              } else if (info.offset.x > 60 && carouselIndex > 0) {
+                                setCarouselIndex(i => i - 1);
+                              }
+                            }}
+                            className="cursor-grab active:cursor-grabbing"
+                          >
+                            {visibleSlice[carouselIndex] && (
+                              <PastOrderCard
+                                order={visibleSlice[carouselIndex]}
+                                currency={me?.currency}
+                                expanded={true}
+                                onToggleExpand={() => { /* en carrousel, toujours déplié */ }}
+                              />
+                            )}
+                          </motion.div>
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Navigation carrousel */}
+                      <div className="flex items-center justify-between gap-3 mt-3">
+                        <button
+                          onClick={() => setCarouselIndex(i => Math.max(0, i - 1))}
+                          disabled={carouselIndex === 0}
+                          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+                          style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.ink }}
+                          aria-label="Commande précédente"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          {visibleSlice.map((_, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setCarouselIndex(i)}
+                              className="rounded-full transition-all"
+                              style={{
+                                width: i === carouselIndex ? 20 : 6,
+                                height: 6,
+                                background: i === carouselIndex ? BRAND.primary : BRAND.border,
+                              }}
+                              aria-label={`Aller à la commande ${i + 1}`}
+                            />
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => setCarouselIndex(i => Math.min(visibleSlice.length - 1, i + 1))}
+                          disabled={carouselIndex >= visibleSlice.length - 1}
+                          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all active:scale-95 disabled:opacity-40"
+                          style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.ink }}
+                          aria-label="Commande suivante"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Contrôle du nombre affiché */}
+                      {(hasMore || canReduce) && (
+                        <div className="flex items-center justify-center gap-2 mt-3">
+                          {hasMore && (
+                            <button
+                              onClick={() => setVisibleCount(c => c + 5)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                              style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.ink }}
+                            >
+                              Afficher plus ({totalFiltered - visibleSlice.length} restantes)
+                            </button>
+                          )}
+                          {canReduce && (
+                            <button
+                              onClick={() => setVisibleCount(3)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                              style={{ background: BRAND.borderSoft, color: BRAND.inkMuted }}
+                            >
+                              Réduire
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <motion.div
-                      variants={listContainer}
-                      initial="hidden"
-                      animate="show"
-                      className="space-y-4"
-                    >
-                      {filteredPastOrders.map(o => (
-                        <PastOrderCard key={o.id} order={o} currency={me?.currency} />
-                      ))}
-                    </motion.div>
+                    /* ═══════════ VUE LISTE ═══════════ */
+                    <>
+                      <motion.div
+                        variants={listContainer}
+                        initial="hidden"
+                        animate="show"
+                        className="space-y-3"
+                      >
+                        {visibleSlice.map(o => (
+                          <PastOrderCard
+                            key={o.id}
+                            order={o}
+                            currency={me?.currency}
+                            expanded={expandedIds.includes(o.id)}
+                            onToggleExpand={() => toggleExpand(o.id)}
+                          />
+                        ))}
+                      </motion.div>
+
+                      {/* Contrôle du nombre affiché */}
+                      {(hasMore || canReduce) && (
+                        <div className="flex items-center justify-center gap-2 mt-5">
+                          {hasMore && (
+                            <button
+                              onClick={() => setVisibleCount(c => c + 5)}
+                              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all hover:shadow-sm active:scale-95"
+                              style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.ink }}
+                            >
+                              <ArrowUpDown className="w-3.5 h-3.5" />
+                              Afficher 5 de plus ({totalFiltered - visibleSlice.length} restantes)
+                            </button>
+                          )}
+                          {canReduce && (
+                            <button
+                              onClick={() => setVisibleCount(3)}
+                              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95"
+                              style={{ background: BRAND.borderSoft, color: BRAND.inkMuted }}
+                            >
+                              Réduire
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   <div className="mt-8">
@@ -2241,8 +2391,8 @@ export default function Dashboard() {
         </AnimatePresence>
       </div>
 
-      {/* Barre d'action mobile fixe */}
-      <MobileActionBar />
+      {/* Navigation mobile */}
+      <MobileNav currentTab={tab} onSelectTab={setTab} />
     </div>
   );
 }
