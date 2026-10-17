@@ -8,6 +8,7 @@ import {
   Filter, Search, Sparkles, Receipt, Calendar, BadgeCheck, Activity,
   ChevronDown, ChevronUp, Info, ShoppingCart, TrendingUp, ArrowLeft,
   ArrowUpDown, LayoutList, GalleryHorizontal, ChevronLeft, ChevronRight,
+  PlayCircle, ExternalLink, Users, Handshake,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -1723,6 +1724,64 @@ function ProfileTab({ me }: { me: UserProfile }) {
               </p>
             )}
           </div>
+
+          {/* ── NOUVEAU : Devenir partenaire commercial ── */}
+          <div className="pt-2">
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{ border: `1px solid ${BRAND.primary}33`, background: BRAND.primarySoft }}
+            >
+              <div className="p-5">
+                <div className="flex items-start gap-3 mb-3">
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: BRAND.primary, color: "#fff" }}
+                  >
+                    <Handshake className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-sm" style={{ color: BRAND.primaryDark }}>
+                      Devenir partenaire commercial
+                    </div>
+                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">
+                      Programme d'affiliation Texerra
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[13px] text-gray-700 leading-relaxed mb-3">
+                  Rejoignez l'équipe Texerra et travaillez avec nous en recommandant nos services autour de vous.
+                  Chaque client que vous apportez vous rapporte une commission sur ses achats, versée directement
+                  sur votre solde.
+                </p>
+
+                <ul className="space-y-1.5 mb-4">
+                  <li className="flex items-start gap-2 text-[12px] text-gray-700">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: BRAND.success }} />
+                    <span>Commissions attractives sur chaque vente</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-[12px] text-gray-700">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: BRAND.success }} />
+                    <span>Suivi en temps réel de vos gains</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-[12px] text-gray-700">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: BRAND.success }} />
+                    <span>Lien et code promo personnalisés</span>
+                  </li>
+                </ul>
+
+                <Link
+                  href="/partners"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: BRAND.primary, boxShadow: "0 6px 16px rgba(197,90,52,0.25)" }}
+                >
+                  <Handshake className="w-4 h-4" />
+                  Devenir partenaire
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -1923,6 +1982,86 @@ function MobileNav({
         </button>
       </div>
     </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/* Tutoriel YouTube rétractable                                       */
+/* ────────────────────────────────────────────────────────────────── */
+
+const TUTORIAL_VIDEO_ID = "m-llmxv3TK0";
+const TUTORIAL_WATCHED_KEY = "texerra:dashboard:tutorialWatched";
+
+function TutorialVideoCard() {
+  const [watched, setWatched] = useLocalStorage<boolean>(TUTORIAL_WATCHED_KEY, false);
+  const [open, setOpen] = useState(() => !watched); // ouvert si jamais vu
+
+  const handleToggle = () => {
+    if (!watched) {
+      setWatched(true);
+    }
+    setOpen(o => !o);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-6 rounded-2xl overflow-hidden"
+      style={{ border: `1px solid ${BRAND.primary}33`, background: BRAND.surface }}
+    >
+      <button
+        onClick={handleToggle}
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: BRAND.primary, color: "#fff" }}
+          >
+            <PlayCircle className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-extrabold text-sm" style={{ color: BRAND.primaryDark }}>
+              Tutoriel : Comment commander un numéro (WhatsApp)
+            </div>
+            <div className="text-[11px] text-gray-500">
+              Regardez la vidéo pour voir à quel point c'est simple et fiable.
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 text-xs font-bold shrink-0" style={{ color: BRAND.primary }}>
+          {open ? "Masquer" : "Regarder"}
+          {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-5 pt-1">
+              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                <iframe
+                  className="absolute inset-0 w-full h-full rounded-xl"
+                  src={`https://www.youtube-nocookie.com/embed/${TUTORIAL_VIDEO_ID}?rel=0`}
+                  title="Tutoriel Texerra — Commander un numéro WhatsApp"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  loading="lazy"
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -2140,6 +2279,9 @@ export default function Dashboard() {
               <RechargesTab currency={me?.currency} />
             ) : (
               <>
+                {/* ── Tutoriel YouTube rétractable ── */}
+                <TutorialVideoCard />
+
                 {/* Commandes actives */}
                 {activeOrders.length > 0 && (
                   <div className="mb-8">
