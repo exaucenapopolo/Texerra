@@ -3,15 +3,14 @@ import { useMeta } from "../lib/use-meta";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
 import {
-  ArrowLeft, ArrowRight, Handshake, CheckCircle2, XCircle, Info,
-  ChevronDown, ChevronUp, AlertTriangle, MessageCircle, Sparkles,
-  Users, TrendingUp, Wallet, Clock, Globe, Shield, FileText,
-  Briefcase, Gift, Ban, Lock, Scale, Target, Award, Phone,
-  BadgeCheck, Percent, ListChecks, UserCheck, Megaphone, Building2,
+  ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Check, MessageCircle,
+  FileText, ListChecks, Briefcase, Wallet, Target, Ban, TrendingUp, Megaphone,
+  UserCheck, Users, Shield, Lock, Scale, BadgeCheck, Clock, XCircle, Building2,
+  Handshake,
 } from "lucide-react";
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Palette (identique au dashboard)                                   */
+/* Palette                                                            */
 /* ────────────────────────────────────────────────────────────────── */
 
 const BRAND = {
@@ -19,22 +18,17 @@ const BRAND = {
   primaryDark: "#A84A28",
   primaryDeep: "#7C2D12",
   primarySoft: "#FBEEE7",
-
   cool: "#2563EB",
   coolSoft: "#EFF6FF",
-
   success: "#16A34A",
   successSoft: "#DCFCE7",
   successBorder: "#86EFAC",
-
   warn: "#D97706",
   warnSoft: "#FEF3C7",
   warnBorder: "#FCD34D",
-
   danger: "#DC2626",
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
-
   ink: "#111827",
   inkMuted: "#6B7280",
   border: "#E5E7EB",
@@ -44,63 +38,44 @@ const BRAND = {
 };
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Numéro WhatsApp + message pré-rempli                              */
+/* WhatsApp                                                           */
 /* ────────────────────────────────────────────────────────────────── */
 
 const WHATSAPP_NUMBER = "12424542961"; // +1 (242) 454-2961
-const WHATSAPP_MESSAGE =
-  "Bonjour Texerra SMS, je suis intéressé(e) par le poste d'Agent Commercial. J'ai lu le contrat en détail et je suis prêt(e) à signer pour commencer à travailler.";
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Points clés — résumé visuel                                        */
+/* Résumé — 6 points clés sans icônes                                */
 /* ────────────────────────────────────────────────────────────────── */
 
 const SUMMARY_POINTS = [
   {
-    icon: Briefcase,
     title: "Statut indépendant",
-    text: "Vous êtes agent commercial indépendant. Le contrat n'est pas un contrat de travail salarié.",
+    text: "Vous êtes agent commercial indépendant. Le contrat ne constitue en aucun cas un contrat de travail salarié.",
   },
   {
-    icon: Percent,
-    title: "50 % de la marge",
-    text: "Votre commission équivaut à 50 % de la marge commerciale, et non 50 % du chiffre d'affaires.",
+    title: "50 % de la marge commerciale",
+    text: "Votre commission équivaut à la moitié de la marge nette générée, et non à 50 % du chiffre d'affaires.",
   },
   {
-    icon: Wallet,
     title: "Aucun salaire fixe",
-    text: "Vos revenus dépendent uniquement des ventes que vous générez et des marges éligibles.",
+    text: "Vos revenus dépendent uniquement des ventes que vous générez et des marges effectivement encaissées.",
   },
   {
-    icon: Globe,
     title: "Liberté d'organisation",
-    text: "Vous choisissez librement vos horaires, méthodes, réseaux et outils de prospection.",
+    text: "Vous choisissez librement vos horaires, vos méthodes de prospection et vos réseaux.",
   },
   {
-    icon: Users,
-    title: "Tableau de bord personnel",
-    text: "Un espace dédié pour suivre en temps réel vos clients, ventes et commissions.",
+    title: "Tableau de bord et parrainage",
+    text: "Un espace personnel pour suivre vos ventes, et un lien unique qui attribue automatiquement vos clients.",
   },
   {
-    icon: Gift,
-    title: "Lien de parrainage",
-    text: "Un lien unique qui permet d'attribuer automatiquement vos ventes à votre compte.",
-  },
-  {
-    icon: Clock,
     title: "Rapport quotidien",
-    text: "Un compte rendu d'activité chaque jour, idéalement avant 20 h GMT.",
-  },
-  {
-    icon: Shield,
-    title: "Confidentialité stricte",
-    text: "Discrétion totale sur les informations internes, les données clients et les stratégies.",
+    text: "Un compte-rendu concis de votre activité chaque jour, idéalement avant 20 h GMT.",
   },
 ];
 
 /* ────────────────────────────────────────────────────────────────── */
-/* Détail des 23 articles du contrat (sans nom)                      */
+/* 23 articles — inchangés                                            */
 /* ────────────────────────────────────────────────────────────────── */
 
 interface ArticleItem {
@@ -371,6 +346,8 @@ export default function Partners() {
   });
 
   const [openArticles, setOpenArticles] = useState<number[]>([]);
+  const [form, setForm] = useState({ firstName: "", lastName: "", city: "", phone: "" });
+  const [accepted, setAccepted] = useState(false);
 
   const toggleArticle = (n: number) => {
     setOpenArticles((prev) =>
@@ -379,9 +356,33 @@ export default function Partners() {
   };
 
   const allOpen = openArticles.length === ARTICLES.length;
-
   const toggleAll = () => {
     setOpenArticles(allOpen ? [] : ARTICLES.map((a) => a.number));
+  };
+
+  const isFormFilled =
+    form.firstName.trim() !== "" &&
+    form.lastName.trim() !== "" &&
+    form.city.trim() !== "" &&
+    form.phone.trim() !== "";
+
+  const isValid = isFormFilled && accepted;
+
+  const buildWhatsAppUrl = () => {
+    const message = `Bonjour Texerra SMS,
+
+Je me permets de vous contacter concernant le poste d'Agent Commercial.
+
+Nom : ${form.lastName.trim().toUpperCase()}
+Prénom : ${form.firstName.trim()}
+Ville : ${form.city.trim()}
+Téléphone : ${form.phone.trim()}
+
+J'ai lu et j'accepte l'intégralité du contrat d'agent commercial Texerra SMS. Je souhaite signer et commencer à travailler.
+
+Cordialement,
+${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
+    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
   };
 
   return (
@@ -389,11 +390,11 @@ export default function Partners() {
       className="min-h-screen w-full overflow-x-hidden"
       style={{ background: BRAND.canvas }}
     >
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {/* Retour */}
         <Link
           href="/dashboard"
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 mb-6"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all active:scale-95 mb-8"
           style={{
             background: BRAND.surface,
             border: `1px solid ${BRAND.border}`,
@@ -404,171 +405,140 @@ export default function Partners() {
           Retour au tableau de bord
         </Link>
 
-        {/* Hero */}
+        {/* ─── Hero éditorial ─── */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-3xl p-6 sm:p-8 mb-6 relative overflow-hidden"
-          style={{
-            background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.primaryDeep} 100%)`,
-          }}
+          className="mb-12"
         >
-          <div
-            className="absolute -top-24 -right-24 w-64 h-64 rounded-full pointer-events-none"
-            style={{ background: "rgba(255,255,255,0.08)" }}
-          />
-          <div
-            className="absolute -bottom-24 -left-16 w-72 h-72 rounded-full pointer-events-none"
-            style={{ background: "rgba(255,255,255,0.06)" }}
-          />
+          <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.18em] mb-5" style={{ color: BRAND.primary }}>
+            <span className="w-10 h-px" style={{ background: BRAND.primary }} />
+            Programme Agent Commercial
+          </div>
 
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4 bg-white/15 text-white">
-              <Sparkles className="w-3 h-3" />
-              Programme d'affiliation
+          <h1 className="text-3xl sm:text-4xl lg:text-[44px] font-black text-gray-900 leading-[1.1] tracking-tight mb-5 max-w-2xl">
+            Devenez partenaire commercial de Texerra SMS
+          </h1>
+
+          <p className="text-base sm:text-lg text-gray-600 leading-relaxed max-w-2xl mb-8">
+            Rejoignez notre équipe en tant qu'agent commercial indépendant.
+            Développez votre portefeuille, générez des ventes et percevez{" "}
+            <strong className="text-gray-900 font-bold">50 % de la marge commerciale</strong> sur chaque transaction.
+          </p>
+
+          <div
+            className="grid grid-cols-3 gap-4 sm:gap-8 py-6 border-y max-w-lg"
+            style={{ borderColor: BRAND.border }}
+          >
+            <div>
+              <div className="text-3xl sm:text-4xl font-black text-gray-900 leading-none">
+                50<span className="text-xl sm:text-2xl">%</span>
+              </div>
+              <div className="text-[11px] text-gray-500 font-semibold mt-1.5 uppercase tracking-wide">
+                de la marge
+              </div>
             </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-3">
-              Devenir partenaire commercial Texerra SMS
-            </h1>
-            <p className="text-white/80 text-sm sm:text-base leading-relaxed max-w-2xl">
-              Rejoignez notre équipe en tant qu'agent commercial indépendant.
-              Développez votre propre portefeuille de clients, générez des ventes
-              et percevez <strong className="text-white">50 % de la marge commerciale</strong> sur chaque
-              vente que vous réalisez.
-            </p>
-
-            <div className="flex flex-wrap gap-2 mt-5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white/15 text-white">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Statut indépendant
+            <div>
+              <div className="text-3xl sm:text-4xl font-black text-gray-900 leading-none">
+                0<span className="text-xl sm:text-2xl">€</span>
               </div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white/15 text-white">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Aucun salaire fixe
+              <div className="text-[11px] text-gray-500 font-semibold mt-1.5 uppercase tracking-wide">
+                salaire fixe
               </div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white/15 text-white">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Liberté d'organisation
+            </div>
+            <div>
+              <div className="text-3xl sm:text-4xl font-black text-gray-900 leading-none">
+                100<span className="text-xl sm:text-2xl">%</span>
+              </div>
+              <div className="text-[11px] text-gray-500 font-semibold mt-1.5 uppercase tracking-wide">
+                indépendant
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Résumé */}
+        {/* ─── Résumé ─── */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="mb-8"
+          className="mb-12"
         >
-          <div className="flex items-center gap-2 mb-4">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: BRAND.primarySoft, color: BRAND.primary }}
-            >
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <h2 className="text-lg font-extrabold text-gray-900">
-              Résumé du contrat
-            </h2>
-          </div>
-
-          <p className="text-sm text-gray-600 leading-relaxed mb-5">
-            Avant de signer, voici l'essentiel à retenir. Ces points sont
-            détaillés dans les 23 articles ci-dessous, eux-mêmes issus du
-            contrat officiel d'agent commercial.
+          <h2 className="text-xl font-extrabold text-gray-900 mb-1">
+            En résumé
+          </h2>
+          <p className="text-sm text-gray-500 mb-6">
+            Les six points essentiels du contrat, avant d'entrer dans le détail.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {SUMMARY_POINTS.map((point, i) => {
-              const Icon = point.icon;
-              return (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.06 + i * 0.03 }}
-                  className="rounded-2xl p-4 flex items-start gap-3"
-                  style={{
-                    background: BRAND.surface,
-                    border: `1px solid ${BRAND.border}`,
-                  }}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+            {SUMMARY_POINTS.map((point, i) => (
+              <div key={i} className="flex gap-3">
+                <span
+                  className="text-sm font-black shrink-0 tabular-nums"
+                  style={{ color: BRAND.primary }}
                 >
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                    style={{
-                      background: BRAND.primarySoft,
-                      color: BRAND.primary,
-                    }}
-                  >
-                    <Icon className="w-4 h-4" />
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div className="min-w-0">
+                  <div className="font-bold text-sm text-gray-900 mb-1">
+                    {point.title}
                   </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-sm text-gray-900 mb-0.5">
-                      {point.title}
-                    </div>
-                    <div className="text-[12px] text-gray-600 leading-relaxed">
-                      {point.text}
-                    </div>
+                  <div className="text-[13px] text-gray-600 leading-relaxed">
+                    {point.text}
                   </div>
-                </motion.div>
-              );
-            })}
+                </div>
+              </div>
+            ))}
           </div>
         </motion.div>
 
-        {/* Détails des articles */}
+        {/* ─── 23 articles ─── */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="mb-8"
+          className="mb-12"
         >
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: BRAND.coolSoft, color: BRAND.cool }}
-              >
-                <FileText className="w-4 h-4" />
-              </div>
-              <h2 className="text-lg font-extrabold text-gray-900">
+          <div className="flex items-end justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-xl font-extrabold text-gray-900 mb-1">
                 Détail des 23 articles
               </h2>
+              <p className="text-sm text-gray-500">
+                Le contrat officiel, article par article.
+              </p>
             </div>
             <button
               onClick={toggleAll}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shrink-0"
-              style={{
-                background: BRAND.borderSoft,
-                color: BRAND.inkMuted,
-              }}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0"
+              style={{ background: BRAND.borderSoft, color: BRAND.inkMuted }}
             >
               {allOpen ? "Tout replier" : "Tout déplier"}
             </button>
           </div>
 
-          <div className="space-y-2">
-            {ARTICLES.map((article) => {
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
+          >
+            {ARTICLES.map((article, idx) => {
               const isOpen = openArticles.includes(article.number);
               const Icon = article.icon;
               return (
                 <div
                   key={article.number}
-                  className="rounded-2xl overflow-hidden"
                   style={{
-                    background: BRAND.surface,
-                    border: `1px solid ${BRAND.border}`,
+                    borderTop: idx === 0 ? "none" : `1px solid ${BRAND.border}`,
                   }}
                 >
                   <button
                     onClick={() => toggleArticle(article.number)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-4 text-left hover:bg-gray-50 transition-colors"
                     aria-expanded={isOpen}
                   >
                     <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                       style={{
                         background: isOpen ? BRAND.primarySoft : BRAND.borderSoft,
                         color: isOpen ? BRAND.primary : BRAND.inkMuted,
@@ -577,24 +547,21 @@ export default function Partners() {
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-baseline gap-2 flex-wrap">
                         <span
                           className="text-[10px] font-black uppercase tracking-widest"
                           style={{ color: BRAND.primary }}
                         >
                           Article {article.number}
                         </span>
-                        <span className="font-bold text-sm text-gray-900 truncate">
+                        <span className="font-bold text-sm text-gray-900">
                           {article.title}
                         </span>
                       </div>
                     </div>
                     <div
-                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform"
-                      style={{
-                        background: BRAND.borderSoft,
-                        color: BRAND.inkMuted,
-                      }}
+                      className="w-6 h-6 rounded flex items-center justify-center shrink-0"
+                      style={{ color: BRAND.inkMuted }}
                     >
                       {isOpen ? (
                         <ChevronUp className="w-4 h-4" />
@@ -613,18 +580,15 @@ export default function Partners() {
                         transition={{ duration: 0.2 }}
                         className="overflow-hidden"
                       >
-                        <div
-                          className="px-4 pb-4 pt-1"
-                          style={{ borderTop: `1px dashed ${BRAND.border}` }}
-                        >
-                          <ul className="space-y-2 mt-3">
+                        <div className="px-4 pb-5 pt-1 pl-[60px]">
+                          <ul className="space-y-2">
                             {article.content.map((line, i) => (
                               <li
                                 key={i}
                                 className="flex items-start gap-2 text-[13px] text-gray-700 leading-relaxed"
                               >
                                 <span
-                                  className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
+                                  className="mt-1.5 w-1 h-1 rounded-full shrink-0"
                                   style={{ background: BRAND.primary }}
                                 />
                                 <span>{line}</span>
@@ -641,169 +605,168 @@ export default function Partners() {
           </div>
         </motion.div>
 
-        {/* Avertissement + CTA WhatsApp */}
+        {/* ─── Formulaire de candidature ─── */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
+          className="rounded-2xl p-6 sm:p-8"
+          style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}` }}
         >
-          {/* Avertissement */}
-          <div
-            className="rounded-2xl p-5 mb-4"
-            style={{
-              background: BRAND.warnSoft,
-              border: `1px solid ${BRAND.warnBorder}`,
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: BRAND.warn,
-                  color: "#ffffff",
-                }}
-              >
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <div
-                  className="font-extrabold text-sm mb-1"
-                  style={{ color: "#92400E" }}
-                >
-                  Ce bouton est réservé aux personnes prêtes à signer
-                </div>
-                <p className="text-[13px] leading-relaxed" style={{ color: "#78350F" }}>
-                  En cliquant sur le bouton ci-dessous, vous confirmez avoir lu
-                  et compris l'intégralité du contrat, et vous engagez la
-                  démarche pour <strong>signer et commencer à travailler</strong>.
-                  Merci de ne pas cliquer si vous souhaitez uniquement poser une
-                  simple question ou vous renseigner. Ce canal est prioritaire
-                  pour les candidatures sérieuses et prêtes à démarrer.
-                </p>
-              </div>
-            </div>
+          <div className="mb-6">
+            <h2 className="text-xl font-extrabold text-gray-900 mb-2">
+              Prêt(e) à rejoindre l'équipe ?
+            </h2>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Renseignez vos informations et envoyez votre candidature via WhatsApp.
+              Notre équipe vous recontactera pour finaliser la signature du contrat.
+            </p>
           </div>
 
-          {/* CTA */}
-          <div
-            className="rounded-3xl p-6 sm:p-8"
-            style={{
-              background: BRAND.surface,
-              border: `1px solid ${BRAND.border}`,
-            }}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-5">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Prénom
+                </label>
+                <input
+                  type="text"
+                  value={form.firstName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, firstName: e.target.value }))
+                  }
+                  placeholder="Jean"
+                  className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
+                  style={{
+                    background: BRAND.borderSoft,
+                    border: `1px solid ${BRAND.border}`,
+                  }}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Nom
+                </label>
+                <input
+                  type="text"
+                  value={form.lastName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, lastName: e.target.value }))
+                  }
+                  placeholder="Dupont"
+                  className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
+                  style={{
+                    background: BRAND.borderSoft,
+                    border: `1px solid ${BRAND.border}`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                Ville
+              </label>
+              <input
+                type="text"
+                value={form.city}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, city: e.target.value }))
+                }
+                placeholder="Douala"
+                className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
+                style={{
+                  background: BRAND.borderSoft,
+                  border: `1px solid ${BRAND.border}`,
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                Téléphone
+              </label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: e.target.value }))
+                }
+                placeholder="+237 6 XX XX XX XX"
+                className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
+                style={{
+                  background: BRAND.borderSoft,
+                  border: `1px solid ${BRAND.border}`,
+                }}
+              />
+            </div>
+
+            {/* Case à cocher */}
+            <label
+              className="flex items-start gap-3 p-4 rounded-xl cursor-pointer transition-colors"
+              style={{
+                background: accepted ? BRAND.primarySoft : BRAND.borderSoft,
+                border: `1px solid ${accepted ? BRAND.primary : BRAND.border}`,
+              }}
+            >
               <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                className="w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5 transition-all"
+                style={{
+                  background: accepted ? BRAND.primary : "#FFFFFF",
+                  border: `2px solid ${accepted ? BRAND.primary : "#D1D5DB"}`,
+                }}
+              >
+                {accepted && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+              </div>
+              <span className="text-sm text-gray-700 leading-relaxed">
+                Je certifie avoir lu et accepté l'intégralité du contrat d'agent
+                commercial Texerra SMS, et je souhaite signer pour commencer à
+                travailler.
+              </span>
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={accepted}
+                onChange={(e) => setAccepted(e.target.checked)}
+              />
+            </label>
+
+            {/* Bouton */}
+            {isValid ? (
+              <a
+                href={buildWhatsAppUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
                 style={{
                   background: "#25D366",
-                  color: "#ffffff",
+                  boxShadow: "0 6px 16px rgba(37,211,102,0.28)",
                 }}
               >
-                <MessageCircle className="w-7 h-7" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-extrabold text-gray-900 mb-1">
-                  Prêt(e) à rejoindre l'équipe Texerra SMS ?
-                </h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Contactez notre assistance sur WhatsApp pour signer le
-                  contrat d'agent commercial et commencer à travailler.
-                </p>
-              </div>
-            </div>
-
-            <a
-              href={WHATSAPP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group w-full flex items-center justify-center gap-2 py-4 text-white font-bold rounded-2xl text-sm transition-all hover:opacity-95 active:scale-[0.98] mb-3"
-              style={{
-                background: "#25D366",
-                boxShadow: "0 8px 20px rgba(37,211,102,0.28)",
-              }}
-            >
-              <MessageCircle className="w-4 h-4" />
-              Contacter l'assistance sur WhatsApp
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </a>
-
-            <div
-              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold"
-              style={{
-                background: BRAND.borderSoft,
-                color: BRAND.inkMuted,
-              }}
-            >
-              <Phone className="w-3.5 h-3.5" />
-              +1 (242) 454-2961 — Assistance officielle Texerra SMS
-            </div>
-
-            <div className="flex items-start gap-2 mt-4 text-[11px] text-gray-500 leading-relaxed">
-              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: BRAND.primary }} />
-              <span>
-                Un message pré-rempli s'ouvrira automatiquement. Il indique que
-                vous avez lu le contrat et que vous souhaitez le signer pour
-                commencer à travailler. Vous pourrez le modifier si nécessaire
-                avant l'envoi.
-              </span>
-            </div>
-          </div>
-
-          {/* Rappel des conditions clés en bas */}
-          <div
-            className="mt-6 rounded-2xl p-5"
-            style={{
-              background: BRAND.coolSoft,
-              border: `1px solid ${BRAND.coolBorder || "#BFDBFE"}`,
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: BRAND.cool, color: "#ffffff" }}
+                <MessageCircle className="w-4 h-4" />
+                Envoyer ma candidature sur WhatsApp
+                <ArrowRight className="w-4 h-4" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold cursor-not-allowed"
+                style={{
+                  background: BRAND.borderSoft,
+                  color: BRAND.inkMuted,
+                }}
               >
-                <Award className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div
-                  className="font-extrabold text-sm mb-1"
-                  style={{ color: "#1E40AF" }}
-                >
-                  À retenir avant de signer
-                </div>
-                <ul className="space-y-1 text-[12px] text-gray-700">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                      style={{ color: BRAND.success }}
-                    />
-                    <span>Vous êtes indépendant(e), sans salaire fixe.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                      style={{ color: BRAND.success }}
-                    />
-                    <span>Commission = 50 % de la marge commerciale générée.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                      style={{ color: BRAND.success }}
-                    />
-                    <span>Rapport quotidien avant 20 h GMT.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
-                      style={{ color: BRAND.success }}
-                    />
-                    <span>Confidentialité et image de marque strictes.</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
+                <MessageCircle className="w-4 h-4" />
+                Envoyer ma candidature sur WhatsApp
+              </button>
+            )}
+
+            {!isValid && (
+              <p className="text-[11px] text-gray-500 text-center leading-relaxed">
+                Remplissez tous les champs et cochez la case pour activer l'envoi.
+              </p>
+            )}
           </div>
         </motion.div>
       </div>
