@@ -21,6 +21,8 @@ import ConditionsVente from "./pages/conditions-vente";
 import Confidentialite from "./pages/confidentialite";
 import Cookies from "./pages/cookies";
 import UtilisationAcceptable from "./pages/utilisation-acceptable";
+// ➕ NOUVEAU : page partenaire commercial
+import Partners from "./pages/partners";
 
 // ➕ NOUVEAU : système d'affiliation / commerciaux
 import { useAffiliateCapture } from "./hooks/useAffiliateCapture";
@@ -810,6 +812,13 @@ function AppRoutes() {
           </Route>
           <Route path="/utilisation-acceptable">
             <Layout><UtilisationAcceptable /></Layout>
+          </Route>
+
+          {/* ➕ NOUVEAU : page partenaire commercial (accessible publiquement) */}
+          <Route path="/partners">
+            <Layout>
+              <Partners />
+            </Layout>
           </Route>
 
           {/* ➕ NOUVEAU : route admin (hors Layout public) */}
