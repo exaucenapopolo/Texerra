@@ -222,7 +222,7 @@ export interface AdminCommercialAccount {
   linked: boolean;
   contactHistory?: Array<{ id: string; channel?: string; status?: string; subject?: string; createdAt: string }>;
   commercial: { id: string; name: string; email: string; country?: string };
-  user?: { id: string; name: string; email: string; phone: string; balance: number; createdAt: string; lastSignInAt: string | null; totalOrders: number; successfulOrders: number; totalSuccessfulSpend: number };
+  user?: { id: string; name: string; email: string; phone: string; countryIso?: string; countryName?: string; countryFlag?: string; balance: number; createdAt: string; lastSignInAt: string | null; totalOrders: number; successfulOrders: number; totalSuccessfulSpend: number };
   orders?: Array<{ id: string; status: string; price: number; createdAt: string; serviceCode: string; phoneNumber: string }>;
 }
 
@@ -244,7 +244,7 @@ export function adminSendAffiliateContact(payload: {
 }
 
 export function adminGetCommercialClients(id: string, page = 1): Promise<{
-  clients: Array<{ id: string; name: string; email: string; phone: string; attributedAt: string; source: string; balance: number; successfulOrders: number }>;
+  clients: Array<{ id: string; name: string; email: string; phone: string; countryIso?: string; countryName?: string; countryFlag?: string; attributedAt: string; source: string; balance: number; successfulOrders: number }>;
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
 }> {
   return apiCall(`/admin/commercials/${encodeURIComponent(id)}/clients?page=${page}&pageSize=20`);

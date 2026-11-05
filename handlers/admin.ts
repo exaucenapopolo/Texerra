@@ -103,6 +103,50 @@ function csvRow(values: unknown[]): string {
   return values.map(escapeCsv).join(",");
 }
 
+
+/** Excel 2003 XML Workbook : permet de fournir un vrai classeur multi-feuilles
+ * sans ajouter de dépendance lourde au projet ou à Vercel. */
+function xmlEscape(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;",
+  }[char] as string));
+}
+
+function spreadsheetXml(sheets: Array<{ name: string; headers: string[]; rows: unknown[][] }>): string {
+  const worksheetXml = sheets.map((sheet) => {
+    const renderRow = (values: unknown[], header = false) => `<Row>${values.map((value) => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return `<Cell${header ? ' ss:StyleID="Header"' : ""}><Data ss:Type="Number">${value}</Data></Cell>`;
+      }
+      if (typeof value === "boolean") {
+        return `<Cell${header ? ' ss:StyleID="Header"' : ""}><Data ss:Type="String">${value ? "Oui" : "Non"}</Data></Cell>`;
+      }
+      let normalized = value;
+      if (normalized && typeof normalized === "object") {
+        if ("toDate" in (normalized as object)) {
+          try { normalized = (normalized as Timestamp).toDate().toISOString(); } catch { normalized = ""; }
+        } else if (normalized instanceof Date) normalized = normalized.toISOString();
+        else normalized = JSON.stringify(normalized);
+      }
+      return `<Cell${header ? ' ss:StyleID="Header"' : ""}><Data ss:Type="String">${xmlEscape(normalized)}</Data></Cell>`;
+    }).join("")}</Row>`;
+    return `<Worksheet ss:Name="${xmlEscape(sheet.name.slice(0, 31))}"><Table>${renderRow(sheet.headers, true)}${sheet.rows.map((row) => renderRow(row)).join("")}</Table></Worksheet>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>` +
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">` +
+    `<Styles><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#A84B25" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style></Styles>${worksheetXml}</Workbook>`;
+}
+
+function sendExcelWorkbook(
+  res: Response,
+  filename: string,
+  sheets: Array<{ name: string; headers: string[]; rows: unknown[][] }>
+): void {
+  res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(`\uFEFF${spreadsheetXml(sheets)}`);
+}
+
 /**
  * Renvoie la marge réelle d'une commande.
  * Priorité : marginNum > margin (string/number) > null (fallback externe).
@@ -476,6 +520,8 @@ router.get("/topups", requireAdmin, async (req: Request, res: Response) => {
         countryIso: d.countryIso ?? null,
         status: d.status,
         externalId: d.externalId ?? null,
+        provider: d.provider ?? d.paymentProvider ?? d.method ?? null,
+        paymentMethod: d.paymentMethod ?? d.method ?? null,
         createdAt: getCreatedAtIso(d.createdAt),
       };
     });
@@ -554,7 +600,7 @@ router.get("/users", requireAdmin, async (req: Request, res: Response) => {
       const profileDocs = userRefs.length ? await firestoreDb.getAll(...userRefs) : [];
       const users = profileDocs.filter((doc) => doc.exists).map((doc) => {
         const d = doc.data()!; const stat = rankMap.get(doc.id)!;
-        return { id: doc.id, name: d.name ?? "", email: d.email ?? "", phone: d.phone ?? "", balance: num(d.balance, 0) ?? 0, createdAt: getCreatedAtIso(d.createdAt), lastExportedAt: d.lastExportedAt ?? null, exportCount: Number(d.exportCount ?? 0), stats: stat, affiliate: null as any };
+        return { id: doc.id, name: d.name ?? "", email: d.email ?? "", phone: d.phone ?? "", countryIso: d.countryIso ?? "", countryName: d.countryName ?? "", countryFlag: d.countryFlag ?? "", balance: num(d.balance, 0) ?? 0, createdAt: getCreatedAtIso(d.createdAt), lastExportedAt: d.lastExportedAt ?? null, exportCount: Number(d.exportCount ?? 0), stats: stat, affiliate: null as any };
       });
       if (users.length) {
         const byCustomer = new Map<string, FirebaseFirestore.DocumentData>();
@@ -624,6 +670,9 @@ router.get("/users", requireAdmin, async (req: Request, res: Response) => {
         email: d.email ?? "",
         name: d.name ?? "",
         phone: d.phone ?? "",
+        countryIso: d.countryIso ?? "",
+        countryName: d.countryName ?? "",
+        countryFlag: d.countryFlag ?? "",
         balance: num(d.balance, 0) ?? 0,
         createdAt: getCreatedAtIso(d.createdAt),
         lastSignInAt: d.lastSignInAt ?? null,
@@ -760,7 +809,7 @@ router.get("/users/:id/profile", requireAdmin, async (req: Request, res: Respons
     const successfulOrdersSnap = await firestoreDb.collection("orders").where("userId", "==", id).where("status", "==", "completed").count().get();
     const historySnap = await userRef.collection("contactHistory").orderBy("createdAt", "desc").limit(20).get();
     res.json({
-      user: { id, name: d.name ?? "", email: d.email ?? "", phone: d.phone ?? "", balance: num(d.balance, 0) ?? 0, currency: d.currency ?? "EUR", createdAt: getCreatedAtIso(d.createdAt), updatedAt: d.updatedAt ?? null, auth: authMeta, stats: { totalOrders: totalOrdersSnap.data().count, completedOrders: successfulOrdersSnap.data().count, totalSuccessfulSpend: num(d.totalSuccessfulSpend, 0) ?? 0 }, affiliate },
+      user: { id, name: d.name ?? "", email: d.email ?? "", phone: d.phone ?? "", countryIso: d.countryIso ?? "", countryName: d.countryName ?? "", countryFlag: d.countryFlag ?? "", balance: num(d.balance, 0) ?? 0, currency: d.currency ?? "EUR", createdAt: getCreatedAtIso(d.createdAt), updatedAt: d.updatedAt ?? null, auth: authMeta, lastOrderAt: orders[0]?.createdAt ?? null, stats: { totalOrders: totalOrdersSnap.data().count, completedOrders: successfulOrdersSnap.data().count, totalSuccessfulSpend: num(d.totalSuccessfulSpend, 0) ?? 0 }, affiliate },
       orders,
       contactHistory: historySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
     });
@@ -785,7 +834,7 @@ router.post("/contact/email", requireAdmin, async (req: Request, res: Response) 
     const user = userSnap.data()!;
     const email = String(user.email ?? "").trim();
     if (!email) { res.status(400).json({ error: "Cet utilisateur n'a pas d'adresse e-mail." }); return; }
-    const sent = await sendAdminContactEmail({ to: email, name: String(user.name ?? "cher client"), subject, message, contextLabel: "Message personnel de l'équipe Texerra SMS" });
+    const sent = await sendAdminContactEmail({ to: email, name: String(user.name ?? "cher client"), subject, message });
     const log = { channel: "email", status: "sent", templateId, subject, message, recipient: email, recipientName: String(user.name ?? ""), resendId: sent.id ?? null, createdAt: new Date().toISOString() };
     const batch = firestoreDb.batch();
     const historyRef = firestoreDb.collection("users").doc(userId).collection("contactHistory").doc();
@@ -863,6 +912,7 @@ router.post("/users/export/mark", requireAdmin, async (req: Request, res: Respon
 /* ────────────────────────────────────────────────────────────────── */
 router.get("/export/full", requireAdmin, async (req: Request, res: Response) => {
   try {
+    const format = String(req.query.format ?? "xls").toLowerCase();
     const { startIso, endIso } = parseRange(req);
     const [usersSnap, ordersSnap, topupsSnap, commercialsSnap, commissionsSnap, attributionsSnap, withdrawalsSnap] = await Promise.all([
       firestoreDb.collection("users").orderBy("createdAt", "desc").limit(MAX_FETCH).get(),
@@ -882,19 +932,59 @@ router.get("/export/full", requireAdmin, async (req: Request, res: Response) => 
       firestoreDb.collection("topups").count().get(), firestoreDb.collection("commercials").count().get(),
       firestoreDb.collection("affiliate_commissions").count().get(), firestoreDb.collection("affiliate_attributions").count().get(),
     ]);
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="texerra-admin-${startIso.slice(0,10)}-${endIso.slice(0,10)}.json"`);
-    res.json({
-      generatedAt: new Date().toISOString(), period: { start: startIso, end: endIso },
-      coverage: {
-        limits: { users: MAX_FETCH, orders: MAX_FETCH, topups: MAX_FETCH, affiliateCollections: MAX_FETCH },
-        totalAvailable: { users: counts[0].data().count, orders: counts[1].data().count, topups: counts[2].data().count, commercials: counts[3].data().count, commissions: counts[4].data().count, attributions: counts[5].data().count },
-        exported: { users: usersSnap.size, orders: ordersSnap.size, topups: topupsSnap.size, commercials: commercialsSnap.size, commissions: commissionsSnap.size, attributions: attributionsSnap.size, withdrawals: withdrawalsSnap.size },
-        truncated: usersSnap.size >= MAX_FETCH || ordersSnap.size >= MAX_FETCH || topupsSnap.size >= MAX_FETCH || commercialsSnap.size >= MAX_FETCH || commissionsSnap.size >= MAX_FETCH || attributionsSnap.size >= MAX_FETCH || withdrawalsSnap.size >= MAX_FETCH,
-      },
-      users: encode(usersSnap), orders: encode(ordersSnap), topups: encode(topupsSnap),
-      affiliation: { commercials: encode(commercialsSnap), commissions: encode(commissionsSnap), attributions: encode(attributionsSnap), withdrawals: encode(withdrawalsSnap) },
+    const users = encode(usersSnap);
+    const orders = encode(ordersSnap);
+    const topups = encode(topupsSnap);
+    const completedOrders = orders.filter((order: any) => order.status === "completed");
+    const exportedRevenue = completedOrders.reduce((sum: number, order: any) => sum + (num(order.priceNum) ?? num(order.price, 0) ?? 0), 0);
+    const exportedMargin = completedOrders.reduce((sum: number, order: any) => {
+      const price = num(order.priceNum) ?? num(order.price, 0) ?? 0;
+      return sum + (computeOrderMargin(order) ?? price * MARGIN_RATE);
+    }, 0);
+    const exportedTopups = topups.filter((topup: any) => topup.status === "completed").reduce((sum: number, topup: any) => sum + (num(topup.amountEurNum) ?? num(topup.amountEur, 0) ?? 0), 0);
+    const commercials = encode(commercialsSnap);
+    const commissions = encode(commissionsSnap);
+    const attributions = encode(attributionsSnap);
+    const withdrawals = encode(withdrawalsSnap);
+    const coverage = {
+      limits: { users: MAX_FETCH, orders: MAX_FETCH, topups: MAX_FETCH, affiliateCollections: MAX_FETCH },
+      totalAvailable: { users: counts[0].data().count, orders: counts[1].data().count, topups: counts[2].data().count, commercials: counts[3].data().count, commissions: counts[4].data().count, attributions: counts[5].data().count },
+      exported: { users: usersSnap.size, orders: ordersSnap.size, topups: topupsSnap.size, commercials: commercialsSnap.size, commissions: commissionsSnap.size, attributions: attributionsSnap.size, withdrawals: withdrawalsSnap.size },
+      truncated: usersSnap.size >= MAX_FETCH || ordersSnap.size >= MAX_FETCH || topupsSnap.size >= MAX_FETCH || commercialsSnap.size >= MAX_FETCH || commissionsSnap.size >= MAX_FETCH || attributionsSnap.size >= MAX_FETCH || withdrawalsSnap.size >= MAX_FETCH,
+    };
+    if (format === "json") {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="texerra-admin-${startIso.slice(0,10)}-${endIso.slice(0,10)}.json"`);
+      res.json({ generatedAt: new Date().toISOString(), period: { start: startIso, end: endIso }, coverage, users, orders, topups, affiliation: { commercials, commissions, attributions, withdrawals } });
+      return;
+    }
+    if (format !== "xls" && format !== "excel") {
+      res.status(400).json({ error: "Format non pris en charge. Utilisez xls ou json." });
+      return;
+    }
+    const fieldsSheet = (items: any[], fields: Array<[string, string]>) => ({
+      headers: fields.map(([label]) => label),
+      rows: items.map((item) => fields.map(([, key]) => item[key] ?? "")),
     });
+    sendExcelWorkbook(res, `texerra-admin-${startIso.slice(0,10)}-${endIso.slice(0,10)}.xls`, [
+      { name: "Résumé", headers: ["Indicateur", "Valeur"], rows: [
+        ["Généré le", new Date().toLocaleString("fr-FR")], ["Début de période", startIso], ["Fin de période", endIso],
+        ["Utilisateurs exportés", users.length], ["Commandes exportées", orders.length], ["Commandes réussies", completedOrders.length],
+        ["Ventes nettes des commandes réussies (€)", exportedRevenue], ["Marge brute estimée/enregistrée (€)", exportedMargin],
+        ["Coût fournisseur calculé (€)", Math.max(0, exportedRevenue - exportedMargin)], ["Taux de marge (%)", exportedRevenue > 0 ? (exportedMargin / exportedRevenue) * 100 : 0],
+        ["Dépôts réussis (€)", exportedTopups], ["Dépôts exportés", topups.length],
+        ["Commerciaux exportés", commercials.length], ["Commissions exportées", commissions.length], ["Attributions exportées", attributions.length], ["Retraits exportés", withdrawals.length],
+        ["Export partiel (limite atteinte)", coverage.truncated ? "Oui" : "Non"],
+      ] },
+      { name: "Utilisateurs", ...fieldsSheet(users, [["UID", "id"], ["Nom", "name"], ["E-mail", "email"], ["Téléphone", "phone"], ["Pays", "countryName"], ["ISO pays", "countryIso"], ["Solde", "balance"], ["Devise", "currency"], ["Inscription", "createdAt"], ["Dernière connexion", "lastSignInAt"]]) },
+      { name: "Commandes", ...fieldsSheet(orders, [["ID", "id"], ["Utilisateur", "userId"], ["Service", "serviceCode"], ["Pays", "countryCode"], ["Numéro", "phoneNumber"], ["Statut", "status"], ["Prix", "priceNum"], ["Marge", "marginNum"], ["Date", "createdAt"]]) },
+      { name: "Dépôts", ...fieldsSheet(topups, [["ID", "id"], ["Utilisateur", "userId"], ["Montant EUR", "amountEurNum"], ["Montant local", "amountLocal"], ["Devise locale", "localCurrency"], ["Pays", "countryIso"], ["Statut", "status"], ["Référence", "externalId"], ["Date", "createdAt"]]) },
+      { name: "Commerciaux", ...fieldsSheet(commercials, [["ID", "id"], ["Nom", "name"], ["E-mail", "email"], ["Pays", "country"], ["Code affilié", "affiliateCode"], ["UID Firebase", "firebaseUid"], ["Statut", "status"], ["Taux commission", "commissionRate"]]) },
+      { name: "Commissions", ...fieldsSheet(commissions, [["ID", "id"], ["Commercial", "commercialId"], ["Client", "customerId"], ["Commande", "orderId"], ["Vente", "orderAmount"], ["Marge", "orderMargin"], ["Commission", "commissionAmount"], ["Statut", "status"], ["Date", "createdAt"]]) },
+      { name: "Attributions", ...fieldsSheet(attributions, [["ID", "id"], ["Commercial", "commercialId"], ["Client", "customerId"], ["Code affilié", "affiliateCode"], ["Source", "source"], ["Date", "createdAt"]]) },
+      { name: "Retraits", ...fieldsSheet(withdrawals, [["ID", "id"], ["Commercial", "commercialId"], ["Montant", "amount"], ["Statut", "status"], ["Méthode", "method"], ["Date demande", "requestedAt"], ["Date mise à jour", "updatedAt"]]) },
+    ]);
+    return;
   } catch (err) {
     console.error("Full admin export error:", err);
     res.status(500).json({ error: "Erreur pendant l'export complet", details: String(err) });
@@ -953,6 +1043,14 @@ router.get("/orders/export", requireAdmin, async (req: Request, res: Response) =
 
     if (format === "json") {
       res.json({ orders: all, total: all.length });
+      return;
+    }
+    if (format === "xls" || format === "excel") {
+      sendExcelWorkbook(res, `commandes-${startIso.slice(0,10)}_${endIso.slice(0,10)}.xls`, [{
+        name: "Commandes",
+        headers: ["Date", "Utilisateur", "E-mail", "UID", "Pays (code)", "Service", "Numéro", "Statut", "Prix (€)", "Marge (€)"],
+        rows: all.map((o) => [new Date(o.createdAt).toLocaleString("fr-FR"), o.userName, o.userEmail, o.userId, o.countryCode, o.serviceCode, o.phoneNumber, o.status, o.price, o.margin]),
+      }]);
       return;
     }
 
@@ -1049,6 +1147,14 @@ router.get("/topups/export", requireAdmin, async (req: Request, res: Response) =
       res.json({ topups: all, total: all.length });
       return;
     }
+    if (format === "xls" || format === "excel") {
+      sendExcelWorkbook(res, `depots-${startIso.slice(0,10)}_${endIso.slice(0,10)}.xls`, [{
+        name: "Dépôts",
+        headers: ["Date", "Utilisateur", "E-mail", "UID", "Montant (€)", "Pays", "Devise locale", "Montant local", "Statut", "Référence"],
+        rows: all.map((t) => [new Date(t.createdAt).toLocaleString("fr-FR"), t.userName, t.userEmail, t.userId, t.amountEur, t.countryIso, t.localCurrency, t.amountLocal, t.status, t.externalId]),
+      }]);
+      return;
+    }
 
     const startDay = startIso.slice(0, 10);
     const endDay = endIso.slice(0, 10);
@@ -1126,12 +1232,23 @@ router.get("/users/export", requireAdmin, async (req: Request, res: Response) =>
         name: d.name ?? "",
         email: d.email ?? "",
         phone: d.phone ?? "",
+        countryIso: d.countryIso ?? "",
+        countryName: d.countryName ?? "",
+        countryFlag: d.countryFlag ?? "",
         balance: num(d.balance, 0) ?? 0,
       });
     }
 
     if (format === "json") {
       res.json({ users: all, total: all.length });
+      return;
+    }
+    if (format === "xls" || format === "excel") {
+      sendExcelWorkbook(res, `utilisateurs-texerra-${all.length}.xls`, [{
+        name: "Utilisateurs",
+        headers: ["UID", "Inscription", "Nom", "E-mail", "Téléphone", "Pays", "ISO pays", "Solde (€)"],
+        rows: all.map((u) => [u.id, new Date(u.createdAt).toLocaleString("fr-FR"), u.name, u.email, u.phone, u.countryName, u.countryIso, u.balance]),
+      }]);
       return;
     }
 
@@ -1166,7 +1283,7 @@ router.get("/users/export", requireAdmin, async (req: Request, res: Response) =>
     );
     res.write("\uFEFF");
     res.write(
-      csvRow(["Inscription", "Nom", "Email", "Téléphone", "Solde (€)", "ID"]) + "\n"
+      csvRow(["Inscription", "Nom", "Email", "Téléphone", "Pays", "ISO pays", "Solde (€)", "ID"]) + "\n"
     );
     for (const u of all) {
       res.write(
@@ -1175,6 +1292,8 @@ router.get("/users/export", requireAdmin, async (req: Request, res: Response) =>
           u.name,
           u.email,
           u.phone,
+          u.countryName,
+          u.countryIso,
           u.balance?.toFixed(2) ?? "0.00",
           u.id,
         ]) + "\n"

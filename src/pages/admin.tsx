@@ -339,141 +339,186 @@ function firstName(name: string | undefined | null): string {
 /* Modèles de messages WhatsApp / Email                               */
 /* ────────────────────────────────────────────────────────────────── */
 
+type UserContactProfile = {
+  createdAt?: string | null;
+  lastSignInAt?: string | null;
+  lastOrderAt?: string | null;
+  completedOrders?: number;
+  totalOrders?: number;
+};
+
+type MessageContext =
+  | {
+      kind: "order";
+      date: string;
+      id: string;
+      status: string;
+      service: string;
+      country: string;
+      number: string;
+      amount: number;
+    }
+  | {
+      kind: "topup";
+      date: string;
+      id: string;
+      status: string;
+      amount: number;
+      country: string;
+      currency?: string;
+      localAmount?: number | null;
+      reference?: string;
+      provider?: string;
+    };
+
 type MessageTemplate = {
   id: string;
+  group: "general" | "order" | "topup";
   label: string;
   preview: string;
-  whatsappBody: (name: string) => string;
-  emailSubject: (name: string) => string;
-  emailBody: (name: string, stats?: { completedOrders: number; totalOrders: number }) => string;
+  whatsappBody: (name: string, profile?: UserContactProfile, context?: MessageContext) => string;
+  emailSubject: (name: string, profile?: UserContactProfile, context?: MessageContext) => string;
+  emailBody: (name: string, profile?: UserContactProfile, context?: MessageContext) => string;
 };
+
+function formatContactDate(value?: string | null): string {
+  if (!value) return "information non disponible";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "information non disponible";
+  return date.toLocaleString("fr-FR", {
+    day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function contactProfileFacts(profile?: UserContactProfile): string {
+  if (!profile) return "";
+  const signup = profile.createdAt
+    ? `Votre compte Texerra a été créé le ${formatContactDate(profile.createdAt)}.`
+    : "La date de création de votre compte n’est pas disponible dans notre historique.";
+  const activity = profile.lastSignInAt
+    ? `La dernière connexion enregistrée sur votre compte date du ${formatContactDate(profile.lastSignInAt)}.`
+    : profile.lastOrderAt
+      ? `Nous ne disposons pas d’une heure de dernière connexion fiable ; votre dernière activité enregistrée est une commande du ${formatContactDate(profile.lastOrderAt)}.`
+      : "Nous ne disposons pas d’une date de dernière connexion suffisamment fiable pour vous l’indiquer.";
+  const count = Number.isFinite(profile.completedOrders)
+    ? `Vous avez déjà réalisé ${profile.completedOrders ?? 0} commande(s) réussie(s) sur ${profile.totalOrders ?? 0} commande(s) enregistrée(s) sur la plateforme.`
+    : "Nous suivons votre historique afin de mieux vous accompagner.";
+  return `${signup}\n${activity}\n${count}`;
+}
+
+function contextStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    completed: "réussi", success: "réussi", successful: "réussi", succeeded: "réussi",
+    active: "actif", pending: "en attente", pending_payment: "en attente de paiement",
+    failed: "échoué", error: "échoué", cancelled: "annulé", expired: "expiré", rejected: "refusé",
+  };
+  return labels[String(status || "").toLowerCase()] || status || "non précisé";
+}
+
+function messageContextFacts(context?: MessageContext): string {
+  if (!context) return "";
+  if (context.kind === "order") {
+    return `Commande : ${context.id}\nDate : ${formatContactDate(context.date)}\nService choisi : ${context.service || "non précisé"}\nPays du numéro : ${context.country || "non précisé"}\nNuméro acheté : ${context.number || "non renseigné"}\nMontant : ${Number(context.amount || 0).toFixed(2)} €\nÉtat enregistré : ${contextStatusLabel(context.status)}`;
+  }
+  const local = context.localAmount != null && context.currency
+    ? `\nMontant indiqué par le moyen de paiement : ${context.localAmount} ${context.currency}`
+    : "";
+  return `Dépôt : ${context.id}\nDate : ${formatContactDate(context.date)}\nMontant : ${Number(context.amount || 0).toFixed(2)} €${local}\nPays : ${context.country || "non renseigné"}\nMoyen de paiement : ${context.provider || "non précisé"}\nStatut enregistré : ${contextStatusLabel(context.status)}${context.reference ? `\nRéférence : ${context.reference}` : ""}`;
+}
 
 const MESSAGE_TEMPLATES: MessageTemplate[] = [
   {
-    id: "relance",
-    label: "Relance client",
-    preview: "Ça fait un moment que nous n'avons pas eu de vos nouvelles…",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Ça fait un moment que nous n'avons pas eu de vos nouvelles sur TEXERRA SMS. Nous espérons que tout va bien !\n\n` +
-      `Si vous avez besoin d'un nouveau numéro ou si vous avez la moindre question, n'hésitez pas à nous écrire — nous sommes là pour vous aider. 🙏`,
-    emailSubject: () => `TEXERRA SMS — On prend de vos nouvelles`,
-    emailBody: (name) =>
-      `Bonjour ${name},\n\n` +
-      `Ça fait un moment que nous n'avons pas eu de vos nouvelles. Nous espérons que tout va bien !\n\n` +
-      `Si vous avez besoin d'un nouveau numéro ou si vous avez la moindre question, n'hésitez pas à nous répondre.\n\n` +
-      `À très bientôt,\nL'équipe TEXERRA SMS`,
+    id: "relance", group: "general", label: "Prendre de vos nouvelles et vous inviter à revenir",
+    preview: "Un message personnalisé qui reprend votre inscription, votre activité et votre historique de commandes.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nNous espérons sincèrement que vous allez bien. Nous souhaitions prendre de vos nouvelles, car cela fait quelque temps que nous ne vous avons pas vu utiliser Texerra.\n\n${contactProfileFacts(profile)}\n\nNous avons apprécié vous compter parmi nos utilisateurs et aimerions savoir si tout se passe bien de votre côté. Avez-vous rencontré une difficulté, un service indisponible ou un problème lors d’une commande ou d’un dépôt ?\n\nVotre retour nous aidera à vous apporter une réponse utile. Vous pouvez nous répondre ici ou reprendre vos activités depuis https://www.texerra.site/dashboard.`,
+    emailSubject: () => "Nous souhaitions prendre de vos nouvelles — Texerra SMS",
+    emailBody: (name, profile) => `Nous espérons que vous allez bien. Nous prenons un moment pour vous écrire parce que votre présence sur Texerra compte pour nous. Nous avons apprécié vous accueillir sur notre plateforme et nous aimerions savoir comment se passe votre expérience aujourd’hui.\n\n${contactProfileFacts(profile)}\n\nNous ne souhaitons pas vous envoyer une simple relance automatique. Nous aimerions surtout comprendre si quelque chose vous a empêché de revenir : un code SMS non reçu, un service qui n’a pas répondu à vos attentes, une recharge difficile à effectuer, un moyen de paiement ou tout autre point que nous pourrions améliorer.\n\nVous pouvez nous répondre directement à cet e-mail en expliquant librement ce qui s’est passé. Notre équipe prendra le temps d’examiner votre retour et de vous accompagner.\n\nPour retrouver vos informations et reprendre votre activité, ouvrez votre tableau de bord Texerra. Nous serons heureux de vous retrouver.`,
   },
   {
-    id: "retour",
-    label: "Invitation à revenir",
-    preview: "Revenez découvrir les nouveaux numéros disponibles sur TEXERRA…",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Nous avons le plaisir de vous informer que de nouveaux numéros sont disponibles sur TEXERRA SMS à des prix très avantageux.\n\n` +
-      `Si vous souhaitez tester à nouveau nos services, nous serions ravis de vous accompagner. Répondez simplement à ce message ! 🚀`,
-    emailSubject: () => `TEXERRA SMS — De nouveaux numéros vous attendent`,
-    emailBody: (name) =>
-      `Bonjour ${name},\n\n` +
-      `Nous avons le plaisir de vous informer que de nouveaux numéros sont disponibles sur TEXERRA SMS à des prix très avantageux.\n\n` +
-      `Si vous souhaitez tester à nouveau nos services, nous serions ravis de vous accompagner.\n\n` +
-      `Bien cordialement,\nL'équipe TEXERRA SMS`,
+    id: "retour", group: "general", label: "Invitation à revenir découvrir Texerra",
+    preview: "Une invitation chaleureuse à reprendre ses commandes sans pression commerciale.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nNous voulions simplement vous rappeler que votre espace Texerra est toujours disponible.\n\n${contactProfileFacts(profile)}\n\nVous pouvez retrouver les services et les pays disponibles, consulter votre solde et passer une nouvelle commande quand vous en aurez besoin. Si vous souhaitez être conseillé avant de commander, dites-le-nous : nous vous aiderons à choisir.\n\nAccédez à votre espace : https://www.texerra.site/dashboard.`,
+    emailSubject: () => "Votre espace Texerra est prêt lorsque vous en avez besoin",
+    emailBody: (name, profile) => `Nous sommes heureux de vous compter parmi les personnes qui ont déjà choisi Texerra SMS. Nous vous écrivons pour vous rappeler que votre espace reste accessible et que vous pouvez reprendre vos activités au moment qui vous convient.\n\n${contactProfileFacts(profile)}\n\nVous pouvez consulter les services disponibles, choisir le pays adapté à votre besoin, vérifier votre solde et retrouver vos anciennes commandes directement depuis votre tableau de bord. Si vous hésitez sur le service ou le pays à sélectionner, répondez à cet e-mail : nous pouvons vous orienter avant votre prochain achat.\n\nNous préférons vous proposer une aide utile plutôt que vous pousser à commander sans connaître votre besoin. Votre confiance mérite cette attention.`,
   },
   {
-    id: "encouragement",
-    label: "Encouragement",
-    preview: "Merci pour votre confiance, continuez ainsi !",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Nous tenions à vous remercier sincèrement pour votre confiance et votre fidélité envers TEXERRA SMS. 🙏\n\n` +
-      `Vous êtes un utilisateur précieux pour nous et nous sommes ravis de vous compter parmi nos clients. Continuez comme ça ! 💪`,
-    emailSubject: () => `Merci pour votre confiance, ${name} !`,
-    emailBody: (name, stats) =>
-      `Bonjour ${name},\n\n` +
-      `Nous tenions à vous remercier sincèrement pour votre confiance et votre fidélité envers TEXERRA SMS.\n\n` +
-      `Vous avez déjà réussi ${stats?.completedOrders ?? 0} commande(s) sur notre plateforme. Chaque utilisation compte et nous sommes heureux de vous accompagner.\n\n` +
-      `Vous êtes un utilisateur précieux pour nous. Notre équipe reste disponible pour vous aider à profiter pleinement du service.\n\n` +
-      `Bien à vous,\nL'équipe TEXERRA SMS`,
+    id: "encouragement", group: "general", label: "Encouragement et reconnaissance personnalisés",
+    preview: "Remercie le client avec son nombre de commandes réussies, sa date d’inscription et sa dernière activité.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nNous tenions à vous adresser un vrai merci pour la confiance que vous accordez à Texerra SMS. Votre présence et chacune de vos commandes comptent pour notre équipe.\n\n${contactProfileFacts(profile)}\n\nNous apprécions le fait que vous ayez choisi notre plateforme pour vos besoins de vérification. Nous souhaitons continuer à mériter cette confiance et rendre vos prochaines utilisations aussi simples que possible.\n\nComment se passe votre expérience actuellement ? Y a-t-il une amélioration ou une assistance qui vous serait utile ? Vous pouvez nous répondre directement.`,
+    emailSubject: (name) => `Merci pour votre confiance, ${name} — Texerra SMS`,
+    emailBody: (name, profile) => `Nous souhaitions prendre le temps de vous remercier personnellement pour la confiance que vous avez accordée à Texerra SMS. Vous avez choisi notre plateforme, vous avez créé votre espace et vous avez déjà pris le temps d’utiliser nos services. Nous ne considérons pas cela comme acquis.\n\n${contactProfileFacts(profile)}\n\nChaque commande réussie représente pour nous bien plus qu’une opération : c’est une personne qui a choisi de nous faire confiance pour un besoin concret. Nous sommes reconnaissants de vous avoir accompagné jusque-là et nous voulons continuer à vous offrir un service fiable, des informations claires et une assistance attentive lorsque vous en avez besoin.\n\nNous aimerions également savoir si tout se passe bien pour vous. Votre expérience est-elle satisfaisante ? Avez-vous rencontré une difficulté que nous devrions connaître ? Même une remarque simple peut nous aider à améliorer la plateforme.\n\nMerci de faire partie de l’aventure Texerra. Nous serons heureux de vous retrouver pour votre prochaine utilisation.`,
   },
   {
-    id: "support",
-    label: "Support / problème",
-    preview: "Rencontrez-vous le moindre souci avec votre numéro ?",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Nous espérons que tout se passe bien avec votre numéro sur TEXERRA SMS.\n\n` +
-      `Si vous rencontrez le moindre souci ou si vous avez une question, n'hésitez pas à nous le dire — nous ferons notre maximum pour vous aider rapidement. 🙏`,
-    emailSubject: () => `TEXERRA SMS — Besoin d'aide ?`,
-    emailBody: (name) =>
-      `Bonjour ${name},\n\n` +
-      `Nous espérons que tout se passe bien avec votre numéro sur TEXERRA SMS.\n\n` +
-      `Si vous rencontrez le moindre souci ou si vous avez une question, n'hésitez pas à nous répondre — nous ferons notre maximum pour vous aider rapidement.\n\n` +
-      `Cordialement,\nL'équipe TEXERRA SMS`,
+    id: "support", group: "general", label: "Prise de nouvelles et proposition d’assistance",
+    preview: "Vérifier qu’aucun problème ne bloque le client et proposer une aide concrète.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nNous espérons que tout va bien. Nous aimerions vérifier que votre utilisation de Texerra se déroule correctement.\n\n${contactProfileFacts(profile)}\n\nAvez-vous rencontré un problème avec un numéro, la réception d’un SMS, une commande ou un dépôt ? Dites-nous simplement ce qui vous bloque. Nous regarderons votre situation et vous indiquerons les prochaines étapes.`,
+    emailSubject: () => "Texerra SMS — pouvons-nous vous aider sur un point précis ?",
+    emailBody: (name, profile) => `Nous vous contactons afin de nous assurer que votre expérience sur Texerra se déroule dans de bonnes conditions. Nous savons qu’un problème ponctuel — un SMS qui tarde, une commande qui n’aboutit pas ou une recharge dont le statut semble incertain — peut être frustrant.\n\n${contactProfileFacts(profile)}\n\nSi vous avez rencontré l’une de ces situations, ou toute autre difficulté, répondez à ce message en nous donnant quelques détails. Nous pourrons alors vérifier les informations utiles et vous proposer une solution adaptée au lieu de vous laisser chercher seul.\n\nMême si tout fonctionne correctement, un simple retour de votre part nous fera plaisir. Votre satisfaction reste importante pour nous.`,
   },
   {
-    id: "satisfaction",
-    label: "Vérification de satisfaction",
-    preview: "Comment se passe votre expérience sur TEXERRA SMS ?",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Nous serions très heureux d'avoir votre avis : comment se passe votre expérience sur TEXERRA SMS ?\n\n` +
-      `Votre retour nous aide à nous améliorer et à mieux vous servir. Merci d'avance ! 🙏`,
-    emailSubject: () => `Votre avis compte pour nous — TEXERRA SMS`,
-    emailBody: (name) =>
-      `Bonjour ${name},\n\n` +
-      `Nous serions très heureux d'avoir votre avis : comment se passe votre expérience sur TEXERRA SMS ?\n\n` +
-      `Votre retour nous aide à nous améliorer et à mieux vous servir.\n\n` +
-      `Merci d'avance,\nL'équipe TEXERRA SMS`,
+    id: "satisfaction", group: "general", label: "Demander un avis sur l’expérience",
+    preview: "Une demande d’avis sincère avec invitation à signaler les améliorations attendues.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nVotre avis nous intéresse réellement.\n\n${contactProfileFacts(profile)}\n\nComment évaluez-vous votre expérience sur Texerra ? Qu’est-ce qui vous a plu et que devrions-nous améliorer ? Vous pouvez nous répondre librement, même si votre remarque concerne un détail. Nous lisons les retours de nos utilisateurs pour faire évoluer le service.`,
+    emailSubject: () => "Votre expérience nous intéresse — Texerra SMS",
+    emailBody: (name, profile) => `Nous aimerions recueillir votre avis sur votre expérience avec Texerra SMS. Nous savons que chaque utilisateur a des besoins différents et que la meilleure façon de progresser est d’écouter les personnes qui utilisent réellement la plateforme.\n\n${contactProfileFacts(profile)}\n\nQu’est-ce qui vous a donné satisfaction ? À l’inverse, y a-t-il une étape qui vous a semblé compliquée, un service que vous n’avez pas trouvé ou une information qui vous a manqué ? Vous pouvez nous faire part de vos observations sans avoir à suivre un questionnaire.\n\nNous vous remercions par avance de prendre quelques instants pour nous répondre. Votre avis sera pris en considération par notre équipe.`,
   },
   {
-    id: "commercial",
-    label: "Proposition commercial / affiliation",
-    preview: "Gagnez 50 % de la marge en recommandant TEXERRA SMS…",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Nous avons remarqué que vous utilisez régulièrement TEXERRA SMS et nous vous en remercions sincèrement 🙏\n\n` +
-      `Nous avons une proposition à vous faire : vous pouvez désormais recommander ou revendre nos services et percevoir une commission correspondant à 50 % de la marge générée sur chaque commande.\n\n` +
-      `Si cela vous intéresse, répondez simplement à ce message et nous vous expliquerons tout en détail. 🚀`,
-    emailSubject: () => `TEXERRA SMS — Gagnez 50 % de la marge en nous recommandant`,
-    emailBody: (name) =>
-      `Bonjour ${name},\n\n` +
-      `Nous avons remarqué que vous utilisez régulièrement TEXERRA SMS et nous vous en remercions sincèrement.\n\n` +
-      `Nous avons une proposition à vous faire : vous pouvez désormais recommander ou revendre nos services et percevoir une commission correspondant à 50 % de la marge générée sur chaque commande.\n\n` +
-      `Si cela vous intéresse, répondez simplement à cet e-mail et nous vous expliquerons tout en détail.\n\n` +
-      `Bien cordialement,\nL'équipe TEXERRA SMS`,
+    id: "commercial", group: "general", label: "Invitation à devenir partenaire commercial",
+    preview: "Présenter clairement le programme d’affiliation et proposer un accompagnement.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nNous vous remercions d’avoir choisi Texerra SMS. Nous aimerions vous présenter une possibilité de collaboration qui pourrait vous intéresser.\n\n${contactProfileFacts(profile)}\n\nVous pouvez recommander nos services à votre entourage ou à votre communauté grâce à un lien personnel. Pour chaque commande éligible réalisée par un client attribué, vous percevez 50 % de la marge générée par cette commande, selon les conditions du programme. Il ne s’agit pas d’un salaire fixe : votre rémunération dépend des ventes réalisées.\n\nSi vous souhaitez en savoir plus, répondez à ce message. Nous pouvons vous expliquer le fonctionnement, vous aider à démarrer et vous accompagner dans votre prospection.`,
+    emailSubject: () => "Une possibilité de collaboration avec Texerra SMS",
+    emailBody: (name, profile) => `Nous souhaitons vous proposer une possibilité de collaboration au sein du programme commercial de Texerra SMS. Cette invitation s’adresse aux personnes qui connaissent déjà nos services et qui pourraient les faire découvrir à de nouveaux utilisateurs.\n\n${contactProfileFacts(profile)}\n\nLe principe est simple : vous partagez votre lien de recommandation et les clients qui s’inscrivent et réalisent des commandes éligibles vous sont attribués. Vous percevez alors 50 % de la marge générée par chaque commande attribuée, conformément aux règles du programme. Il ne s’agit pas d’un salaire fixe ni d’une commission calculée sur le chiffre d’affaires brut.\n\nSi cette collaboration vous intéresse, répondez à cet e-mail. Nous pourrons vous présenter l’espace commercial, les outils mis à votre disposition et des méthodes concrètes pour trouver vos premiers clients. Vous pouvez également nous dire quels moyens ou supports vous aideraient à démarrer.`,
   },
   {
-    id: "fidelisation",
-    label: "Fidélisation",
-    preview: "Merci pour votre fidélité, nous tenons à vous…",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Vous faites partie de nos clients les plus fidèles et nous tenons à vous remercier chaleureusement 🙏\n\n` +
-      `Sachez que nous sommes toujours disponibles pour vous accompagner. À très bientôt sur TEXERRA SMS !`,
-    emailSubject: () => `Merci pour votre fidélité — TEXERRA SMS`,
-    emailBody: (name) =>
-      `Bonjour ${name},\n\n` +
-      `Vous faites partie de nos clients les plus fidèles et nous tenons à vous remercier chaleureusement.\n\n` +
-      `Sachez que nous sommes toujours disponibles pour vous accompagner.\n\n` +
-      `Chaleureusement,\nL'équipe TEXERRA SMS`,
+    id: "fidelisation", group: "general", label: "Remerciement pour la fidélité",
+    preview: "Reconnaître la relation dans la durée et rester disponible pour le client.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nNous souhaitions vous remercier pour la place que Texerra occupe dans vos habitudes.\n\n${contactProfileFacts(profile)}\n\nVotre fidélité nous encourage à continuer d’améliorer la qualité de nos services. Si vous avez une suggestion ou un besoin particulier, nous serions heureux de vous écouter. Merci de nous avoir fait confiance.`,
+    emailSubject: () => "Nous vous remercions de votre fidélité — Texerra SMS",
+    emailBody: (name, profile) => `Nous tenions à vous remercier pour la confiance que vous continuez à accorder à Texerra SMS. Une relation avec un utilisateur ne se résume pas au nombre de commandes : elle se construit aussi par la confiance, les retours et la possibilité de vous accompagner lorsque vous en avez besoin.\n\n${contactProfileFacts(profile)}\n\nNous souhaitons garder cette relation dans la durée et continuer à améliorer notre service. Si vous avez une suggestion, une attente particulière ou une difficulté que nous n’avons pas encore résolue, nous vous invitons à nous en parler. Nous prendrons le temps de vous répondre.\n\nMerci de faire confiance à Texerra.`,
   },
   {
-    id: "remerciement",
-    label: "Remerciement",
-    preview: "Un grand merci pour votre confiance.",
-    whatsappBody: (name) =>
-      `Bonjour ${name} 👋\n\n` +
-      `Un grand merci pour votre confiance et pour avoir choisi TEXERRA SMS. 🙏\n\n` +
-      `Nous restons à votre entière disposition si vous avez la moindre question. À très bientôt !`,
-    emailSubject: () => `Un grand merci de la part de TEXERRA SMS`,
-    emailBody: (name) =>
-      `Bonjour ${name},\n\n` +
-      `Un grand merci pour votre confiance et pour avoir choisi TEXERRA SMS.\n\n` +
-      `Nous restons à votre entière disposition si vous avez la moindre question.\n\n` +
-      `À très bientôt,\nL'équipe TEXERRA SMS`,
+    id: "remerciement", group: "general", label: "Remerciement après une interaction",
+    preview: "Remercier chaleureusement et inviter à faire part de toute difficulté.",
+    whatsappBody: (name, profile) => `Bonjour ${name},\n\nUn grand merci d’avoir choisi Texerra SMS. Nous apprécions sincèrement la confiance que vous nous accordez.\n\n${contactProfileFacts(profile)}\n\nNous espérons que notre service répond à vos attentes. Si un point mérite notre attention, n’hésitez pas à nous le signaler. Nous serons heureux de vous accompagner lors de vos prochaines utilisations.`,
+    emailSubject: () => "Merci d’avoir choisi Texerra SMS",
+    emailBody: (name, profile) => `Nous souhaitions vous remercier sincèrement d’avoir choisi Texerra SMS. Nous savons que vous avez plusieurs possibilités et nous apprécions que vous ayez décidé de nous confier vos besoins de vérification par SMS.\n\n${contactProfileFacts(profile)}\n\nNotre objectif est de vous proposer une expérience claire, pratique et accompagnée. Si vous avez une remarque sur une commande, une recharge, le choix d’un pays ou la disponibilité d’un service, vous pouvez nous écrire en réponse à cet e-mail.\n\nMerci encore pour votre confiance. Nous serons heureux de vous retrouver sur votre espace Texerra.`,
+  },
+  {
+    id: "order_feedback", group: "order", label: "Suivi personnalisé d’une commande",
+    preview: "Reprendre les détails exacts de la commande et demander si tout s’est bien passé.",
+    whatsappBody: (name, _profile, context) => `Bonjour ${name},\n\nNous revenons vers vous au sujet de cette commande effectuée sur Texerra :\n\n${messageContextFacts(context)}\n\nNous aimerions savoir si tout s’est bien passé pour vous. Avez-vous pu utiliser le numéro dans l’application concernée ? Avez-vous reçu le SMS attendu ou rencontré une difficulté ?\n\nVotre retour nous permettra de vérifier ce qui doit l’être et de mieux vous accompagner.`,
+    emailSubject: (_name, _profile, context) => `Suivi de votre commande Texerra${context?.kind === "order" ? ` du ${formatContactDate(context.date).split(" à ")[0]}` : ""}`,
+    emailBody: (name, _profile, context) => `Nous vous écrivons au sujet d’une commande précise enregistrée sur votre compte Texerra. Nous aimerions simplement vérifier que le service a répondu à votre besoin et que vous avez pu utiliser le numéro sans difficulté.\n\n${messageContextFacts(context)}\n\nTout s’est-il bien déroulé après l’achat ? Avez-vous reçu le code SMS attendu et pu l’utiliser dans l’application choisie ? Si le numéro n’a pas fonctionné comme prévu, si le code n’est pas arrivé ou si vous avez rencontré une autre difficulté, merci de nous expliquer ce qui s’est passé.\n\nNous ne voulons pas supposer que tout s’est bien passé : votre réponse nous aidera à comprendre la situation de cette commande et à vous proposer une aide adaptée. Vous pouvez répondre directement à cet e-mail en rappelant les détails ci-dessus.`,
+  },
+  {
+    id: "order_problem", group: "order", label: "Vérifier un problème sur la commande",
+    preview: "Demander des précisions sur une commande avec statut non abouti ou incertain.",
+    whatsappBody: (name, _profile, context) => `Bonjour ${name},\n\nNous souhaitons faire le point avec vous sur cette commande :\n\n${messageContextFacts(context)}\n\nPouvez-vous nous dire ce qui s’est passé de votre côté ? Le numéro a-t-il été délivré, le code a-t-il été reçu, ou l’application a-t-elle refusé la vérification ? Nous allons examiner votre retour.`,
+    emailSubject: () => "Besoin de votre retour concernant une commande Texerra",
+    emailBody: (name, _profile, context) => `Nous avons souhaité revenir vers vous au sujet de la commande ci-dessous afin de vérifier que vous n’êtes pas resté avec une difficulté non résolue.\n\n${messageContextFacts(context)}\n\nPouvez-vous nous expliquer ce qui s’est passé après cette commande ? Le numéro était-il accessible ? Le SMS est-il arrivé ? Avez-vous rencontré un refus de la part de l’application ou un autre message d’erreur ?\n\nNous vous remercions de nous donner autant de détails que possible, sans partager votre mot de passe ni d’autres informations confidentielles. Notre équipe pourra ainsi examiner l’opération et vous indiquer la marche à suivre.`,
+  },
+  {
+    id: "topup_success", group: "topup", label: "Féliciter après un dépôt réussi",
+    preview: "Confirmer les informations du dépôt et inviter à passer une commande.",
+    whatsappBody: (name, _profile, context) => `Bonjour ${name},\n\nNous vous confirmons que votre dépôt apparaît comme réussi sur Texerra.\n\n${messageContextFacts(context)}\n\nMerci pour votre confiance. Votre solde est disponible pour vos prochaines commandes. Vous pouvez maintenant choisir un service et le pays correspondant à votre besoin. Si vous souhaitez un conseil, notre équipe reste disponible.`,
+    emailSubject: () => "Votre dépôt est confirmé sur Texerra — merci pour votre confiance",
+    emailBody: (name, _profile, context) => `Nous sommes heureux de vous confirmer que le dépôt repris ci-dessous apparaît comme réussi dans notre système. Merci d’avoir choisi Texerra pour effectuer cette opération.\n\n${messageContextFacts(context)}\n\nVous pouvez retrouver cette opération dans l’historique de votre espace et utiliser votre solde pour passer une commande. Plusieurs services et pays sont proposés sur la plateforme ; prenez le temps de sélectionner ceux qui correspondent à votre besoin.\n\nSi le montant affiché ne correspond pas à ce que vous attendiez, ou si vous avez la moindre question concernant cette recharge, répondez à cet e-mail afin que nous puissions vérifier avec vous.`,
+  },
+  {
+    id: "topup_pending", group: "topup", label: "Vérifier un dépôt encore en attente",
+    preview: "Demander si le client a été débité et lui expliquer le bouton Vérifier.",
+    whatsappBody: (name, _profile, context) => `Bonjour ${name},\n\nNous faisons le point sur votre dépôt qui apparaît actuellement en attente.\n\n${messageContextFacts(context)}\n\nPouvez-vous nous confirmer si votre compte Mobile Money ou votre carte a bien été débité ? Vous pouvez aussi ouvrir votre tableau de bord, consulter l’historique des dépôts puis cliquer sur « Vérifier » sur la ligne concernée pour actualiser son statut. Si vous avez déjà été débité, ne relancez pas un paiement avant vérification : répondez-nous et nous allons vous accompagner.`,
+    emailSubject: () => "Votre dépôt est toujours en attente : vérifions ensemble",
+    emailBody: (name, _profile, context) => `Nous vous contactons au sujet du dépôt ci-dessous, qui apparaît encore avec le statut « en attente » dans notre système. Nous souhaitons nous assurer que votre paiement s’est déroulé correctement et éviter que vous soyez obligé de recommencer inutilement.\n\n${messageContextFacts(context)}\n\nPouvez-vous nous confirmer si votre compte Mobile Money ou votre carte bancaire a bien été débité pour cette opération ?\n\nVous pouvez également ouvrir votre tableau de bord Texerra, accéder à l’historique des dépôts et cliquer sur le bouton « Vérifier » de la ligne correspondante. Le statut sera actualisé si le prestataire de paiement a transmis une nouvelle information.\n\nSi le montant a été débité, nous vous invitons à ne pas effectuer un second paiement avant que nous ayons vérifié la première opération. Répondez à cet e-mail en nous indiquant le moyen de paiement utilisé et ce que vous constatez. Nous prendrons le temps de vous aider.`,
+  },
+  {
+    id: "topup_failed", group: "topup", label: "Faire le point sur un dépôt échoué",
+    preview: "Demander si un débit a eu lieu, expliquer quoi vérifier et proposer une nouvelle tentative prudente.",
+    whatsappBody: (name, _profile, context) => `Bonjour ${name},\n\nNous avons remarqué que le dépôt ci-dessous apparaît comme échoué. Nous souhaitons vérifier avec vous ce qui s’est réellement passé.\n\n${messageContextFacts(context)}\n\nVotre Mobile Money ou votre carte a-t-il été débité malgré ce statut ? Si oui, ne relancez pas immédiatement le paiement : contactez-nous avec la référence afin que nous puissions vérifier. Si aucun débit n’a eu lieu, vous pourrez réessayer depuis votre espace. Y a-t-il eu un message d’erreur ou une difficulté particulière ?`,
+    emailSubject: () => "À propos de votre dépôt Texerra — vérifions le résultat",
+    emailBody: (name, _profile, context) => `Nous revenons vers vous au sujet du dépôt ci-dessous, qui apparaît comme échoué dans notre système. Nous sommes désolés si cette opération vous a occasionné une gêne et souhaitons surtout vérifier que votre argent n’a pas été débité sans que votre solde soit crédité.\n\n${messageContextFacts(context)}\n\nPouvez-vous nous indiquer si votre compte Mobile Money ou votre carte bancaire a été débité ? Si un débit a bien eu lieu, merci de ne pas effectuer un nouveau paiement pour le moment et de nous répondre avec la référence de l’opération afin que nous puissions effectuer les vérifications nécessaires.\n\nSi aucun montant n’a été débité, vous pourrez tenter un nouveau dépôt depuis votre espace Texerra. Si un message d’erreur est apparu ou si vous ne comprenez pas le statut affiché, transmettez-nous simplement son contenu. Nous sommes disponibles pour vous accompagner et trouver avec vous la meilleure suite à donner.`,
   },
 ];
-
 const STORAGE_KEY = "texerra:admin:period";
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -516,6 +561,7 @@ export default function AdminPage() {
 
   const [firebaseToken, setFirebaseToken] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [fullExportFormat, setFullExportFormat] = useState<"xls" | "json">("xls");
   const [migrating, setMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -529,6 +575,8 @@ export default function AdminPage() {
     email?: string;
     userId?: string;
     stats?: { completedOrders: number; totalOrders: number };
+    profile?: UserContactProfile;
+    context?: MessageContext;
   } | null>(null);
 
   // Référence vers la section Utilisateurs (pour "Voir utilisateur")
@@ -685,11 +733,42 @@ export default function AdminPage() {
     phone?: string,
     email?: string,
     userId?: string,
-    stats?: { completedOrders: number; totalOrders: number }
+    stats?: { completedOrders: number; totalOrders: number },
+    context?: MessageContext
   ) {
-    setMessageTarget({ name: name || "Client", channel, phone, email, userId, stats });
+    const initialProfile: UserContactProfile = {
+      completedOrders: stats?.completedOrders,
+      totalOrders: stats?.totalOrders,
+    };
+    setMessageTarget({ name: name || "Client", channel, phone, email, userId, stats, profile: initialProfile, context });
     setMessageDraft({ templateId: "", subject: "", body: "" });
     setMessagePickerOpen(true);
+
+    // À l'ouverture du contact, charger le profil détaillé une seule fois pour
+    // personnaliser le message avec l'inscription, la dernière connexion et
+    // la dernière commande connue. Aucun chargement massif en arrière-plan.
+    if (channel === "email" && userId && firebaseToken) {
+      apiFetch(`/users/${encodeURIComponent(userId)}/profile`, firebaseToken)
+        .then((data) => {
+          const profile = data?.user;
+          setMessageTarget((current) => {
+            if (!current || current.userId !== userId) return current;
+            return {
+              ...current,
+              profile: {
+                createdAt: profile?.createdAt ?? null,
+                lastSignInAt: profile?.auth?.lastSignInTime ?? profile?.lastSignInAt ?? null,
+                lastOrderAt: data?.orders?.[0]?.createdAt ?? null,
+                completedOrders: Number(profile?.stats?.completedOrders ?? current.stats?.completedOrders ?? 0),
+                totalOrders: Number(profile?.stats?.totalOrders ?? current.stats?.totalOrders ?? 0),
+              },
+            };
+          });
+        })
+        .catch(() => {
+          // Le modèle reste utilisable avec les informations déjà connues du tableau.
+        });
+    }
   }
 
   function handleTemplateSelect(template: MessageTemplate) {
@@ -700,7 +779,7 @@ export default function AdminPage() {
     if (messageTarget.channel === "whatsapp") {
       if (!messageTarget.phone) { setToast("Pas de téléphone disponible"); return; }
       const clean = cleanForWa(messageTarget.phone);
-      const text = encodeURIComponent(template.whatsappBody(fn));
+      const text = encodeURIComponent(template.whatsappBody(fn, messageTarget.profile ?? messageTarget.stats, messageTarget.context));
       window.open(`https://wa.me/${clean}?text=${text}`, "_blank", "noopener,noreferrer");
       if (messageTarget.userId && firebaseToken) {
         apiPost("/contact/log", firebaseToken, {
@@ -720,7 +799,7 @@ export default function AdminPage() {
     setMessageDraft({
       templateId: template.id,
       subject: template.emailSubject(fn),
-      body: template.emailBody(displayName, messageTarget.stats),
+      body: template.emailBody(displayName, messageTarget.profile ?? messageTarget.stats, messageTarget.context),
     });
   }
 
@@ -802,6 +881,18 @@ export default function AdminPage() {
     } finally {
       setExporting(null);
     }
+  }
+
+  async function handleOrdersExcel() {
+    try {
+      setExporting("orders-xls");
+      await downloadBlob(
+        `/orders/export?format=xls&start=${start}&end=${end}&status=${orderStatus}`,
+        `commandes-${start}_${end}.xls`,
+        firebaseToken!
+      );
+    } catch (e) { alert((e as Error).message); }
+    finally { setExporting(null); }
   }
 
   async function handleOrdersPdf() {
@@ -888,6 +979,18 @@ export default function AdminPage() {
     }
   }
 
+  async function handleTopupsExcel() {
+    try {
+      setExporting("topups-xls");
+      await downloadBlob(
+        `/topups/export?format=xls&start=${start}&end=${end}&status=${topupStatus}`,
+        `depots-${start}_${end}.xls`,
+        firebaseToken!
+      );
+    } catch (e) { alert((e as Error).message); }
+    finally { setExporting(null); }
+  }
+
   async function handleTopupsPdf() {
     try {
       setExporting("topups-pdf");
@@ -948,6 +1051,22 @@ export default function AdminPage() {
     finally { setExporting(null); }
   }
 
+  async function handleUsersExcel() {
+    const ids = userExportIds();
+    if (!ids.length) { setToast("Aucun utilisateur à exporter sur cette page."); return; }
+    try {
+      setExporting("users-xls");
+      await downloadBlob(
+        `/users/export?format=xls&ids=${encodeURIComponent(ids.join(","))}`,
+        `utilisateurs-texerra-${ids.length}.xls`,
+        firebaseToken!
+      );
+      await markUsersExported(ids);
+      setToast(`${ids.length} profil(s) exporté(s) au format Excel.`);
+    } catch (e) { alert((e as Error).message); }
+    finally { setExporting(null); }
+  }
+
   async function handleUsersPdf() {
     const ids = userExportIds();
     if (!ids.length) { setToast("Aucun utilisateur à exporter sur cette page."); return; }
@@ -970,7 +1089,7 @@ export default function AdminPage() {
   async function handleFullAdminExport() {
     try {
       setExporting("full-admin");
-      await downloadBlob(`/export/full?start=${start}&end=${end}`, `texerra-export-administrateur-${start}_${end}.json`, firebaseToken!);
+      await downloadBlob(`/export/full?format=${fullExportFormat}&start=${start}&end=${end}`, `texerra-export-administrateur-${start}_${end}.${fullExportFormat}`, firebaseToken!);
       setToast("Export des données administrateur téléchargé.");
     } catch (e) { alert((e as Error).message); }
     finally { setExporting(null); }
@@ -1017,13 +1136,23 @@ export default function AdminPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <select
+              aria-label="Format de l'export complet"
+              value={fullExportFormat}
+              onChange={(event) => setFullExportFormat(event.target.value as "xls" | "json")}
+              className="px-3 py-1.5 rounded-lg border border-border bg-white text-sm"
+              title="Choisir le format du classeur administrateur"
+            >
+              <option value="xls">Excel — plusieurs feuilles</option>
+              <option value="json">JSON — données brutes</option>
+            </select>
             <button
               onClick={handleFullAdminExport}
               disabled={busy("full-admin")}
               className="px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-semibold disabled:opacity-50"
               title="Télécharger les indicateurs, utilisateurs, dépôts, commandes et données d'affiliation"
             >
-              {busy("full-admin") ? "Préparation…" : "Télécharger toutes les données"}
+              {busy("full-admin") ? "Préparation…" : `Télécharger toutes les données (${fullExportFormat.toUpperCase()})`}
             </button>
             {(
               [
@@ -1244,6 +1373,9 @@ export default function AdminPage() {
               <ExportBtn onClick={handleOrdersCsv} disabled={busy("orders-csv")}>
                 {busy("orders-csv") ? "…" : "CSV"}
               </ExportBtn>
+              <ExportBtn onClick={handleOrdersExcel} disabled={busy("orders-xls")}>
+                {busy("orders-xls") ? "…" : "Excel"}
+              </ExportBtn>
               <ExportBtn onClick={handleOrdersPdf} disabled={busy("orders-pdf")}>
                 {busy("orders-pdf") ? "…" : "PDF"}
               </ExportBtn>
@@ -1364,7 +1496,11 @@ export default function AdminPage() {
                                   title="Contacter par email"
                                   variant="mail"
                                   onClick={() =>
-                                    openMessagePicker(userName, "email", undefined, userEmail, o.userId)
+                                    openMessagePicker(userName, "email", undefined, userEmail, o.userId, undefined, {
+                                      kind: "order", date: o.createdAt, id: o.id, status: o.status,
+                                      service: ({ wa: "WhatsApp", wb: "WhatsApp Business", ig: "Instagram", tg: "Telegram", fb: "Facebook", go: "Google", tk: "TikTok", tw: "Twitter / X", ap: "Apple", am: "Amazon", ms: "Microsoft", dc: "Discord", sc: "Snapchat", nf: "Netflix", ub: "Uber", ln: "LinkedIn", pp: "PayPal", bn: "Binance", vi: "Viber", yt: "YouTube", wc: "WeChat", sp: "Spotify", si: "Signal" } as Record<string, string>)[String(o.serviceCode || "").toLowerCase()] || String(o.serviceCode || "Service"),
+                                      country: `${country.flag} ${country.name}`, number: o.phoneNumber || "", amount: Number(o.price || 0),
+                                    })
                                   }
                                 >
                                   <SendMailIcon />
@@ -1375,7 +1511,7 @@ export default function AdminPage() {
                                   title="Écrire sur WhatsApp au client"
                                   variant="whatsapp"
                                   onClick={() =>
-                                    openMessagePicker(userName, "whatsapp", userPhone, undefined, t.userId)
+                                    openMessagePicker(userName, "whatsapp", userPhone, undefined, o.userId)
                                   }
                                 >
                                   <WhatsAppIcon />
@@ -1432,6 +1568,9 @@ export default function AdminPage() {
             <>
               <ExportBtn onClick={handleTopupsCsv} disabled={busy("topups-csv")}>
                 {busy("topups-csv") ? "…" : "CSV"}
+              </ExportBtn>
+              <ExportBtn onClick={handleTopupsExcel} disabled={busy("topups-xls")}>
+                {busy("topups-xls") ? "…" : "Excel"}
               </ExportBtn>
               <ExportBtn onClick={handleTopupsPdf} disabled={busy("topups-pdf")}>
                 {busy("topups-pdf") ? "…" : "PDF"}
@@ -1535,7 +1674,7 @@ export default function AdminPage() {
                                   title="Contacter sur WhatsApp"
                                   variant="whatsapp"
                                   onClick={() =>
-                                    openMessagePicker(userName, "whatsapp", userPhone)
+                                    openMessagePicker(userName, "whatsapp", userPhone, undefined, t.userId)
                                   }
                                 >
                                   <WhatsAppIcon />
@@ -1546,7 +1685,12 @@ export default function AdminPage() {
                                   title="Contacter par email"
                                   variant="mail"
                                   onClick={() =>
-                                    openMessagePicker(userName, "email", undefined, userEmail, t.userId)
+                                    openMessagePicker(userName, "email", undefined, userEmail, t.userId, undefined, {
+                                      kind: "topup", date: t.createdAt, id: t.id, status: t.status,
+                                      amount: Number(t.amountEur || 0), country: country ? `${country.flag} ${country.name}` : t.countryIso || "Non renseigné",
+                                      currency: t.localCurrency || undefined, localAmount: t.amountLocal ?? null,
+                                      reference: t.externalId || undefined, provider: t.provider || t.paymentMethod || undefined,
+                                    })
                                   }
                                 >
                                   <SendMailIcon />
@@ -1605,6 +1749,9 @@ export default function AdminPage() {
               <>
                 <ExportBtn onClick={handleUsersCsv} disabled={busy("users-csv")}>
                   {busy("users-csv") ? "…" : "CSV"}
+                </ExportBtn>
+                <ExportBtn onClick={handleUsersExcel} disabled={busy("users-xls")}>
+                  {busy("users-xls") ? "…" : "Excel"}
                 </ExportBtn>
                 <ExportBtn onClick={handleUsersPdf} disabled={busy("users-pdf")}>
                   {busy("users-pdf") ? "…" : "PDF"}
@@ -1692,6 +1839,7 @@ export default function AdminPage() {
                         <th className="text-left p-2 font-medium">Nom</th>
                         <th className="text-left p-2 font-medium">E-mail</th>
                         <th className="text-left p-2 font-medium">Téléphone</th>
+                        <th className="text-left p-2 font-medium">Pays</th>
                         <th className="text-right p-2 font-medium">Solde (€)</th>
                         <th className="text-right p-2 font-medium">Solde (FCFA)</th>
                         <th className="text-right p-2 font-medium">Commandes réussies</th>
@@ -1719,6 +1867,7 @@ export default function AdminPage() {
                               {u.email || "—"}
                             </td>
                             <td className="p-2 font-mono text-xs">{u.phone || "—"}</td>
+                            <td className="p-2 text-xs whitespace-nowrap">{u.countryName ? <span>{u.countryFlag || countryFromIso(u.countryIso)?.flag || "🌍"} {u.countryName}</span> : <span className="text-muted-foreground">À détecter</span>}</td>
                             <td className="p-2 text-right font-medium">
                               {u.balance.toFixed(2)} €
                             </td>
@@ -1818,7 +1967,7 @@ export default function AdminPage() {
                       {usersQuery.data?.users?.length === 0 && (
                         <tr>
                           <td
-                            colSpan={10}
+                            colSpan={11}
                             className="p-4 text-center text-muted-foreground"
                           >
                             Aucun utilisateur ne correspond à votre recherche
@@ -1851,7 +2000,7 @@ export default function AdminPage() {
             {profileLoading ? <div className="p-8 text-center text-muted-foreground">Chargement du profil…</div> : profileError ? <div className="p-6 text-sm text-red-700">{profileError}</div> : profileData?.user && (
               <div className="p-5 space-y-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div><div className="text-xl font-bold">{profileData.user.name || "Utilisateur"}</div><div className="text-sm text-muted-foreground">{profileData.user.email}</div><div className="text-xs text-muted-foreground mt-1">UID : {profileData.user.id}</div></div>
+                  <div><div className="text-xl font-bold">{profileData.user.name || "Utilisateur"}</div><div className="text-sm text-muted-foreground">{profileData.user.email}</div><div className="text-xs text-muted-foreground mt-1">UID : {profileData.user.id}</div><div className="text-xs text-muted-foreground mt-1">Pays : {profileData.user.countryName ? `${profileData.user.countryFlag || countryFromIso(profileData.user.countryIso)?.flag || "🌍"} ${profileData.user.countryName}` : "Non détecté"}</div></div>
                   <div className="flex flex-wrap gap-2">
                     {profileData.user.email && <button onClick={() => openMessagePicker(profileData.user.name, "email", undefined, profileData.user.email, profileData.user.id, { completedOrders: profileData.user.stats.completedOrders, totalOrders: profileData.user.stats.totalOrders })} className="px-3 py-2 rounded-lg border text-sm">Contacter par e-mail</button>}
                     {profileData.user.phone && <button onClick={() => openMessagePicker(profileData.user.name, "whatsapp", profileData.user.phone, undefined, profileData.user.id)} className="px-3 py-2 rounded-lg border text-sm">WhatsApp</button>}
@@ -1916,7 +2065,22 @@ export default function AdminPage() {
               )}
             </p>
             <div className="space-y-1.5 overflow-y-auto flex-1 -mx-1 px-1">
-              {MESSAGE_TEMPLATES.map((t) => (
+              {MESSAGE_TEMPLATES.filter((t) => {
+                const context = messageTarget.context;
+                if (t.group !== (context?.kind ?? "general")) return false;
+                if (context?.kind === "order") {
+                  return context.status === "completed" || context.status === "active"
+                    ? t.id === "order_feedback"
+                    : t.id === "order_problem";
+                }
+                if (context?.kind === "topup") {
+                  return context.status === "completed" ? t.id === "topup_success"
+                    : context.status === "pending" || context.status === "pending_payment"
+                      ? t.id === "topup_pending"
+                      : t.id === "topup_failed";
+                }
+                return true;
+              }).map((t) => (
                 <button
                   key={t.id}
                   onClick={() => handleTemplateSelect(t)}
@@ -1934,7 +2098,7 @@ export default function AdminPage() {
                 <label className="text-xs font-semibold text-gray-600">Objet</label>
                 <input value={messageDraft.subject} onChange={(e) => setMessageDraft((d) => ({ ...d, subject: e.target.value }))} className="w-full border rounded-lg px-3 py-2 text-sm" maxLength={180} />
                 <label className="text-xs font-semibold text-gray-600">Message (modifiable avant envoi)</label>
-                <textarea value={messageDraft.body} onChange={(e) => setMessageDraft((d) => ({ ...d, body: e.target.value }))} rows={9} maxLength={12000} className="w-full border rounded-lg px-3 py-2 text-sm leading-relaxed" />
+                <textarea value={messageDraft.body} onChange={(e) => setMessageDraft((d) => ({ ...d, body: e.target.value }))} rows={14} maxLength={12000} className="w-full border rounded-lg px-3 py-2 text-sm leading-relaxed" />
                 <button onClick={sendEmailDraft} disabled={sendingMessage || !messageTarget.userId} className="w-full bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
                   {sendingMessage ? "Envoi via Resend…" : "Envoyer l'e-mail"}
                 </button>

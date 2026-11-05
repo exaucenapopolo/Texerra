@@ -722,15 +722,27 @@ function CommercialRow({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [clientsTotal, setClientsTotal] = useState(0);
   const [clientsPage, setClientsPage] = useState(1);
-  const [contactTarget, setContactTarget] = useState<{ targetType: "commercial" | "client"; targetId: string; name: string; email: string } | null>(null);
+  const [contactTarget, setContactTarget] = useState<{
+    targetType: "commercial" | "client";
+    targetId: string;
+    name: string;
+    email: string;
+    meta?: { country?: string; successfulOrders?: number; attributedAt?: string | null };
+  } | null>(null);
   const [contactTemplate, setContactTemplate] = useState("");
   const [contactSubject, setContactSubject] = useState("");
   const [contactMessage, setContactMessage] = useState("");
   const [contactSending, setContactSending] = useState(false);
 
-  const openContact = (targetType: "commercial" | "client", targetId: string, name: string, email: string) => {
+  const openContact = (
+    targetType: "commercial" | "client",
+    targetId: string,
+    name: string,
+    email: string,
+    meta?: { country?: string; successfulOrders?: number; attributedAt?: string | null }
+  ) => {
     if (!email) return;
-    setContactTarget({ targetType, targetId, name: name || "cher partenaire", email });
+    setContactTarget({ targetType, targetId, name: name || "cher partenaire", email, meta });
     setContactTemplate("");
     setContactSubject("");
     setContactMessage("");
@@ -739,32 +751,46 @@ function CommercialRow({
   const applyContactTemplate = (templateId: string) => {
     setContactTemplate(templateId);
     const firstName = (contactTarget?.name || "").trim().split(/\s+/)[0] || "Bonjour";
+    const commercialPerformance = stats
+      ? `\n\nVotre activité actuelle dans notre programme :\n- Clients attribués : ${stats.clientsCount}\n- Ventes enregistrées : ${stats.salesCount}\n- Volume de ventes : ${formatEur(stats.totalSales)}\n- Commissions générées : ${formatEur(stats.totalCommissions)}.\n\nCes chiffres nous permettent de mieux comprendre votre progression et de voir où un accompagnement pourrait vous être utile.`
+      : "\n\nNous souhaitons faire le point sur votre progression et comprendre les besoins qui pourraient vous aider à avancer.";
+    const countryLine = commercial?.country ? `\nVotre marché déclaré : ${commercial.country}.` : "";
+    const clientFacts = contactTarget?.meta
+      ? `\n\nInformations liées à votre relation avec Texerra :\n- Pays : ${contactTarget.meta.country || "Non renseigné"}\n- Commandes réussies : ${contactTarget.meta.successfulOrders ?? 0}\n- Attribution au programme : ${contactTarget.meta.attributedAt ? new Date(contactTarget.meta.attributedAt).toLocaleString("fr-FR") : "Date non disponible"}.`
+      : "";
     const templates: Record<string, { subject: string; message: string }> = {
       commercial_encouragement: {
-        subject: "Merci pour votre engagement auprès de Texerra",
-        message: `Bonjour ${firstName},\n\nNous tenions à vous remercier pour votre engagement dans le développement de Texerra SMS. Chaque démarche que vous faites pour faire connaître nos services compte. Continuez à avancer à votre rythme : notre équipe reste disponible pour vous accompagner et vous aider à trouver de nouvelles opportunités.\n\nN'hésitez pas à nous dire comment se passe votre activité et de quel soutien vous auriez besoin.\n\nBien cordialement,\nLa direction Texerra SMS`,
+        subject: "Nous vous remercions pour votre engagement avec Texerra",
+        message: `Bonjour ${firstName},\n\nNous tenions à vous écrire personnellement pour vous remercier du temps et de l’énergie que vous consacrez au développement de Texerra SMS. Nous savons que trouver des clients, présenter un service et entretenir une relation de confiance demande de la régularité. Votre engagement compte pour nous et nous ne le considérons pas comme acquis.${commercialPerformance}${countryLine}\n\nNous aimerions savoir comment vous vivez cette collaboration aujourd’hui. Qu’est-ce qui fonctionne bien pour vous ? Qu’est-ce qui vous semble plus difficile ? Nous souhaitons que vous puissiez vous sentir accompagné, et pas simplement recevoir un lien d’affiliation.\n\nRépondez directement à cet e-mail pour nous dire comment vous allez et ce dont vous auriez besoin pour développer votre activité.\n\nAvec toute notre considération,\nLa direction Texerra SMS`,
       },
       commercial_checkin: {
-        subject: "Faisons le point sur votre activité commerciale",
-        message: `Bonjour ${firstName},\n\nNous souhaitions prendre de vos nouvelles et savoir comment se déroule votre activité avec Texerra SMS. Rencontrez-vous des difficultés pour trouver des clients ou présenter nos services ?\n\nVous pouvez nous faire part de vos retours en répondant directement à cet e-mail. Nous serons heureux d'étudier avec vous des pistes concrètes pour vous aider.\n\nBien cordialement,\nLa direction Texerra SMS`,
+        subject: "Prenons de vos nouvelles et faisons le point sur votre activité",
+        message: `Bonjour ${firstName},\n\nNous prenons un moment pour savoir comment vous allez et comment se déroule votre activité commerciale avec Texerra SMS.${commercialPerformance}${countryLine}\n\nRencontrez-vous actuellement des difficultés pour trouver de nouveaux clients, expliquer le fonctionnement des numéros, créer du contenu ou convertir les personnes intéressées ? Avez-vous eu un problème avec votre espace commercial, votre lien de recommandation ou le suivi des commissions ?\n\nNous préférons connaître les difficultés assez tôt afin de chercher une solution avec vous. Vous pouvez nous répondre librement en précisant ce qui vous bloque le plus aujourd’hui.\n\nNous sommes à votre écoute et prêts à vous accompagner.\n\nBien cordialement,\nLa direction Texerra SMS`,
       },
       commercial_support: {
-        subject: "Un accompagnement pour développer vos ventes",
-        message: `Bonjour ${firstName},\n\nNous aimerions vous aider à développer votre activité commerciale. Si vous avez besoin d'idées de prospection, de supports de présentation ou d'un point sur votre lien d'affiliation, dites-nous simplement ce qui vous serait le plus utile.\n\nNous pouvons avancer ensemble sur une méthode adaptée à votre marché et à votre pays.\n\nBien cordialement,\nLa direction Texerra SMS`,
+        subject: "Comment pouvons-nous vous aider à trouver davantage de clients ?",
+        message: `Bonjour ${firstName},\n\nNous aimerions vous proposer un accompagnement concret pour vous aider à développer vos ventes. Il peut s’agir de préparer un message de présentation, de vous conseiller sur les groupes et communautés à cibler, de vous aider à créer des publications, ou de vous montrer comment expliquer simplement les avantages de Texerra à un nouveau client.${commercialPerformance}${countryLine}\n\nDites-nous quelle difficulté vous rencontrez en ce moment et quel type d’aide vous serait le plus utile. Nous pourrons réfléchir avec vous à une méthode réaliste, adaptée à votre marché et à votre disponibilité.\n\nVotre progression nous importe : nous voulons construire cette collaboration avec vous, étape par étape.\n\nRépondez à cet e-mail pour que nous puissions organiser cet accompagnement.\n\nBien cordialement,\nLa direction Texerra SMS`,
+      },
+      commercial_progress: {
+        subject: "Faisons progresser ensemble vos résultats Texerra",
+        message: `Bonjour ${firstName},\n\nNous souhaitons faire le point sur vos résultats et identifier la prochaine étape qui pourrait vous permettre de progresser.${commercialPerformance}${countryLine}\n\nAvez-vous déjà une méthode de prospection qui fonctionne ? Si oui, nous aimerions comprendre ce qui vous apporte les meilleurs retours. Si vous n’avez pas encore trouvé une méthode régulière, nous pouvons vous aider à préparer un plan simple : choix de votre audience, présentation de l’offre, publications et suivi des personnes intéressées.\n\nRépondez-nous en nous indiquant votre objectif pour les prochains jours et le principal obstacle que vous rencontrez. Nous chercherons ensemble une action concrète à mettre en place.\n\nBien cordialement,\nLa direction Texerra SMS`,
       },
       client_followup: {
-        subject: "Comment se passe votre expérience avec Texerra SMS ?",
-        message: `Bonjour ${firstName},\n\nNous avons remarqué que vous n'avez pas utilisé Texerra SMS récemment et souhaitions simplement prendre de vos nouvelles. Est-ce que tout fonctionne correctement de votre côté ?\n\nVotre avis nous intéresse. Si vous avez rencontré une difficulté ou si un service vous a manqué, répondez à cet e-mail : notre équipe sera heureuse de vous aider.\n\nMerci pour votre confiance.\nL'équipe Texerra SMS`,
+        subject: "Nous aimerions savoir comment se passe votre expérience Texerra",
+        message: `Bonjour ${firstName},\n\nNous souhaitions prendre de vos nouvelles et savoir comment se déroule votre expérience avec Texerra SMS. Nous avons apprécié vous accueillir sur la plateforme et nous aimerions nous assurer que nos services répondent toujours à vos besoins.${clientFacts}\n\nAvez-vous rencontré une difficulté avec une commande, un numéro, un dépôt ou le choix d’un service ? Y a-t-il une amélioration qui vous permettrait d’utiliser Texerra plus facilement ?\n\nVotre retour sera lu avec attention par notre équipe. Répondez directement à cet e-mail pour nous expliquer votre situation ; nous serons heureux de vous aider.\n\nMerci pour votre confiance.\nL’équipe Texerra SMS`,
       },
       client_thanks: {
-        subject: "Merci pour votre confiance",
-        message: `Bonjour ${firstName},\n\nMerci d'avoir choisi Texerra SMS. Nous apprécions la confiance que vous accordez à notre service. Nous espérons que votre expérience s'est bien déroulée et restons disponibles pour vous accompagner lors de vos prochaines utilisations.\n\nBien cordialement,\nL'équipe Texerra SMS`,
+        subject: "Merci de faire confiance à Texerra SMS",
+        message: `Bonjour ${firstName},\n\nNous tenions à vous remercier personnellement pour votre confiance et pour avoir utilisé Texerra SMS. Chaque utilisateur qui choisit notre plateforme nous donne une responsabilité : proposer un service compréhensible, fiable et une assistance accessible.${clientFacts}\n\nNous espérons que vos utilisations se sont bien déroulées. Si vous avez une remarque, une suggestion ou une difficulté qui mérite notre attention, vous pouvez simplement répondre à cet e-mail.\n\nNous serons heureux de vous accompagner lors de vos prochaines utilisations.\n\nBien cordialement,\nL’équipe Texerra SMS`,
+      },
+      client_support: {
+        subject: "Besoin d’aide sur votre compte Texerra ?",
+        message: `Bonjour ${firstName},\n\nNous vous écrivons pour vérifier que tout fonctionne correctement sur votre compte Texerra SMS.${clientFacts}\n\nSi un numéro n’a pas fonctionné, si un code SMS n’est pas arrivé, si un dépôt semble bloqué ou si vous avez une question sur une commande, expliquez-nous simplement ce que vous avez constaté. Nous vérifierons les informations utiles et vous guiderons vers la bonne solution.\n\nVous pouvez répondre directement à ce message. Nous vous remercions de nous permettre de vous accompagner.\n\nBien cordialement,\nL’équipe Texerra SMS`,
       },
     };
     const selected = templates[templateId];
     if (selected) { setContactSubject(selected.subject); setContactMessage(selected.message); }
   };
-
   const sendContact = async () => {
     if (!contactTarget || !contactSubject.trim() || !contactMessage.trim()) return;
     setContactSending(true);
@@ -957,6 +983,7 @@ function CommercialRow({
                     <div><div className="text-blue-700/70">Email</div><strong>{account.user.email || "—"}</strong></div>
                     <div><div className="text-blue-700/70">Inscription</div><strong>{new Date(account.user.createdAt).toLocaleDateString("fr-FR")}</strong></div>
                     <div><div className="text-blue-700/70">Dernière connexion</div><strong>{account.user.lastSignInAt ? new Date(account.user.lastSignInAt).toLocaleString("fr-FR") : "Non disponible"}</strong></div>
+                    <div><div className="text-blue-700/70">Pays du compte</div><strong>{account.user.countryFlag || ""} {account.user.countryName || account.user.countryIso || "Non renseigné"}</strong></div>
                     <div><div className="text-blue-700/70">Solde personnel</div><strong>{formatEur(account.user.balance)}</strong></div>
                     <div><div className="text-blue-700/70">Commandes réussies</div><strong>{account.user.successfulOrders}</strong></div>
                     <div><div className="text-blue-700/70">Commandes totales</div><strong>{account.user.totalOrders}</strong></div>
@@ -970,7 +997,7 @@ function CommercialRow({
               </div>
               <div>
                 <div className="font-semibold text-sm mb-2">Clients attribués à ce commercial ({clientsTotal})</div>
-                {clients.length ? <div className="overflow-x-auto border rounded-xl"><table className="w-full text-xs"><thead className="bg-gray-50"><tr><th className="p-2 text-left">Client</th><th className="p-2 text-left">Email</th><th className="p-2 text-left">Téléphone</th><th className="p-2 text-right">Commandes réussies</th><th className="p-2 text-left">Attribution</th><th className="p-2 text-center">Contact</th></tr></thead><tbody>{clients.map((client) => <tr key={client.id} className="border-t"><td className="p-2">{client.name}</td><td className="p-2">{client.email || "—"}</td><td className="p-2">{client.phone || "—"}</td><td className="p-2 text-right">{client.successfulOrders}</td><td className="p-2">{client.attributedAt ? new Date(client.attributedAt).toLocaleDateString("fr-FR") : "—"}</td><td className="p-2 text-center">{client.email ? <button onClick={() => openContact("client", client.id, client.name, client.email)} className="px-2 py-1 rounded border border-orange-200 text-orange-700 hover:bg-orange-50">E-mail</button> : "—"}</td></tr>)}</tbody></table></div> : <p className="text-xs text-gray-400">Aucun client attribué.</p>}
+                {clients.length ? <div className="overflow-x-auto border rounded-xl"><table className="w-full text-xs"><thead className="bg-gray-50"><tr><th className="p-2 text-left">Client</th><th className="p-2 text-left">Email</th><th className="p-2 text-left">Téléphone</th><th className="p-2 text-left">Pays</th><th className="p-2 text-right">Commandes réussies</th><th className="p-2 text-left">Attribution</th><th className="p-2 text-center">Contact</th></tr></thead><tbody>{clients.map((client) => <tr key={client.id} className="border-t"><td className="p-2">{client.name}</td><td className="p-2">{client.email || "—"}</td><td className="p-2">{client.phone || "—"}</td><td className="p-2">{client.countryFlag || ""} {client.countryName || client.countryIso || "—"}</td><td className="p-2 text-right">{client.successfulOrders}</td><td className="p-2">{client.attributedAt ? new Date(client.attributedAt).toLocaleDateString("fr-FR") : "—"}</td><td className="p-2 text-center">{client.email ? <button onClick={() => openContact("client", client.id, client.name, client.email, { country: client.countryName || client.countryIso || "", successfulOrders: client.successfulOrders, attributedAt: client.attributedAt })} className="px-2 py-1 rounded border border-orange-200 text-orange-700 hover:bg-orange-50">E-mail</button> : "—"}</td></tr>)}</tbody></table></div> : <p className="text-xs text-gray-400">Aucun client attribué.</p>}
                 {clients.length < clientsTotal && <button onClick={loadMoreClients} disabled={detailsLoading} className="mt-2 px-3 py-1.5 rounded-lg border text-xs hover:bg-gray-50 disabled:opacity-50">{detailsLoading ? "Chargement…" : `Afficher les clients suivants (${clients.length}/${clientsTotal})`}</button>}
               </div>
             </>
@@ -987,7 +1014,7 @@ function CommercialRow({
             <label className="block text-xs font-semibold text-gray-600">Modèle de message</label>
             <select value={contactTemplate} onChange={(e) => applyContactTemplate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm">
               <option value="">Message personnalisé</option>
-              {contactTarget.targetType === "commercial" ? <><option value="commercial_encouragement">Encouragement et remerciement</option><option value="commercial_checkin">Prendre des nouvelles</option><option value="commercial_support">Proposer un accompagnement commercial</option></> : <><option value="client_followup">Demander un retour d'expérience</option><option value="client_thanks">Remercier le client</option></>}
+              {contactTarget.targetType === "commercial" ? <><option value="commercial_encouragement">Encouragement et reconnaissance</option><option value="commercial_checkin">Prendre des nouvelles et détecter les difficultés</option><option value="commercial_support">Proposer un accompagnement concret</option><option value="commercial_progress">Faire progresser les résultats</option></> : <><option value="client_followup">Demander un retour d’expérience</option><option value="client_thanks">Remercier le client</option><option value="client_support">Proposer une assistance personnalisée</option></>}
             </select>
             <label className="block text-xs font-semibold text-gray-600">Objet</label>
             <input value={contactSubject} onChange={(e) => setContactSubject(e.target.value)} maxLength={180} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Objet de l'e-mail" />

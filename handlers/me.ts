@@ -1,9 +1,28 @@
 import { Router } from "express";
-import { firestoreDb } from "../lib/firebase-admin.js";
+import { firestoreDb, getAdminAuth } from "../lib/firebase-admin.js";
 import { requireAuth } from "../lib/requireAuth.js";
 import { sendWelcomeEmail } from "../lib/mailer.js";
 
 const router = Router();
+
+function detectCountryFromRequest(req: any): { countryIso: string; countryName: string; countryFlag: string; countrySource: string; countryDetectedAt: string } | null {
+  const raw = String(req.headers?.["x-vercel-ip-country"] ?? req.headers?.["cf-ipcountry"] ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(raw) || raw === "XX" || raw === "T1") return null;
+  let countryName = raw;
+  try {
+    const displayNames = new Intl.DisplayNames(["fr"], { type: "region" });
+    countryName = displayNames.of(raw) || raw;
+  } catch { /* Le code ISO reste une information exploitable. */ }
+  const first = 0x1f1e6 + raw.charCodeAt(0) - 65;
+  const second = 0x1f1e6 + raw.charCodeAt(1) - 65;
+  return {
+    countryIso: raw,
+    countryName,
+    countryFlag: String.fromCodePoint(first, second),
+    countrySource: "edge-ip",
+    countryDetectedAt: new Date().toISOString(),
+  };
+}
 
 const SUPPORTED_CURRENCIES = [
   "EUR", "USD",
@@ -23,6 +42,9 @@ function formatUser(user: any) {
     phone: user.phone ?? null,
     currency: user.currency ?? "EUR",
     balance: parseFloat(user.balance ?? "0"),
+    countryIso: user.countryIso ?? null,
+    countryName: user.countryName ?? null,
+    countryFlag: user.countryFlag ?? null,
   };
 }
 
@@ -46,6 +68,16 @@ router.get("/", requireAuth, async (req, res) => {
     const name = firebaseUser?.name || email.split("@")[0] || "Utilisateur";
     const avatarUrl = firebaseUser?.picture ?? null;
 
+    let accountCreatedAt = new Date().toISOString();
+    try {
+      const authRecord = await getAdminAuth().getUser(userId);
+      if (authRecord.metadata.creationTime) {
+        accountCreatedAt = new Date(authRecord.metadata.creationTime).toISOString();
+      }
+    } catch {
+      // Si Firebase Auth ne renvoie pas les métadonnées, on conserve la date de provisionnement.
+    }
+
     userData = {
       id: userId,
       email,
@@ -54,7 +86,8 @@ router.get("/", requireAuth, async (req, res) => {
       phone: null,
       currency: "EUR",
       balance: "0.0000",
-      createdAt: new Date().toISOString(),
+      ...(detectCountryFromRequest(req) ?? {}),
+      createdAt: accountCreatedAt,
       updatedAt: new Date().toISOString(),
     };
 
@@ -74,6 +107,13 @@ router.get("/", requireAuth, async (req, res) => {
     }
   } else {
     userData = userDoc.data();
+    // Renseigne les anciens profils sans pays uniquement lorsqu'ils reviennent
+    // sur la plateforme. Aucune demande de permission GPS côté navigateur.
+    const detectedCountry = detectCountryFromRequest(req);
+    if (detectedCountry && !userData.countryIso) {
+      await userRef.set(detectedCountry, { merge: true });
+      userData = { ...userData, ...detectedCountry };
+    }
   }
 
   res.json(formatUser(userData));

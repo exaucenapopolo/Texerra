@@ -8,10 +8,12 @@ const FROM = "Texerra <support@texerra.site>";
 const SUPPORT_WA      = "https://wa.me/12424542961";
 const SUPPORT_WA_DISP = "+1 (242) 454-2961";
 const SUPPORT_EMAIL   = "support@texerra.site";
-const SITE_URL        = "https://texerra.site";
-const PARTNER_URL     = "https://socialboosthorizon.com/";
-const PARTNER_NAME    = "Social Boost Horizon";
-const PARTNER_SLOGAN  = "Votre visibilité, notre horizon";
+const SITE_URL        = "https://www.texerra.site";
+const PARTNERS = [
+  { name: "Social Boost Horizon", description: "Achète tes abonnés moins cher", url: "https://socialboosthorizon.com/" },
+  { name: "PATA YAM", description: "Gestion des dépenses avec IA", url: "https://www.pata-yam.site/" },
+  { name: "TRIXHUB", description: "Gagne de l’argent gratuitement", url: "https://www.trixhub.store/?ref=EXA0001HJB" },
+] as const;
 const YEAR            = new Date().getFullYear();
 
 const SERVICE_NAMES: Record<string, string> = {
@@ -61,99 +63,90 @@ function countryDetails(countryCode: string): { name: string; flag: string } {
 // ─── Shell ────────────────────────────────────────────────────────────────────
 // Professional white-background design (renders well in all clients)
 
-function shell(preheader: string, accentLine: string, body: string): string {
+function shell(preheader: string, _accentLine: string, body: string, dashboardUrl = `${SITE_URL}/dashboard`): string {
+  const isCommercialDashboard = dashboardUrl.replace(/\/$/, "").endsWith("/commercial");
+  const dashboardTitle = isCommercialDashboard ? "Retrouvez votre espace commercial" : "Retrouvez votre espace Texerra";
+  const dashboardDescription = isCommercialDashboard
+    ? "Vos clients attribués, vos ventes et le suivi de vos commissions sont accessibles depuis votre espace commercial."
+    : "Vos commandes, vos numéros, vos dépôts et votre solde sont accessibles depuis votre tableau de bord.";
+  const dashboardButton = isCommercialDashboard ? "Ouvrir mon espace commercial" : "Ouvrir mon tableau de bord";
+  const partnerRows = PARTNERS.map((partner) => `
+    <tr>
+      <td style="padding:13px 0;border-bottom:1px solid #eceff1;">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td valign="middle" style="padding-right:12px;">
+              <p style="margin:0 0 3px;font-size:14px;line-height:1.4;font-weight:700;color:#20252b;">${escapeHtml(partner.name)}</p>
+              <p style="margin:0;font-size:12px;line-height:1.5;color:#68717b;">${escapeHtml(partner.description)}</p>
+            </td>
+            <td valign="middle" align="right" width="112">
+              <a href="${partner.url}" target="_blank" style="display:inline-block;padding:8px 11px;border:1px solid #d7dce1;border-radius:5px;color:#303943;font-size:11px;line-height:1.2;font-weight:700;text-decoration:none;white-space:nowrap;">Découvrir</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`).join("");
+
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Texerra</title>
+<title>Texerra SMS</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
-<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#f4f4f5;">${preheader}&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌</div>
-
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f4f4f5;padding:32px 16px 48px;">
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;">
+<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#f3f4f6;">${escapeHtml(preheader)}&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌</div>
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f3f4f6;padding:28px 12px 36px;">
 <tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;width:100%;">
-
-  <!-- Brand header -->
+<table width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;max-width:600px;">
   <tr>
-    <td align="center" style="padding-bottom:24px;">
-      <div style="font-size:22px;font-weight:900;letter-spacing:-0.5px;color:#111827;">
-        <span style="color:#f97316;">●</span> Texerra
-      </div>
+    <td align="center" style="padding:4px 0 20px;">
+      <a href="${SITE_URL}" style="text-decoration:none;">
+        <img src="${SITE_URL}/logo-email.png" width="226" height="44" alt="Texerra SMS" style="display:block;width:226px;max-width:70%;height:auto;border:0;outline:none;text-decoration:none;"/>
+      </a>
     </td>
   </tr>
-
-  <!-- Accent bar -->
+  <tr><td style="height:3px;background:#c95f2d;font-size:0;line-height:0;">&nbsp;</td></tr>
   <tr>
-    <td style="height:4px;background:linear-gradient(90deg,#f97316,#fb923c);border-radius:4px 4px 0 0;"></td>
-  </tr>
-
-  <!-- Card -->
-  <tr>
-    <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:40px 48px;border:1px solid #e5e7eb;border-top:none;">
+    <td style="background:#ffffff;padding:34px 38px 28px;border:1px solid #e3e6e9;border-top:0;">
       ${body}
-
-      <!-- Divider -->
-      <div style="height:1px;background:#f3f4f6;margin:32px 0;"></div>
-
-      <!-- Support block -->
-      <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
-        <tr>
-          <td style="background:#fafafa;border:1px solid #f3f4f6;border-radius:10px;padding:16px 20px;">
-            <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.8px;">Support client</p>
-            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
-              <a href="${SUPPORT_WA}" style="color:#f97316;text-decoration:none;font-weight:600;">WhatsApp ${SUPPORT_WA_DISP}</a>
-              &nbsp;·&nbsp;
-              <a href="mailto:${SUPPORT_EMAIL}" style="color:#6b7280;text-decoration:none;">${SUPPORT_EMAIL}</a>
-            </p>
-          </td>
-        </tr>
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:28px;">
+        <tr><td style="padding:18px 0 8px;border-top:1px solid #eceff1;">
+          <p style="margin:0 0 7px;font-size:14px;font-weight:700;color:#20252b;">${dashboardTitle}</p>
+          <p style="margin:0 0 15px;font-size:13px;line-height:1.6;color:#68717b;">${dashboardDescription}</p>
+          <a href="${dashboardUrl}" style="display:inline-block;padding:12px 19px;background:#c95f2d;border-radius:5px;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;">${dashboardButton}</a>
+        </td></tr>
+      </table>
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px;background:#fafafa;border:1px solid #e8ebee;">
+        <tr><td style="padding:15px 17px;">
+          <p style="margin:0 0 5px;font-size:13px;font-weight:700;color:#20252b;">Besoin d’une assistance humaine ?</p>
+          <p style="margin:0;font-size:12px;line-height:1.8;color:#68717b;">
+            Écrivez-nous sur <a href="${SUPPORT_WA}" target="_blank" style="color:#a84b25;font-weight:700;text-decoration:underline;">WhatsApp ${SUPPORT_WA_DISP}</a> pour une réponse rapide.<br/>
+            Vous pouvez également répondre à cet e-mail ou écrire à <a href="mailto:${SUPPORT_EMAIL}" style="color:#a84b25;text-decoration:underline;">${SUPPORT_EMAIL}</a>.
+          </p>
+        </td></tr>
       </table>
     </td>
   </tr>
-
-  <!-- Partner footer -->
   <tr>
-    <td style="padding:24px 0 4px;">
-      <table cellpadding="0" cellspacing="0" role="presentation" width="100%" style="background:#fffbf5;border:1px solid #fed7aa;border-radius:10px;padding:16px 20px;">
-        <tr>
-          <td>
-            <p style="margin:0 0 4px;font-size:14px;color:#111827;line-height:1.6;">
-              🌐 <strong>Vous souhaitez devenir viral sur les réseaux sociaux ?</strong>
-            </p>
-            <p style="margin:0 0 8px;font-size:13px;color:#78350f;line-height:1.5;">
-              Notre partenaire a ce qu'il vous faut — rapide et fiable.
-            </p>
-            <p style="margin:0;font-size:13px;">
-              👉 <a href="${PARTNER_URL}" style="color:#c2410c;font-weight:700;text-decoration:none;">Consulter ${PARTNER_URL}</a>
-            </p>
-          </td>
-        </tr>
-      </table>
+    <td style="padding:22px 18px 5px;background:#ffffff;border:1px solid #e3e6e9;border-top:0;">
+      <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#20252b;">Nos partenaires</p>
+      <p style="margin:0 0 4px;font-size:11px;line-height:1.5;color:#68717b;">Découvrez également les services de nos partenaires.</p>
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">${partnerRows}</table>
     </td>
   </tr>
-
-  <!-- Legal footer -->
-  <tr>
-    <td style="padding-top:16px;text-align:center;">
-      <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.6;">
-        © ${YEAR} Texerra &nbsp;·&nbsp;
-        <a href="${SITE_URL}" style="color:#9ca3af;text-decoration:none;">texerra.site</a>
-        &nbsp;·&nbsp;
-        <a href="${SITE_URL}/faq" style="color:#9ca3af;text-decoration:none;">FAQ</a>
-      </p>
-    </td>
-  </tr>
-
+  <tr><td align="center" style="padding:16px 8px 0;">
+    <p style="margin:0;font-size:11px;line-height:1.7;color:#89919a;">
+      © ${YEAR} Texerra SMS · <a href="${SITE_URL}" style="color:#89919a;text-decoration:underline;">texerra.site</a> · <a href="${SITE_URL}/faq" style="color:#89919a;text-decoration:underline;">Centre d’aide</a>
+    </p>
+    <p style="margin:3px 0 0;font-size:10px;line-height:1.6;color:#a1a8af;">Vous recevez cet e-mail à la suite d’une activité liée à votre compte Texerra.</p>
+  </td></tr>
 </table>
 </td></tr>
 </table>
 </body>
 </html>`;
 }
-
 function btn(label: string, href: string, color = "#f97316") {
   return `<a href="${href}" style="display:inline-block;background:${color};color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;padding:13px 28px;border-radius:8px;letter-spacing:0.1px;">${label}</a>`;
 }
@@ -166,10 +159,10 @@ function p(text: string) {
   return `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7;">${text}</p>`;
 }
 
-function badge(icon: string, label: string, value: string) {
+function badge(_icon: string, label: string, value: string) {
   return `<tr>
-    <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
-      <span style="font-size:13px;color:#6b7280;">${icon} ${label}</span>
+    <td style="padding:10px 0;border-bottom:1px solid #e8ebee;">
+      <span style="font-size:13px;color:#68717b;">${label}</span>
     </td>
     <td style="padding:10px 0;border-bottom:1px solid #f3f4f6;text-align:right;">
       <span style="font-size:13px;font-weight:700;color:#111827;">${value}</span>
@@ -181,56 +174,23 @@ function badge(icon: string, label: string, value: string) {
 
 export async function sendWelcomeEmail(to: string, name: string) {
   if (!process.env.RESEND_API_KEY) { logger.warn("RESEND_API_KEY not set"); return; }
-  const first = name.split(" ")[0] || name;
+  const first = escapeHtml(name.split(" ")[0] || name);
 
   const body = `
-    ${h1(`Bienvenue sur Texerra, ${first} ! 🎉`)}
-    ${p("Ton compte est prêt. Reçois tes codes SMS de vérification pour <strong>WhatsApp, Instagram, Telegram, TikTok</strong> et +200 services — en moins de 60&nbsp;secondes, payé en <strong>Orange Money, MTN</strong> ou carte bancaire.")}
-
-    <table cellpadding="0" cellspacing="0" role="presentation" width="100%" style="margin:20px 0 28px;">
-      <tr>
-        <td style="width:36px;height:36px;background:#fff7ed;border-radius:50%;text-align:center;vertical-align:middle;border:2px solid #f97316;">
-          <span style="font-size:13px;font-weight:800;color:#f97316;">1</span>
-        </td>
-        <td style="padding-left:14px;font-size:14px;color:#374151;vertical-align:middle;">
-          <strong style="color:#111827;">Rechargez votre solde</strong> — Orange Money, MTN Mobile Money, carte bancaire
-        </td>
-      </tr>
-      <tr><td colspan="2" style="height:10px;"></td></tr>
-      <tr>
-        <td style="width:36px;height:36px;background:#fff7ed;border-radius:50%;text-align:center;vertical-align:middle;border:2px solid #f97316;">
-          <span style="font-size:13px;font-weight:800;color:#f97316;">2</span>
-        </td>
-        <td style="padding-left:14px;font-size:14px;color:#374151;vertical-align:middle;">
-          <strong style="color:#111827;">Choisissez service &amp; pays</strong> — WhatsApp, Instagram, Telegram, TikTok…
-        </td>
-      </tr>
-      <tr><td colspan="2" style="height:10px;"></td></tr>
-      <tr>
-        <td style="width:36px;height:36px;background:#fff7ed;border-radius:50%;text-align:center;vertical-align:middle;border:2px solid #f97316;">
-          <span style="font-size:13px;font-weight:800;color:#f97316;">3</span>
-        </td>
-        <td style="padding-left:14px;font-size:14px;color:#374151;vertical-align:middle;">
-          <strong style="color:#111827;">Recevez le code SMS</strong> — livré en temps réel sur votre tableau de bord
-        </td>
-      </tr>
+    ${h1(`Bienvenue sur Texerra, ${first}.`)}
+    ${p("Votre compte est maintenant prêt. Texerra vous permet de recevoir des codes SMS de vérification pour WhatsApp, Instagram, Telegram, TikTok et plus de 200 services, dans plus de 100 pays.")}
+    ${p("Pour commencer, il vous suffit de suivre ces trois étapes :")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 22px;border-collapse:collapse;">
+      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#a84b25;">01</td><td style="padding:9px 0;border-bottom:1px solid #eceff1;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Approvisionnez votre solde</strong><br/>Orange Money, MTN Mobile Money ou carte bancaire.</td></tr>
+      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#a84b25;">02</td><td style="padding:9px 0;border-bottom:1px solid #eceff1;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Sélectionnez votre service et votre pays</strong><br/>Choisissez le service que vous souhaitez vérifier et le pays du numéro.</td></tr>
+      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;font-size:13px;font-weight:700;color:#a84b25;">03</td><td style="padding:9px 0;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Utilisez le numéro et recevez votre code</strong><br/>Le code reçu est affiché dans votre espace Texerra.</td></tr>
     </table>
-
-    <table cellpadding="0" cellspacing="0" role="presentation" width="100%" style="background:#f9fafb;border-radius:10px;padding:20px 24px;margin-bottom:28px;">
-      <tr><td style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.8px;padding-bottom:12px;">Pourquoi choisir Texerra ?</td></tr>
-      <tr><td style="font-size:14px;color:#374151;padding:4px 0;">✅&nbsp; Paiement <strong>Orange Money, MTN, Airtel, Wave</strong></td></tr>
-      <tr><td style="font-size:14px;color:#374151;padding:4px 0;">✅&nbsp; +200 services · +100 pays disponibles</td></tr>
-      <tr><td style="font-size:14px;color:#374151;padding:4px 0;">✅&nbsp; SMS livré en moins de <strong>60 secondes</strong></td></tr>
-      <tr><td style="font-size:14px;color:#374151;padding:4px 0;">✅&nbsp; Votre solde <strong>n'expire jamais</strong></td></tr>
-      <tr><td style="font-size:14px;color:#374151;padding:4px 0;">✅&nbsp; Support en français disponible 7j/7</td></tr>
-    </table>
-
-    ${p(`Des questions ? Consultez notre <a href="${SITE_URL}/faq" style="color:#f97316;font-weight:600;text-decoration:none;">FAQ</a> ou contactez notre équipe sur WhatsApp.`)}
-    <div style="margin-top:4px;">${btn("Commander mon premier numéro →", `${SITE_URL}/order`)}</div>
+    ${p("Votre solde n’expire pas. Vous pouvez consulter vos commandes et vos recharges à tout moment depuis votre tableau de bord. Si vous avez besoin d’un conseil avant votre première commande, notre équipe est disponible pour vous accompagner.")}
+    <div style="margin-top:4px;">${btn("Accéder aux services Texerra", `${SITE_URL}/order`)}</div>
   `;
 
-  const text = `Bienvenue sur Texerra, ${first} !\n\n1. Rechargez votre solde (Orange Money, MTN, carte)\n2. Choisissez service & pays\n3. Recevez le SMS en 60 secondes\n\nCommander : ${SITE_URL}/order | FAQ : ${SITE_URL}/faq\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}\n\nPartenaire : ${PARTNER_NAME} — ${PARTNER_SLOGAN}\n${PARTNER_URL}`;
-  await _send(to, "Bienvenue sur Texerra 🎉", shell("Ton compte est prêt — reçois tes premiers codes SMS en 60 secondes", "bienvenue", body), text);
+  const text = `Bienvenue sur Texerra, ${name.split(" ")[0] || name}.\n\nVotre compte est prêt. Pour commencer :\n1. Approvisionnez votre solde.\n2. Sélectionnez le service et le pays correspondant à votre besoin.\n3. Utilisez le numéro obtenu et saisissez le code SMS lorsqu'il arrive.\n\nAccéder aux services : ${SITE_URL}/order\nCentre d'aide : ${SITE_URL}/faq`;
+  await _send(to, "Bienvenue sur Texerra SMS", shell("Votre compte Texerra est prêt", "bienvenue", body), text);
 }
 
 // ─── 2. Confirmation de commande ──────────────────────────────────────────────
@@ -246,10 +206,6 @@ export async function sendOrderEmail(opts: {
   const cnt = cntName(countryCode);
 
   const body = `
-    <div style="background:#fff7ed;border-left:4px solid #f97316;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:28px;">
-      <p style="margin:0;font-size:13px;font-weight:700;color:#c2410c;text-transform:uppercase;letter-spacing:0.5px;">Commande confirmée</p>
-    </div>
-
     ${h1(`Votre numéro est prêt, ${first} !`)}
     ${p(`Votre numéro <strong>${svc}</strong> pour ${cnt} est actif. Entrez-le dans l'application pour recevoir votre code de vérification.`)}
 
@@ -278,7 +234,7 @@ export async function sendOrderEmail(opts: {
     ${btn("Voir ma commande sur le tableau de bord →", `${SITE_URL}/dashboard`)}
   `;
 
-  const text = `Commande confirmée !\n\nNuméro : ${phoneNumber}\nService : ${svc} | Pays : ${cnt}\nPrix : ${fmtEur(priceEur)} | Expire : ${fmtDate(expiresAt)}\n\nTableau de bord : ${SITE_URL}/dashboard\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}\n\nPartenaire : ${PARTNER_NAME} — ${PARTNER_SLOGAN}\n${PARTNER_URL}`;
+  const text = `Commande confirmée !\n\nNuméro : ${phoneNumber}\nService : ${svc} | Pays : ${cnt}\nPrix : ${fmtEur(priceEur)} | Expire : ${fmtDate(expiresAt)}\n\nTableau de bord : ${SITE_URL}/dashboard\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}`;
   await _send(to, `✅ Votre numéro ${svc} est prêt — ${phoneNumber}`, shell(`Numéro ${phoneNumber} activé pour ${svc}`, "commande", body), text);
 }
 
@@ -336,10 +292,11 @@ Ma commande : ${SITE_URL}/dashboard
 Support : ${SUPPORT_EMAIL}`;
   const { error } = await resend.emails.send({
     from: FROM,
+    replyTo: SUPPORT_EMAIL,
     to: opts.to,
     subject: `Votre code ${svcName(opts.serviceCode)} est arrivé — Texerra`,
     html: shell("Votre code de vérification vient d'être reçu", "code SMS reçu", body),
-    text,
+    text: `${text}${plainTextFooter()}`,
   });
   if (error) {
     logger.warn({ error, to: opts.to, orderId: opts.orderId }, "SMS code email failed");
@@ -357,23 +314,28 @@ export async function sendAdminContactEmail(opts: {
   subject: string;
   message: string;
   contextLabel?: string;
+  dashboardUrl?: string;
 }): Promise<{ success: boolean; id?: string }> {
   if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY n'est pas configurée sur le serveur.");
-  const name = escapeHtml(opts.name || "cher client");
+  const safeName = escapeHtml(opts.name || "cher client");
   const safeSubject = escapeHtml(opts.subject);
-  const paragraphs = String(opts.message || "").trim().split(/\n{2,}/).map((part) =>
-    `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.75;">${escapeHtml(part).replace(/\n/g, "<br>")}</p>`
-  ).join("");
-  const context = opts.contextLabel
-    ? `<p style="margin:0 0 18px;font-size:12px;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 13px;">${escapeHtml(opts.contextLabel)}</p>`
-    : "";
-  const body = `${h1(`Bonjour ${name},`)}${context}${paragraphs}<p style="margin:20px 0 0;font-size:14px;color:#374151;line-height:1.7;">Bien cordialement,<br><strong>L'équipe Texerra SMS</strong></p>`;
+  const lines = String(opts.message || "").trim().split(/\n/);
+  const paragraphs = lines.reduce<string[]>((acc, line) => {
+    if (!line.trim()) { if (acc.length && acc[acc.length - 1] !== "") acc.push(""); return acc; }
+    if (!acc.length || acc[acc.length - 1] === "") acc.push(escapeHtml(line));
+    else acc[acc.length - 1] += `<br/>${escapeHtml(line)}`;
+    return acc;
+  }, []).filter(Boolean).map((line) => `<p style="margin:0 0 15px;font-size:14px;line-height:1.8;color:#3f4852;">${line}</p>`).join("");
+  const body = `${h1(`Bonjour ${safeName},`)}${paragraphs}<p style="margin:22px 0 0;font-size:14px;line-height:1.7;color:#3f4852;">Bien cordialement,<br/><strong>L’équipe Texerra SMS</strong></p>`;
+  const dashboardUrl = opts.dashboardUrl || `${SITE_URL}/dashboard`;
+  const plainText = `Bonjour ${opts.name || "cher client"},\n\n${opts.message}\n\nBien cordialement,\nL'équipe Texerra SMS${plainTextFooter(dashboardUrl)}`;
   const { data, error } = await resend.emails.send({
     from: FROM,
+    replyTo: SUPPORT_EMAIL,
     to: opts.to,
     subject: opts.subject,
-    html: shell(safeSubject, "communication client", body),
-    text: `Bonjour ${opts.name || "cher client"},\n\n${opts.message}\n\nBien cordialement,\nL'équipe Texerra SMS\n${SITE_URL}`,
+    html: shell(safeSubject, "contact", body, dashboardUrl),
+    text: plainText,
   });
   if (error) {
     logger.warn({ error, to: opts.to, subject: opts.subject }, "Admin contact email failed");
@@ -417,12 +379,14 @@ export async function sendCommissionEarnedEmail(opts: {
     ${btn("Consulter mon espace commercial →", `${SITE_URL}/commercial`)}
   `;
   const text = `Bravo ${opts.name} !\n\nNouvelle vente attribuée.\nCommande : ${opts.orderId}\nVente : ${fmtEur(opts.orderAmount)}\nMarge Texerra : ${fmtEur(opts.orderMargin)}\nVotre commission (${opts.commissionRate} %) : ${fmtEur(opts.commissionAmount)}\n\nConsultez votre espace : ${SITE_URL}/commercial`;
+  const commercialDashboard = `${SITE_URL}/commercial`;
   const { error } = await resend.emails.send({
     from: FROM,
+    replyTo: SUPPORT_EMAIL,
     to: opts.to,
     subject: `Bravo ${opts.name.split(" ")[0]} ! Une nouvelle commission vient d'être générée`,
-    html: shell("Une nouvelle vente vient de générer une commission", "commission commerciale", body),
-    text,
+    html: shell("Une nouvelle vente vient de générer une commission", "commission commerciale", body, commercialDashboard),
+    text: `${text}${plainTextFooter(commercialDashboard)}`,
   });
   if (error) {
     logger.warn({ error, to: opts.to, orderId: opts.orderId }, "Commission email failed");
@@ -469,7 +433,7 @@ export async function sendCancellationEmail(opts: {
     ${btn("Commander un nouveau numéro →", `${SITE_URL}/order`)}
   `;
 
-  const text = `Commande annulée\n\nNuméro : ${phoneNumber} | Service : ${svc} | Pays : ${cnt}\n${refundEur ? `Remboursé : ${fmtEur(refundEur)}\n` : ""}Commander à nouveau : ${SITE_URL}/order\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}\n\nPartenaire : ${PARTNER_NAME} — ${PARTNER_SLOGAN}\n${PARTNER_URL}`;
+  const text = `Commande annulée\n\nNuméro : ${phoneNumber} | Service : ${svc} | Pays : ${cnt}\n${refundEur ? `Remboursé : ${fmtEur(refundEur)}\n` : ""}Commander à nouveau : ${SITE_URL}/order\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}`;
   await _send(to, `❌ Commande ${svc} annulée — ${phoneNumber}`, shell(`Votre commande ${phoneNumber} a été annulée`, "annulation", body), text);
 }
 
@@ -507,7 +471,7 @@ export async function sendTopupEmail(opts: {
       ${p("Votre solde est disponible immédiatement. Commandez un numéro virtuel dès maintenant.")}
       ${btn("Commander un numéro →", `${SITE_URL}/order`)}
     `;
-    const text = `Recharge confirmée — ${fmtEur(amountEur)} crédités.\nCommander : ${SITE_URL}/order\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}\n\nPartenaire : ${PARTNER_NAME} — ${PARTNER_SLOGAN}\n${PARTNER_URL}`;
+    const text = `Recharge confirmée — ${fmtEur(amountEur)} crédités.\nCommander : ${SITE_URL}/order\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}`;
     await _send(to, `✅ Recharge confirmée — ${fmtEur(amountEur)} crédités`, shell(`${fmtEur(amountEur)} ont été ajoutés à votre solde Texerra`, "recharge", body), text);
     return;
   }
@@ -529,16 +493,22 @@ export async function sendTopupEmail(opts: {
 
       ${btn("Réessayer la recharge →", `${SITE_URL}/wallet`)}
     `;
-    const text = `Paiement non abouti — ${fmtEur(amountEur)}\nVotre solde n'a pas été modifié.\nRéessayer : ${SITE_URL}/wallet\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}\n\nPartenaire : ${PARTNER_NAME} — ${PARTNER_SLOGAN}\n${PARTNER_URL}`;
+    const text = `Paiement non abouti — ${fmtEur(amountEur)}\nVotre solde n'a pas été modifié.\nRéessayer : ${SITE_URL}/wallet\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}`;
     await _send(to, `❌ Paiement non abouti — ${fmtEur(amountEur)}`, shell(`Votre paiement de ${fmtEur(amountEur)} n'a pas abouti`, "echec", body), text);
   }
+}
+
+// ─── Pied de page commun en texte brut ────────────────────────────────────────
+
+function plainTextFooter(dashboardUrl = `${SITE_URL}/dashboard`): string {
+  return `\n\nVotre tableau de bord : ${dashboardUrl}\nSupport WhatsApp : ${SUPPORT_WA} (${SUPPORT_WA_DISP})\nSupport e-mail : ${SUPPORT_EMAIL}\n\nNos partenaires :\n${PARTNERS.map((partner) => `${partner.name} — ${partner.description} : ${partner.url}`).join("\n")}`;
 }
 
 // ─── Internal ─────────────────────────────────────────────────────────────────
 
 async function _send(to: string, subject: string, html: string, text: string) {
   try {
-    const { error } = await resend.emails.send({ from: FROM, to, subject, html, text });
+    const { error } = await resend.emails.send({ from: FROM, replyTo: SUPPORT_EMAIL, to, subject, html, text: `${text}${plainTextFooter()}` });
     if (error) logger.warn({ error, to, subject }, "Resend error");
     else logger.info({ to, subject }, "Email sent");
   } catch (err) {

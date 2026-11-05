@@ -52,6 +52,31 @@ import {
 
 const router = Router();
 
+
+function affiliateNumber(value: unknown, fallback: number | null = null): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function affiliateDateIso(value: unknown): string {
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? new Date(0).toISOString() : parsed.toISOString();
+  }
+  if (value instanceof Date) return value.toISOString();
+  if (value && typeof value === "object" && "toDate" in (value as object)) {
+    try {
+      const date = (value as { toDate: () => Date }).toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString() : new Date(0).toISOString();
+    } catch { return new Date(0).toISOString(); }
+  }
+  return new Date(0).toISOString();
+}
+
 /* ═══════════════════════════════════════════════════════════
  * MIDDLEWARES
  * ═══════════════════════════════════════════════════════════ */
@@ -705,7 +730,7 @@ router.post("/admin/contact", requireAffiliateAdmin, async (req: Request, res: R
       name: String(target.name ?? "cher partenaire"),
       subject,
       message,
-      contextLabel: isCommercial ? "Communication personnelle de la direction Texerra SMS" : "Message personnel de l'équipe Texerra SMS",
+      dashboardUrl: isCommercial ? "https://www.texerra.site/commercial" : "https://www.texerra.site/dashboard",
     });
     const log = {
       channel: "email", status: "sent", templateId, subject, message,
@@ -732,10 +757,51 @@ router.get("/admin/commercials/:id/account", requireAffiliateAdmin, async (req: 
     const commercialSnap = await firestoreDb.collection("commercials").doc(commercialId).get();
     if (!commercialSnap.exists) { res.status(404).json({ error: "Commercial introuvable" }); return; }
     const commercial = commercialSnap.data()!;
-    let userSnap = commercial.firebaseUid ? await firestoreDb.collection("users").doc(String(commercial.firebaseUid)).get() : null;
-    if (!userSnap?.exists) {
-      const linked = await firestoreDb.collection("users").where("email", "==", String(commercial.email ?? "").toLowerCase()).limit(1).get();
-      userSnap = linked.empty ? null : linked.docs[0];
+    const usersCol = firestoreDb.collection("users");
+    let userSnap: FirebaseFirestore.DocumentSnapshot | null = commercial.firebaseUid
+      ? await usersCol.doc(String(commercial.firebaseUid)).get()
+      : null;
+    const commercialEmail = String(commercial.email ?? "").trim();
+    if (userSnap?.exists && commercialEmail) {
+      const linkedEmail = String(userSnap.data()?.email ?? "").trim().toLowerCase();
+      if (linkedEmail && linkedEmail !== commercialEmail.toLowerCase()) {
+        // Un UID ancien ne doit jamais lier le commercial au mauvais profil.
+        userSnap = null;
+      }
+    }
+    if (!userSnap?.exists && commercialEmail) {
+      // L'UID Firebase est la source la plus fiable : l'e-mail peut avoir
+      // une casse différente ou ne pas encore être recopié dans le profil.
+      const authMatch = await getAdminAuth().getUserByEmail(commercialEmail).catch(() => null);
+      if (authMatch) {
+        const linkedUserRef = usersCol.doc(authMatch.uid);
+        userSnap = await linkedUserRef.get();
+        // Certains comptes Auth historiques n'ont pas encore de document
+        // Firestore : créer leur profil minimal pour rendre la liaison visible.
+        if (!userSnap.exists) {
+          const now = new Date().toISOString();
+          await linkedUserRef.set({
+            id: authMatch.uid,
+            email: authMatch.email ?? commercialEmail,
+            name: authMatch.displayName || (authMatch.email ?? commercialEmail).split("@")[0] || "Utilisateur",
+            phone: authMatch.phoneNumber ?? null,
+            avatarUrl: authMatch.photoURL ?? null,
+            currency: "EUR",
+            balance: "0.0000",
+            createdAt: authMatch.metadata.creationTime ? new Date(authMatch.metadata.creationTime).toISOString() : now,
+            updatedAt: now,
+            profileProvisionedBy: "affiliate-admin-sync",
+          }, { merge: true });
+          userSnap = await linkedUserRef.get();
+        }
+      }
+    }
+    if (!userSnap?.exists && commercialEmail) {
+      const emailVariants = [...new Set([commercialEmail, commercialEmail.toLowerCase()])];
+      for (const emailVariant of emailVariants) {
+        const linked = await usersCol.where("email", "==", emailVariant).limit(1).get();
+        if (!linked.empty) { userSnap = linked.docs[0]; break; }
+      }
     }
     const commercialHistorySnap = await firestoreDb.collection("commercials").doc(commercialId).collection("contactHistory").orderBy("createdAt", "desc").limit(10).get();
     const contactHistory = commercialHistorySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -755,11 +821,14 @@ router.get("/admin/commercials/:id/account", requireAffiliateAdmin, async (req: 
     ]);
     let lastSignInAt: string | null = null;
     try { const authUser = await getAdminAuth().getUser(uid); lastSignInAt = authUser.metadata.lastSignInTime ?? null; } catch { lastSignInAt = null; }
-    const orders = ordersSnap.docs.map((doc) => ({ id: doc.id, status: doc.data().status, price: num(doc.data().priceNum) ?? num(doc.data().price, 0) ?? 0, createdAt: getCreatedAtIso(doc.data().createdAt), serviceCode: doc.data().serviceCode ?? "", phoneNumber: doc.data().phoneNumber ?? "" })).sort((a,b) => new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()).slice(0,10);
-    res.json({ linked: true, contactHistory, commercial: { id: commercialId, name: commercial.name, email: commercial.email, country: commercial.country ?? "" }, user: { id: uid, name: user.name ?? "", email: user.email ?? "", phone: user.phone ?? "", balance: num(user.balance, 0) ?? 0, createdAt: getCreatedAtIso(user.createdAt), lastSignInAt, totalOrders: allCount.data().count, successfulOrders: successfulCount.data().count, totalSuccessfulSpend: num(user.totalSuccessfulSpend,0) ?? 0 }, orders });
+    const orders = ordersSnap.docs.map((doc) => ({ id: doc.id, status: doc.data().status, price: affiliateNumber(doc.data().priceNum) ?? affiliateNumber(doc.data().price, 0) ?? 0, createdAt: affiliateDateIso(doc.data().createdAt), serviceCode: doc.data().serviceCode ?? "", phoneNumber: doc.data().phoneNumber ?? "" })).sort((a,b) => new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()).slice(0,10);
+    res.json({ linked: true, contactHistory, commercial: { id: commercialId, name: commercial.name, email: commercial.email, country: commercial.country ?? "" }, user: { id: uid, name: user.name ?? "", email: user.email ?? "", phone: user.phone ?? "", countryIso: user.countryIso ?? "", countryName: user.countryName ?? "", countryFlag: user.countryFlag ?? "", balance: affiliateNumber(user.balance, 0) ?? 0, createdAt: affiliateDateIso(user.createdAt), lastSignInAt, totalOrders: allCount.data().count, successfulOrders: successfulCount.data().count, totalSuccessfulSpend: affiliateNumber(user.totalSuccessfulSpend,0) ?? 0 }, orders });
   } catch (err) {
     console.error("[affiliate/admin/commercial account] error:", err);
-    res.status(500).json({ error: "Impossible de charger le compte utilisateur du commercial." });
+    res.status(500).json({
+      error: "Impossible de charger le compte utilisateur du commercial.",
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
@@ -779,7 +848,7 @@ router.get("/admin/commercials/:id/clients", requireAffiliateAdmin, async (req: 
     }
     const clients = attributionsSnap.docs.map((doc) => {
       const a = doc.data(); const u = users.get(String(a.customerId));
-      return { id: String(a.customerId), name: u?.name ?? "Client", email: u?.email ?? "", phone: u?.phone ?? "", attributedAt: a.createdAt ?? null, source: a.source ?? "link", balance: Number(u?.balance ?? 0), successfulOrders: Number(u?.successfulOrdersCount ?? 0) };
+      return { id: String(a.customerId), name: u?.name ?? "Client", email: u?.email ?? "", phone: u?.phone ?? "", countryIso: u?.countryIso ?? "", countryName: u?.countryName ?? "", countryFlag: u?.countryFlag ?? "", attributedAt: a.createdAt ?? null, source: a.source ?? "link", balance: Number(u?.balance ?? 0), successfulOrders: Number(u?.successfulOrdersCount ?? 0) };
     });
     res.json({ clients, pagination: { page, pageSize, total: totalSnap.data().count, totalPages: Math.ceil(totalSnap.data().count/pageSize) } });
   } catch (err) {

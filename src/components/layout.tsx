@@ -10,8 +10,10 @@ interface UserProfile {
   balance: number;
 }
 
-async function fetchApi<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+async function fetchApi<T>(url: string, token: string): Promise<T> {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw { status: res.status, data: errorData };
@@ -26,7 +28,10 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   const { data: me } = useQuery<UserProfile>({
     queryKey: ["/api/me"],
-    queryFn: () => fetchApi<UserProfile>("/api/me"),
+    queryFn: async () => {
+      if (!user) throw new Error("Session utilisateur indisponible");
+      return fetchApi<UserProfile>("/api/me", await user.getIdToken());
+    },
     enabled: !!user,
     staleTime: 10_000,
   });
