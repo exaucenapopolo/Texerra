@@ -192,10 +192,12 @@ export interface AdminCommercialRow {
   id: string;
   name: string;
   email: string;
+  country?: string;
   affiliateCode: string;
   commissionRate: number;
   status: "active" | "inactive";
   createdAt: string;
+  firebaseUid?: string | null;
 }
 
 export function adminListCommercials(): Promise<{
@@ -207,12 +209,45 @@ export function adminListCommercials(): Promise<{
 export function adminCreateCommercial(payload: {
   name: string;
   email: string;
+  country: string;
   commissionRate?: number;
 }): Promise<{ ok: boolean; commercial: AdminCommercialRow }> {
   return apiCall("/admin/commercials", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export interface AdminCommercialAccount {
+  linked: boolean;
+  contactHistory?: Array<{ id: string; channel?: string; status?: string; subject?: string; createdAt: string }>;
+  commercial: { id: string; name: string; email: string; country?: string };
+  user?: { id: string; name: string; email: string; phone: string; balance: number; createdAt: string; lastSignInAt: string | null; totalOrders: number; successfulOrders: number; totalSuccessfulSpend: number };
+  orders?: Array<{ id: string; status: string; price: number; createdAt: string; serviceCode: string; phoneNumber: string }>;
+}
+
+export function adminGetCommercialAccount(id: string): Promise<AdminCommercialAccount> {
+  return apiCall(`/admin/commercials/${encodeURIComponent(id)}/account`);
+}
+
+export function adminSendAffiliateContact(payload: {
+  targetType: "commercial" | "client";
+  targetId: string;
+  templateId: string;
+  subject: string;
+  message: string;
+}): Promise<{ ok: boolean; id?: string; message: string }> {
+  return apiCall("/admin/contact", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function adminGetCommercialClients(id: string, page = 1): Promise<{
+  clients: Array<{ id: string; name: string; email: string; phone: string; attributedAt: string; source: string; balance: number; successfulOrders: number }>;
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+}> {
+  return apiCall(`/admin/commercials/${encodeURIComponent(id)}/clients?page=${page}&pageSize=20`);
 }
 
 export function adminUpdateRate(

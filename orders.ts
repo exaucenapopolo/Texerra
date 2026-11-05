@@ -5,7 +5,7 @@ import { CreateOrderBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import { buyNumber, checkOrder, cancelOrder, finishOrder, GRIZZLY_COUNTRIES } from "../lib/grizzlysms.js";
 import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
-import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer.js";
+import { sendCancellationEmail } from "../lib/mailer.js";
 import { requireAuth } from "../lib/requireAuth.js";
 
 const router = Router();
@@ -156,18 +156,7 @@ router.post("/", requireAuth, async (req, res) => {
 
   res.status(201).json({ ...order, price: order.price ? parseFloat(order.price) : null });
 
-  // Email de confirmation — non-bloquant
-  if (user.email) {
-    sendOrderEmail({
-      to: user.email, name: user.name,
-      phoneNumber: order.phoneNumber,
-      serviceCode: order.serviceCode,
-      countryCode: order.countryCode,
-      priceEur,
-      expiresAt: order.expiresAt,
-      orderId: order.id,
-    }).catch(() => {});
-  }
+  // Pas d’e-mail à la création : la confirmation part uniquement après réception du SMS.
 });
 
 // GET /api/orders/:id — get order + poll SMS + auto-refund on expire

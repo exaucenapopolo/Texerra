@@ -139,4 +139,49 @@ router.patch("/", requireAuth, async (req, res) => {
   }
 });
 
+// Notifications in-app : lecture limitée pour ne pas multiplier les lectures Firestore.
+router.get("/notifications", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).userId as string;
+    const rawLimit = Number(req.query.limit ?? 20);
+    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 20, 1), 30);
+    const notificationsRef = firestoreDb.collection("users").doc(userId).collection("notifications");
+    const [snap, unreadSnap] = await Promise.all([
+      notificationsRef.orderBy("createdAt", "desc").limit(limit).get(),
+      notificationsRef.where("read", "==", false).count().get(),
+    ]);
+    res.json({
+      notifications: snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      unreadCount: unreadSnap.data().count,
+    });
+  } catch (err) {
+    console.error("[me/notifications] error:", err);
+    res.status(500).json({ error: "Impossible de récupérer les notifications" });
+  }
+});
+
+router.patch("/notifications/:id/read", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).userId as string;
+    const id = String(req.params.id || "").slice(0, 160);
+    if (!id) {
+      res.status(400).json({ error: "Notification invalide" });
+      return;
+    }
+    const ref = firestoreDb.collection("users").doc(userId).collection("notifications").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      res.status(404).json({ error: "Notification introuvable" });
+      return;
+    }
+    if (snap.data()?.read !== true) {
+      await ref.update({ read: true, readAt: new Date().toISOString() });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[me/notifications/read] error:", err);
+    res.status(500).json({ error: "Impossible de mettre à jour la notification" });
+  }
+});
+
 export default router;

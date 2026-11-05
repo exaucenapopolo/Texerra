@@ -16,8 +16,9 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { firestoreDb } from "../lib/firebase-admin.js";
+import { firestoreDb, getAdminAuth } from "../lib/firebase-admin.js";
 import { requireAuth } from "../lib/requireAuth.js";
+import { sendAdminContactEmail } from "../lib/mailer.js";
 
 import {
   checkRateLimit,
@@ -545,6 +546,7 @@ router.get(
           id: doc.id,
           name: d.name,
           email: d.email,
+          country: d.country ?? "",
           affiliateCode: d.affiliateCode,
           commissionRate: d.commissionRate,
           status: d.status,
@@ -571,6 +573,7 @@ router.post(
       const body = (req.body ?? {}) as Record<string, unknown>;
       const name = sanitizeString(body.name, 100);
       const email = sanitizeString(body.email, 150).toLowerCase();
+      const country = sanitizeString(body.country, 80);
       const commissionRate = Math.min(
         Math.max(parseNumber(body.commissionRate, 50), 0),
         100
@@ -642,6 +645,7 @@ router.post(
         firebaseUid: initialFirebaseUid,
         name,
         email,
+        country,
         affiliateCode,
         commissionRate,
         status: "active",
@@ -660,6 +664,7 @@ router.post(
         metadataSafe: {
           name,
           email,
+          country,
           affiliateCode,
           commissionRate,
           linkedImmediately: !!initialFirebaseUid,
@@ -673,6 +678,115 @@ router.post(
     }
   }
 );
+
+/** Envoi de messages Resend à un commercial ou à l'un de ses clients attribués. */
+router.post("/admin/contact", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  try {
+    const targetType = String(req.body?.targetType ?? "");
+    const targetId = String(req.body?.targetId ?? "");
+    const subject = String(req.body?.subject ?? "").trim().slice(0, 180);
+    const message = String(req.body?.message ?? "").trim().slice(0, 12000);
+    const templateId = String(req.body?.templateId ?? "custom").slice(0, 80);
+    if (!targetId || !subject || !message || !["commercial", "client"].includes(targetType)) {
+      res.status(400).json({ error: "Destinataire, objet et message obligatoires." });
+      return;
+    }
+
+    const isCommercial = targetType === "commercial";
+    const targetRef = firestoreDb.collection(isCommercial ? "commercials" : "users").doc(targetId);
+    const targetSnap = await targetRef.get();
+    if (!targetSnap.exists) { res.status(404).json({ error: "Destinataire introuvable." }); return; }
+    const target = targetSnap.data()!;
+    const email = String(target.email ?? "").trim();
+    if (!email) { res.status(400).json({ error: "Aucune adresse e-mail disponible pour ce destinataire." }); return; }
+
+    const sent = await sendAdminContactEmail({
+      to: email,
+      name: String(target.name ?? "cher partenaire"),
+      subject,
+      message,
+      contextLabel: isCommercial ? "Communication personnelle de la direction Texerra SMS" : "Message personnel de l'équipe Texerra SMS",
+    });
+    const log = {
+      channel: "email", status: "sent", templateId, subject, message,
+      recipient: email, recipientName: String(target.name ?? ""),
+      recipientType: targetType, recipientId: targetId,
+      resendId: sent.id ?? null, createdAt: new Date().toISOString(),
+    };
+    const historyRef = targetRef.collection("contactHistory").doc();
+    const batch = firestoreDb.batch();
+    batch.set(historyRef, log);
+    batch.set(firestoreDb.collection("admin_contact_logs").doc(historyRef.id), { ...log, userId: isCommercial ? null : targetId, commercialId: isCommercial ? targetId : null });
+    await batch.commit();
+    res.json({ ok: true, id: sent.id ?? null, message: "E-mail envoyé avec succès." });
+  } catch (err) {
+    console.error("[affiliate/admin/contact] error:", err);
+    res.status(502).json({ error: err instanceof Error ? err.message : "Échec de l'envoi du message." });
+  }
+});
+
+/** Fiche liée du commercial : compte utilisateur normal + dernières commandes. */
+router.get("/admin/commercials/:id/account", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  try {
+    const commercialId = String(req.params.id);
+    const commercialSnap = await firestoreDb.collection("commercials").doc(commercialId).get();
+    if (!commercialSnap.exists) { res.status(404).json({ error: "Commercial introuvable" }); return; }
+    const commercial = commercialSnap.data()!;
+    let userSnap = commercial.firebaseUid ? await firestoreDb.collection("users").doc(String(commercial.firebaseUid)).get() : null;
+    if (!userSnap?.exists) {
+      const linked = await firestoreDb.collection("users").where("email", "==", String(commercial.email ?? "").toLowerCase()).limit(1).get();
+      userSnap = linked.empty ? null : linked.docs[0];
+    }
+    const commercialHistorySnap = await firestoreDb.collection("commercials").doc(commercialId).collection("contactHistory").orderBy("createdAt", "desc").limit(10).get();
+    const contactHistory = commercialHistorySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (!userSnap?.exists) {
+      res.json({ linked: false, contactHistory, commercial: { id: commercialId, name: commercial.name, email: commercial.email, country: commercial.country ?? "" } });
+      return;
+    }
+    const uid = userSnap.id;
+    if (commercial.firebaseUid !== uid) {
+      await firestoreDb.collection("commercials").doc(commercialId).update({ firebaseUid: uid, updatedAt: new Date().toISOString() });
+    }
+    const user = userSnap.data()!;
+    const [ordersSnap, allCount, successfulCount] = await Promise.all([
+      firestoreDb.collection("orders").where("userId", "==", uid).orderBy("createdAt", "desc").limit(10).get(),
+      firestoreDb.collection("orders").where("userId", "==", uid).count().get(),
+      firestoreDb.collection("orders").where("userId", "==", uid).where("status", "==", "completed").count().get(),
+    ]);
+    let lastSignInAt: string | null = null;
+    try { const authUser = await getAdminAuth().getUser(uid); lastSignInAt = authUser.metadata.lastSignInTime ?? null; } catch { lastSignInAt = null; }
+    const orders = ordersSnap.docs.map((doc) => ({ id: doc.id, status: doc.data().status, price: num(doc.data().priceNum) ?? num(doc.data().price, 0) ?? 0, createdAt: getCreatedAtIso(doc.data().createdAt), serviceCode: doc.data().serviceCode ?? "", phoneNumber: doc.data().phoneNumber ?? "" })).sort((a,b) => new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()).slice(0,10);
+    res.json({ linked: true, contactHistory, commercial: { id: commercialId, name: commercial.name, email: commercial.email, country: commercial.country ?? "" }, user: { id: uid, name: user.name ?? "", email: user.email ?? "", phone: user.phone ?? "", balance: num(user.balance, 0) ?? 0, createdAt: getCreatedAtIso(user.createdAt), lastSignInAt, totalOrders: allCount.data().count, successfulOrders: successfulCount.data().count, totalSuccessfulSpend: num(user.totalSuccessfulSpend,0) ?? 0 }, orders });
+  } catch (err) {
+    console.error("[affiliate/admin/commercial account] error:", err);
+    res.status(500).json({ error: "Impossible de charger le compte utilisateur du commercial." });
+  }
+});
+
+/** Clients rattachés à un commercial : même collection d'attributions que le dashboard client. */
+router.get("/admin/commercials/:id/clients", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  try {
+    const commercialId = String(req.params.id);
+    const page = Math.max(parseInt(String(req.query.page ?? "1"),10) || 1,1);
+    const pageSize = Math.min(Math.max(parseInt(String(req.query.pageSize ?? "20"),10) || 20,1),50);
+    const base = firestoreDb.collection("affiliate_attributions").where("commercialId","==",commercialId);
+    const [totalSnap, attributionsSnap] = await Promise.all([base.count().get(), base.orderBy("createdAt","desc").offset((page-1)*pageSize).limit(pageSize).get()]);
+    const ids = attributionsSnap.docs.map((doc) => String(doc.data().customerId ?? ""));
+    const users = new Map<string, any>();
+    for (let i=0;i<ids.length;i+=30) {
+      const docs = await firestoreDb.getAll(...ids.slice(i,i+30).map((id)=>firestoreDb.collection("users").doc(id)));
+      for (const doc of docs) if (doc.exists) users.set(doc.id,doc.data());
+    }
+    const clients = attributionsSnap.docs.map((doc) => {
+      const a = doc.data(); const u = users.get(String(a.customerId));
+      return { id: String(a.customerId), name: u?.name ?? "Client", email: u?.email ?? "", phone: u?.phone ?? "", attributedAt: a.createdAt ?? null, source: a.source ?? "link", balance: Number(u?.balance ?? 0), successfulOrders: Number(u?.successfulOrdersCount ?? 0) };
+    });
+    res.json({ clients, pagination: { page, pageSize, total: totalSnap.data().count, totalPages: Math.ceil(totalSnap.data().count/pageSize) } });
+  } catch (err) {
+    console.error("[affiliate/admin/commercial clients] error:", err);
+    res.status(500).json({ error: "Impossible de charger les clients attribués." });
+  }
+});
 
 /** PATCH /admin/commercials/:id/rate — Modifier taux */
 router.patch(

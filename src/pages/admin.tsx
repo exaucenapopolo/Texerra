@@ -240,6 +240,17 @@ async function apiFetch<T = any>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
+async function apiPost<T = any>(path: string, token: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api/admin${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as any)?.error || `API ${res.status}`);
+  return data as T;
+}
+
 async function downloadBlob(path: string, filename: string, token: string) {
   const res = await fetch(`/api/admin${path}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -334,7 +345,7 @@ type MessageTemplate = {
   preview: string;
   whatsappBody: (name: string) => string;
   emailSubject: (name: string) => string;
-  emailBody: (name: string) => string;
+  emailBody: (name: string, stats?: { completedOrders: number; totalOrders: number }) => string;
 };
 
 const MESSAGE_TEMPLATES: MessageTemplate[] = [
@@ -377,10 +388,11 @@ const MESSAGE_TEMPLATES: MessageTemplate[] = [
       `Nous tenions à vous remercier sincèrement pour votre confiance et votre fidélité envers TEXERRA SMS. 🙏\n\n` +
       `Vous êtes un utilisateur précieux pour nous et nous sommes ravis de vous compter parmi nos clients. Continuez comme ça ! 💪`,
     emailSubject: () => `Merci pour votre confiance, ${name} !`,
-    emailBody: (name) =>
+    emailBody: (name, stats) =>
       `Bonjour ${name},\n\n` +
       `Nous tenions à vous remercier sincèrement pour votre confiance et votre fidélité envers TEXERRA SMS.\n\n` +
-      `Vous êtes un utilisateur précieux pour nous et nous sommes ravis de vous compter parmi nos clients.\n\n` +
+      `Vous avez déjà réussi ${stats?.completedOrders ?? 0} commande(s) sur notre plateforme. Chaque utilisation compte et nous sommes heureux de vous accompagner.\n\n` +
+      `Vous êtes un utilisateur précieux pour nous. Notre équipe reste disponible pour vous aider à profiter pleinement du service.\n\n` +
       `Bien à vous,\nL'équipe TEXERRA SMS`,
   },
   {
@@ -493,6 +505,14 @@ export default function AdminPage() {
   const [userSearchDebounced, setUserSearchDebounced] = useState("");
   const [userFilter, setUserFilter] = useState("all");
   const [userSort, setUserSort] = useState("recent");
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [topUsersPeriod, setTopUsersPeriod] = useState("week");
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState({ templateId: "", subject: "", body: "" });
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const [firebaseToken, setFirebaseToken] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
@@ -507,6 +527,8 @@ export default function AdminPage() {
     channel: "whatsapp" | "email";
     phone?: string;
     email?: string;
+    userId?: string;
+    stats?: { completedOrders: number; totalOrders: number };
   } | null>(null);
 
   // Référence vers la section Utilisateurs (pour "Voir utilisateur")
@@ -536,6 +558,22 @@ export default function AdminPage() {
       cancelled = true;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!profileUserId || !firebaseToken) {
+      setProfileData(null);
+      setProfileError(null);
+      return;
+    }
+    let cancelled = false;
+    setProfileLoading(true);
+    setProfileError(null);
+    apiFetch(`/users/${encodeURIComponent(profileUserId)}/profile`, firebaseToken)
+      .then((data) => { if (!cancelled) setProfileData(data); })
+      .catch((error) => { if (!cancelled) setProfileError(error instanceof Error ? error.message : "Erreur de chargement"); })
+      .finally(() => { if (!cancelled) setProfileLoading(false); });
+    return () => { cancelled = true; };
+  }, [profileUserId, firebaseToken]);
 
   // Debounce de la recherche utilisateur (350 ms)
   useEffect(() => {
@@ -592,12 +630,13 @@ export default function AdminPage() {
       userSearchDebounced,
       userFilter,
       userSort,
+      topUsersPeriod,
     ],
     queryFn: () =>
       apiFetch(
         `/users?page=${userPage}&pageSize=${userPageSize}&search=${encodeURIComponent(
           userSearchDebounced
-        )}&filter=${userFilter}&sort=${userSort}`,
+        )}&filter=${userFilter}&sort=${userSort}&topPeriod=${topUsersPeriod}`,
         firebaseToken!
       ),
     enabled: !!firebaseToken,
@@ -644,38 +683,110 @@ export default function AdminPage() {
     name: string,
     channel: "whatsapp" | "email",
     phone?: string,
-    email?: string
+    email?: string,
+    userId?: string,
+    stats?: { completedOrders: number; totalOrders: number }
   ) {
-    setMessageTarget({ name: name || "Client", channel, phone, email });
+    setMessageTarget({ name: name || "Client", channel, phone, email, userId, stats });
+    setMessageDraft({ templateId: "", subject: "", body: "" });
     setMessagePickerOpen(true);
   }
 
   function handleTemplateSelect(template: MessageTemplate) {
     if (!messageTarget) return;
-    const displayName = messageTarget.name?.trim()
-      ? messageTarget.name.trim()
-      : "cher client";
+    const displayName = messageTarget.name?.trim() ? messageTarget.name.trim() : "cher client";
     const fn = firstName(displayName);
 
     if (messageTarget.channel === "whatsapp") {
-      if (!messageTarget.phone) {
-        setToast("Pas de téléphone disponible");
-        return;
-      }
+      if (!messageTarget.phone) { setToast("Pas de téléphone disponible"); return; }
       const clean = cleanForWa(messageTarget.phone);
       const text = encodeURIComponent(template.whatsappBody(fn));
       window.open(`https://wa.me/${clean}?text=${text}`, "_blank", "noopener,noreferrer");
-    } else {
-      if (!messageTarget.email) {
-        setToast("Pas d'email disponible");
-        return;
+      if (messageTarget.userId && firebaseToken) {
+        apiPost("/contact/log", firebaseToken, {
+          userId: messageTarget.userId,
+          channel: "whatsapp",
+          templateId: template.id,
+          subject: template.label,
+        }).catch(() => {});
       }
-      const subject = encodeURIComponent(template.emailSubject(fn));
-      const body = encodeURIComponent(template.emailBody(displayName));
-      window.location.href = `mailto:${messageTarget.email}?subject=${subject}&body=${body}`;
+      setToast("WhatsApp ouvert. Le contact est enregistré comme initié, pas comme envoyé.");
+      setMessagePickerOpen(false);
+      setMessageTarget(null);
+      return;
     }
-    setMessagePickerOpen(false);
-    setMessageTarget(null);
+
+    if (!messageTarget.email) { setToast("Pas d'email disponible"); return; }
+    setMessageDraft({
+      templateId: template.id,
+      subject: template.emailSubject(fn),
+      body: template.emailBody(displayName, messageTarget.stats),
+    });
+  }
+
+  async function sendEmailDraft() {
+    if (!messageTarget?.userId || !firebaseToken) {
+      setToast("Impossible d'identifier ce client pour l'envoi sécurisé.");
+      return;
+    }
+    if (!messageDraft.subject.trim() || !messageDraft.body.trim()) {
+      setToast("L'objet et le message sont obligatoires.");
+      return;
+    }
+    try {
+      setSendingMessage(true);
+      await apiPost("/contact/email", firebaseToken, {
+        userId: messageTarget.userId,
+        templateId: messageDraft.templateId || "custom",
+        subject: messageDraft.subject.trim(),
+        message: messageDraft.body.trim(),
+      });
+      setToast(`E-mail envoyé à ${messageTarget.email}.`);
+      setMessagePickerOpen(false);
+      setMessageTarget(null);
+      setMessageDraft({ templateId: "", subject: "", body: "" });
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      if (profileUserId) {
+        const refreshed = await apiFetch(`/users/${encodeURIComponent(profileUserId)}/profile`, firebaseToken);
+        setProfileData(refreshed);
+      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Échec de l'envoi.");
+    } finally {
+      setSendingMessage(false);
+    }
+  }
+
+  function openUserProfile(userId: string) {
+    if (!userId) return;
+    setProfileData(null);
+    setProfileUserId(userId);
+  }
+
+  async function sendInAppNotification(userId: string) {
+    if (!firebaseToken) return;
+    const title = window.prompt("Titre de la notification", "Un message de l'équipe Texerra");
+    if (!title?.trim()) return;
+    const message = window.prompt("Contenu de la notification");
+    if (!message?.trim()) return;
+    try {
+      await apiPost("/notifications", firebaseToken, { userId, title: title.trim(), message: message.trim() });
+      setToast("Notification envoyée dans l'application.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Échec de la notification.");
+    }
+  }
+
+  function userExportIds(): string[] {
+    if (selectedUserIds.length) return selectedUserIds.slice(0, 200);
+    return (usersQuery.data?.users ?? []).map((u: any) => String(u.id)).slice(0, 200);
+  }
+
+  async function markUsersExported(ids: string[]) {
+    if (!ids.length || !firebaseToken) return;
+    await apiPost("/users/export/mark", firebaseToken, { ids });
+    setSelectedUserIds([]);
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
   async function handleOrdersCsv() {
@@ -814,50 +925,55 @@ export default function AdminPage() {
   }
 
   async function handleUsersCsv() {
+    const ids = userExportIds();
+    if (!ids.length) { setToast("Aucun utilisateur à exporter sur cette page."); return; }
     try {
       setExporting("users-csv");
-      await downloadBlob(`/users/export?format=csv`, `utilisateurs-texerra.csv`, firebaseToken!);
-    } catch (e) {
-      alert((e as Error).message);
-    } finally {
-      setExporting(null);
-    }
+      await downloadBlob(`/users/export?format=csv&ids=${encodeURIComponent(ids.join(","))}`, `utilisateurs-texerra-${ids.length}.csv`, firebaseToken!);
+      await markUsersExported(ids);
+      setToast(`${ids.length} utilisateur(s) exporté(s).`);
+    } catch (e) { alert((e as Error).message); }
+    finally { setExporting(null); }
   }
 
   async function handleUsersVcf() {
+    const ids = userExportIds();
+    if (!ids.length) { setToast("Aucun utilisateur à exporter sur cette page."); return; }
     try {
       setExporting("users-vcf");
-      await downloadBlob(`/users/export?format=vcf`, `contacts-texerra.vcf`, firebaseToken!);
-    } catch (e) {
-      alert((e as Error).message);
-    } finally {
-      setExporting(null);
-    }
+      await downloadBlob(`/users/export?format=vcf&ids=${encodeURIComponent(ids.join(","))}`, `contacts-texerra-${ids.length}.vcf`, firebaseToken!);
+      await markUsersExported(ids);
+      setToast(`${ids.length} contact(s) exporté(s).`);
+    } catch (e) { alert((e as Error).message); }
+    finally { setExporting(null); }
   }
 
   async function handleUsersPdf() {
+    const ids = userExportIds();
+    if (!ids.length) { setToast("Aucun utilisateur à exporter sur cette page."); return; }
     try {
       setExporting("users-pdf");
-      const data = await apiFetch(`/users/export?format=json`, firebaseToken!);
+      const data = await apiFetch(`/users/export?format=json&ids=${encodeURIComponent(ids.join(","))}`, firebaseToken!);
       const users = data.users as any[];
       openPdfPrint(
-        `Utilisateurs — annuaire complet`,
+        `Utilisateurs — ${users.length} sélectionnés`,
         [`Total : <b>${users.length}</b> utilisateurs`],
         ["Inscription", "Nom", "Email", "Téléphone", "Solde (€)", "Solde (FCFA)"],
-        users.map((u) => [
-          new Date(u.createdAt).toLocaleString("fr-FR"),
-          u.name || "—",
-          u.email || "—",
-          u.phone || "—",
-          u.balance?.toFixed(2) ?? "0.00",
-          toCfa(u.balance ?? 0),
-        ])
+        users.map((u) => [new Date(u.createdAt).toLocaleString("fr-FR"), u.name || "—", u.email || "—", u.phone || "—", u.balance?.toFixed(2) ?? "0.00", toCfa(u.balance ?? 0)])
       );
-    } catch (e) {
-      alert((e as Error).message);
-    } finally {
-      setExporting(null);
-    }
+      await markUsersExported(ids);
+      setToast(`${users.length} profil(s) exporté(s).`);
+    } catch (e) { alert((e as Error).message); }
+    finally { setExporting(null); }
+  }
+
+  async function handleFullAdminExport() {
+    try {
+      setExporting("full-admin");
+      await downloadBlob(`/export/full?start=${start}&end=${end}`, `texerra-export-administrateur-${start}_${end}.json`, firebaseToken!);
+      setToast("Export des données administrateur téléchargé.");
+    } catch (e) { alert((e as Error).message); }
+    finally { setExporting(null); }
   }
 
   async function handleMigrate() {
@@ -901,6 +1017,14 @@ export default function AdminPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleFullAdminExport}
+              disabled={busy("full-admin")}
+              className="px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-semibold disabled:opacity-50"
+              title="Télécharger les indicateurs, utilisateurs, dépôts, commandes et données d'affiliation"
+            >
+              {busy("full-admin") ? "Préparation…" : "Télécharger toutes les données"}
+            </button>
             {(
               [
                 ["today", "Aujourd'hui"],
@@ -1164,7 +1288,6 @@ export default function AdminPage() {
                           ? realMargin
                           : o.price * MARGIN_RATE_FALLBACK
                         : null;
-                      const hasWa = isWhatsAppService(o.serviceCode);
                       const userName = o.user?.name || "";
                       const userEmail = o.user?.email || "";
                       const userPhone = o.user?.phone || "";
@@ -1236,27 +1359,12 @@ export default function AdminPage() {
                                   <SearchIcon />
                                 </ActionBtn>
                               )}
-                              {hasWa && o.phoneNumber && (
-                                <ActionBtn
-                                  title="Contacter sur WhatsApp"
-                                  variant="whatsapp"
-                                  onClick={() =>
-                                    openMessagePicker(
-                                      userName,
-                                      "whatsapp",
-                                      o.phoneNumber
-                                    )
-                                  }
-                                >
-                                  <WhatsAppIcon />
-                                </ActionBtn>
-                              )}
                               {userEmail && (
                                 <ActionBtn
                                   title="Contacter par email"
                                   variant="mail"
                                   onClick={() =>
-                                    openMessagePicker(userName, "email", undefined, userEmail)
+                                    openMessagePicker(userName, "email", undefined, userEmail, o.userId)
                                   }
                                 >
                                   <SendMailIcon />
@@ -1267,7 +1375,7 @@ export default function AdminPage() {
                                   title="Écrire sur WhatsApp au client"
                                   variant="whatsapp"
                                   onClick={() =>
-                                    openMessagePicker(userName, "whatsapp", userPhone)
+                                    openMessagePicker(userName, "whatsapp", userPhone, undefined, t.userId)
                                   }
                                 >
                                   <WhatsAppIcon />
@@ -1438,7 +1546,7 @@ export default function AdminPage() {
                                   title="Contacter par email"
                                   variant="mail"
                                   onClick={() =>
-                                    openMessagePicker(userName, "email", undefined, userEmail)
+                                    openMessagePicker(userName, "email", undefined, userEmail, t.userId)
                                   }
                                 >
                                   <SendMailIcon />
@@ -1512,13 +1620,32 @@ export default function AdminPage() {
             }
             toolbar={
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const visible = (usersQuery.data?.users ?? []).map((u: any) => String(u.id));
+                    setSelectedUserIds((current) => current.length === visible.length && visible.every((id: string) => current.includes(id)) ? current.filter((id) => !visible.includes(id)) : [...new Set([...current, ...visible])]);
+                  }}
+                  className="px-3 py-1.5 border rounded-lg text-xs font-medium hover:bg-secondary"
+                >
+                  {selectedUserIds.length ? `${selectedUserIds.length} sélectionné(s)` : "Sélectionner la page"}
+                </button>
                 <input
                   type="text"
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Rechercher par nom, email, téléphone ou ID…"
+                  placeholder="Début du nom, e-mail, téléphone ou ID…"
                   className="flex-1 min-w-[220px] border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary/60"
                 />
+                {userFilter === "top" && (
+                  <select value={topUsersPeriod} onChange={(e) => { setTopUsersPeriod(e.target.value); setUserPage(1); }} className="border rounded-lg px-2 py-1.5 text-xs bg-white">
+                    <option value="today">Aujourd'hui</option>
+                    <option value="week">Cette semaine</option>
+                    <option value="month">Ce mois</option>
+                    <option value="year">Cette année</option>
+                    <option value="all">Depuis le début</option>
+                  </select>
+                )}
                 <select
                   value={userSort}
                   onChange={(e) => {
@@ -1537,6 +1664,16 @@ export default function AdminPage() {
               </div>
             }
           >
+            {userFilter !== "all" && userFilter !== "top" && !userSearchDebounced && (
+              <p className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-y border-amber-100">
+                Pour préserver les quotas Firestore, ce filtre s’applique à la page d’utilisateurs actuellement chargée, et non à un balayage de toute la base. Augmentez le nombre d’éléments par page ou utilisez la recherche pour affiner la sélection.
+              </p>
+            )}
+            {userFilter === "top" && usersQuery.data?.truncated && (
+              <p className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-y border-amber-100">
+                Classement calculé sur les {topUsersPeriod === "all" ? "50 000" : "10 000"} commandes les plus récentes de la période. Le plafond a été atteint : ce classement peut être partiel.
+              </p>
+            )}
             {usersQuery.isLoading ? (
               <p className="text-sm text-muted-foreground p-3">Chargement…</p>
             ) : usersQuery.isError ? (
@@ -1550,13 +1687,15 @@ export default function AdminPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-secondary/50">
                       <tr>
+                        <th className="text-left p-2 font-medium"><input type="checkbox" aria-label="Sélectionner tous les utilisateurs visibles" checked={(usersQuery.data?.users?.length ?? 0) > 0 && usersQuery.data.users.every((u: any) => selectedUserIds.includes(String(u.id)))} onChange={(e) => { const visible = (usersQuery.data?.users ?? []).map((u: any) => String(u.id)); setSelectedUserIds((current) => e.target.checked ? [...new Set([...current, ...visible])] : current.filter((id) => !visible.includes(id))); }} /></th>
                         <th className="text-left p-2 font-medium">Inscription</th>
                         <th className="text-left p-2 font-medium">Nom</th>
                         <th className="text-left p-2 font-medium">E-mail</th>
                         <th className="text-left p-2 font-medium">Téléphone</th>
                         <th className="text-right p-2 font-medium">Solde (€)</th>
                         <th className="text-right p-2 font-medium">Solde (FCFA)</th>
-                        <th className="text-right p-2 font-medium">Commandes</th>
+                        <th className="text-right p-2 font-medium">Commandes réussies</th>
+                        <th className="text-left p-2 font-medium">Commercial</th>
                         <th className="text-center p-2 font-medium">Actions</th>
                       </tr>
                     </thead>
@@ -1568,10 +1707,14 @@ export default function AdminPage() {
                             key={u.id}
                             className="border-t hover:bg-secondary/30 transition-colors"
                           >
+                            <td className="p-2"><input type="checkbox" aria-label={`Sélectionner ${u.name || u.email || u.id}`} checked={selectedUserIds.includes(String(u.id))} onChange={(e) => setSelectedUserIds((current) => e.target.checked ? [...new Set([...current, String(u.id)])] : current.filter((id) => id !== String(u.id)))} /></td>
                             <td className="p-2 whitespace-nowrap text-xs">
-                              {new Date(u.createdAt).toLocaleDateString("fr-FR")}
+                              {new Date(u.createdAt).toLocaleString("fr-FR")}
                             </td>
-                            <td className="p-2">{u.name || "—"}</td>
+                            <td className="p-2">
+                              <div>{u.name || "—"}</div>
+                              {u.lastExportedAt && <div className="text-[10px] text-emerald-700 mt-0.5" title={`Exporté ${u.exportCount ?? 1} fois · dernier export ${new Date(u.lastExportedAt).toLocaleString("fr-FR")}`}>Déjà exporté</div>}
+                            </td>
                             <td className="p-2 text-muted-foreground text-xs">
                               {u.email || "—"}
                             </td>
@@ -1585,11 +1728,7 @@ export default function AdminPage() {
                             <td className="p-2 text-right whitespace-nowrap">
                               <span
                                 className="inline-flex items-center gap-1"
-                                title={`Total : ${s.totalOrders ?? 0} · En cours : ${
-                                  s.activeOrders ?? 0
-                                } · En attente : ${s.pendingOrders ?? 0} · Annulées : ${
-                                  s.cancelledOrders ?? 0
-                                } · Expirées : ${s.expiredOrders ?? 0}`}
+                                title={`${s.completedOrders ?? 0} commande(s) réussie(s) sur ${s.totalOrders ?? 0} commande(s) au total`}
                               >
                                 <span className="inline-flex items-center justify-center text-[11px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                                   {s.completedOrders ?? 0}
@@ -1599,8 +1738,12 @@ export default function AdminPage() {
                                 </span>
                               </span>
                             </td>
+                            <td className="p-2 text-xs">
+                              {u.affiliate ? <div><div className="font-medium">{u.affiliate.commercialName}</div><div className="text-muted-foreground">{u.affiliate.affiliateCode}</div></div> : <span className="text-muted-foreground">Direct</span>}
+                            </td>
                             <td className="p-2">
                               <div className="flex items-center justify-center gap-1">
+                                <ActionBtn title="Ouvrir la fiche utilisateur" onClick={() => openUserProfile(u.id)}><SearchIcon /></ActionBtn>
                                 {u.name && (
                                   <ActionBtn
                                     title="Copier le nom"
@@ -1628,7 +1771,10 @@ export default function AdminPage() {
                                         openMessagePicker(
                                           u.name || "",
                                           "whatsapp",
-                                          u.phone
+                                          u.phone,
+                                          undefined,
+                                          u.id,
+                                          s
                                         )
                                       }
                                     >
@@ -1654,7 +1800,9 @@ export default function AdminPage() {
                                           u.name || "",
                                           "email",
                                           undefined,
-                                          u.email
+                                          u.email,
+                                          u.id,
+                                          s
                                         )
                                       }
                                     >
@@ -1670,7 +1818,7 @@ export default function AdminPage() {
                       {usersQuery.data?.users?.length === 0 && (
                         <tr>
                           <td
-                            colSpan={8}
+                            colSpan={10}
                             className="p-4 text-center text-muted-foreground"
                           >
                             Aucun utilisateur ne correspond à votre recherche
@@ -1691,6 +1839,39 @@ export default function AdminPage() {
           </Section>
         </div>
       </div>
+
+      {/* Fiche utilisateur détaillée — chargée uniquement à l'ouverture */}
+      {profileUserId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-3 sm:p-6" onClick={() => setProfileUserId(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b px-5 py-4 flex items-center justify-between gap-3 z-10">
+              <div><h3 className="font-bold text-lg">Fiche utilisateur</h3><p className="text-xs text-muted-foreground">Profil, activité, commandes et historique de contact</p></div>
+              <button onClick={() => setProfileUserId(null)} className="text-xl px-2" aria-label="Fermer">×</button>
+            </div>
+            {profileLoading ? <div className="p-8 text-center text-muted-foreground">Chargement du profil…</div> : profileError ? <div className="p-6 text-sm text-red-700">{profileError}</div> : profileData?.user && (
+              <div className="p-5 space-y-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div><div className="text-xl font-bold">{profileData.user.name || "Utilisateur"}</div><div className="text-sm text-muted-foreground">{profileData.user.email}</div><div className="text-xs text-muted-foreground mt-1">UID : {profileData.user.id}</div></div>
+                  <div className="flex flex-wrap gap-2">
+                    {profileData.user.email && <button onClick={() => openMessagePicker(profileData.user.name, "email", undefined, profileData.user.email, profileData.user.id, { completedOrders: profileData.user.stats.completedOrders, totalOrders: profileData.user.stats.totalOrders })} className="px-3 py-2 rounded-lg border text-sm">Contacter par e-mail</button>}
+                    {profileData.user.phone && <button onClick={() => openMessagePicker(profileData.user.name, "whatsapp", profileData.user.phone, undefined, profileData.user.id)} className="px-3 py-2 rounded-lg border text-sm">WhatsApp</button>}
+                    <button onClick={() => sendInAppNotification(profileData.user.id)} className="px-3 py-2 rounded-lg border text-sm">Notifier dans l'application</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-muted-foreground">Inscription</div><div className="text-sm font-semibold">{new Date(profileData.user.createdAt).toLocaleString("fr-FR")}</div></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-muted-foreground">Dernière connexion</div><div className="text-sm font-semibold">{profileData.user.auth?.lastSignInTime ? new Date(profileData.user.auth.lastSignInTime).toLocaleString("fr-FR") : "Non disponible"}</div></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-muted-foreground">Commandes réussies</div><div className="text-lg font-bold text-emerald-700">{profileData.user.stats.completedOrders}</div></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-muted-foreground">Solde actuel</div><div className="text-lg font-bold">{Number(profileData.user.balance || 0).toFixed(2)} €</div></div>
+                </div>
+                {profileData.user.affiliate && <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm"><strong>Client attribué à :</strong> {profileData.user.affiliate.name} · {profileData.user.affiliate.affiliateCode} · {profileData.user.affiliate.country || "Pays non renseigné"}</div>}
+                <section><h4 className="font-semibold mb-2">Dernières commandes et numéros achetés</h4><div className="overflow-x-auto border rounded-xl"><table className="w-full text-xs"><thead className="bg-slate-50"><tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Pays</th><th className="p-2 text-left">Service</th><th className="p-2 text-left">Numéro</th><th className="p-2 text-left">Code SMS</th><th className="p-2 text-left">Statut</th><th className="p-2 text-right">Prix</th></tr></thead><tbody>{(profileData.orders || []).map((o: any) => { const c = resolveCountry(o.phoneNumber, o.countryCode); return <tr key={o.id} className="border-t"><td className="p-2 whitespace-nowrap">{new Date(o.createdAt).toLocaleString("fr-FR")}</td><td className="p-2">{c.flag} {c.name}</td><td className="p-2">{o.serviceName || o.serviceCode}</td><td className="p-2 font-mono">{o.phoneNumber}</td><td className="p-2 font-mono font-semibold">{o.smsCode || "—"}</td><td className="p-2">{o.status}</td><td className="p-2 text-right">{Number(o.price || 0).toFixed(2)} €</td></tr>; })}{!profileData.orders?.length && <tr><td colSpan={7} className="p-3 text-center text-muted-foreground">Aucune commande trouvée.</td></tr>}</tbody></table></div></section>
+                <section><h4 className="font-semibold mb-2">Historique des contacts</h4><div className="space-y-2">{(profileData.contactHistory || []).map((item: any) => <div key={item.id} className="border rounded-lg px-3 py-2 text-xs"><div className="flex flex-wrap justify-between gap-2"><strong>{item.channel === "email" ? "E-mail" : item.channel === "whatsapp" ? "WhatsApp" : item.channel} · {item.status === "sent" ? "Envoyé" : item.status === "opened" ? "WhatsApp ouvert" : "Initiée"}</strong><span className="text-muted-foreground">{new Date(item.createdAt).toLocaleString("fr-FR")}</span></div><div className="text-muted-foreground mt-1">{item.subject || item.templateId || "Contact"}</div></div>)}{!profileData.contactHistory?.length && <p className="text-xs text-muted-foreground">Aucun contact enregistré pour le moment.</p>}</div></section>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Picker de modèle de message */}
       {messagePickerOpen && messageTarget && (
@@ -1748,6 +1929,18 @@ export default function AdminPage() {
                 </button>
               ))}
             </div>
+            {messageTarget.channel === "email" && messageDraft.templateId && (
+              <div className="mt-4 pt-4 border-t space-y-2">
+                <label className="text-xs font-semibold text-gray-600">Objet</label>
+                <input value={messageDraft.subject} onChange={(e) => setMessageDraft((d) => ({ ...d, subject: e.target.value }))} className="w-full border rounded-lg px-3 py-2 text-sm" maxLength={180} />
+                <label className="text-xs font-semibold text-gray-600">Message (modifiable avant envoi)</label>
+                <textarea value={messageDraft.body} onChange={(e) => setMessageDraft((d) => ({ ...d, body: e.target.value }))} rows={9} maxLength={12000} className="w-full border rounded-lg px-3 py-2 text-sm leading-relaxed" />
+                <button onClick={sendEmailDraft} disabled={sendingMessage || !messageTarget.userId} className="w-full bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
+                  {sendingMessage ? "Envoi via Resend…" : "Envoyer l'e-mail"}
+                </button>
+                {!messageTarget.userId && <p className="text-xs text-red-600">Identifiant utilisateur manquant : l'envoi sécurisé est désactivé.</p>}
+              </div>
+            )}
           </div>
         </div>
       )}

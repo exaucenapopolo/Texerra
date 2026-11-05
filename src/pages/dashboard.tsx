@@ -8,7 +8,7 @@ import {
   Filter, Search, Sparkles, Receipt, Calendar, BadgeCheck, Activity,
   ChevronDown, ChevronUp, Info, ShoppingCart, TrendingUp, ArrowLeft,
   ArrowUpDown, LayoutList, GalleryHorizontal, ChevronLeft, ChevronRight,
-  PlayCircle, ExternalLink, Users, Handshake,
+  PlayCircle, ExternalLink, Users, Handshake, Bell,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
@@ -2079,6 +2079,7 @@ const VIEW_KEY = "texerra:dashboard:view";
 const EXPANDED_KEY = "texerra:dashboard:expanded";
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
   useMeta({
     title: "Tableau de bord — Mes commandes et mon solde | Texerra",
     description: "Gérez vos commandes de numéros virtuels, suivez vos codes SMS reçus et consultez votre historique de recharges sur Texerra.",
@@ -2111,6 +2112,30 @@ export default function Dashboard() {
       return res.json();
     },
   });
+
+  const { data: notificationData } = useQuery<{ notifications: any[]; unreadCount: number }>({
+    queryKey: ["/api/me/notifications"],
+    queryFn: async () => {
+      const token = await auth.currentUser?.getIdToken().catch(() => null);
+      const res = await fetch("/api/me/notifications?limit=5", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Erreur notifications");
+      return res.json();
+    },
+    staleTime: 45_000,
+    refetchInterval: 60_000,
+  });
+
+  const markNotificationRead = async (notificationId: string) => {
+    const token = await auth.currentUser?.getIdToken().catch(() => null);
+    if (!token) return;
+    await fetch(`/api/me/notifications/${encodeURIComponent(notificationId)}/read`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    await queryClient.invalidateQueries({ queryKey: ["/api/me/notifications"] });
+  };
 
   /* Persistance */
   const [tab, setTab] = useLocalStorage<DashTab>(TAB_KEY, "orders");
@@ -2191,6 +2216,33 @@ export default function Dashboard() {
             </button>
           )}
         </div>
+
+        {/* Notifications récentes : une lecture limitée, actualisée à intervalle modéré */}
+        {(notificationData?.notifications?.length ?? 0) > 0 && (
+          <section className="mb-6 rounded-2xl border bg-white p-4 sm:p-5 shadow-sm" style={{ borderColor: BRAND.border }}>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+                <Bell className="w-4 h-4" style={{ color: BRAND.primary }} />
+                Notifications
+                {(notificationData?.unreadCount ?? 0) > 0 && <span className="text-xs rounded-full px-2 py-0.5" style={{ background: BRAND.primarySoft, color: BRAND.primary }}>{notificationData?.unreadCount} nouvelle(s)</span>}
+              </div>
+            </div>
+            <div className="space-y-2">
+              {notificationData?.notifications?.slice(0, 5).map((notification: any) => (
+                <div key={notification.id} className="flex items-start gap-3 rounded-xl p-3" style={{ background: notification.read ? "#F9FAFB" : BRAND.primarySoft, border: `1px solid ${notification.read ? BRAND.borderSoft : BRAND.primaryBorder || "#E8A47F"}` }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-gray-900">{notification.title || "Notification Texerra"}</div>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">{notification.message}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">{notification.createdAt ? new Date(notification.createdAt).toLocaleString("fr-FR") : ""}</p>
+                  </div>
+                  {!notification.read && (
+                    <button onClick={() => markNotificationRead(notification.id).catch(() => {})} className="shrink-0 text-[11px] font-semibold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600">Lu</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Carte solde + panneau action */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-5 mb-6">

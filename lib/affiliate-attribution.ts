@@ -36,6 +36,7 @@ export interface Commercial {
   firebaseUid?: string;
   name: string;
   email: string;
+  country?: string;
   affiliateCode: string;
   commissionRate: number;
   status: "active" | "inactive";

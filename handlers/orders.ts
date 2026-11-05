@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { FieldValue } from "firebase-admin/firestore";
 // Ajout des extensions .js pour la compatibilité ESM sur Vercel
 import { firestoreDb } from "../lib/firebase-admin.js";
 import { z } from "zod";
@@ -11,7 +12,7 @@ import {
   GRIZZLY_COUNTRIES,
 } from "../lib/grizzlysms.js";
 import { getCachedPrices, countryIdFromCode, sellingPrice } from "../lib/priceCache.js";
-import { sendOrderEmail, sendCancellationEmail } from "../lib/mailer.js";
+import { sendSmsCodeEmail, sendCancellationEmail } from "../lib/mailer.js";
 import { requireAuth } from "../lib/requireAuth.js";
 // ➕ Service de commission (calcul sur la MARGE nette)
 import { createCommissionForOrder } from "../lib/affiliate-commission.js";
@@ -247,28 +248,23 @@ router.post("/", requireAuth, async (req, res) => {
     orderData.marginRatio = MARGIN;
   }
 
-  await firestoreDb.collection("orders").doc(orderId).set(orderData);
+  // Commande et compteur sont écrits atomiquement : aucune commande ne peut
+  // exister sans que son compteur utilisateur soit mis à jour (et inversement).
+  const createBatch = firestoreDb.batch();
+  createBatch.set(firestoreDb.collection("orders").doc(orderId), orderData);
+  createBatch.set(userRef, {
+    totalOrdersCount: FieldValue.increment(1),
+    updatedAt: new Date().toISOString(),
+  }, { merge: true });
+  await createBatch.commit();
 
+  // Aucun e-mail à cette étape : plusieurs numéros peuvent être essayés
+  // avant la réception d'un SMS. L'e-mail partira uniquement avec le code.
   res.status(201).json({
     ...orderData,
     price: priceEur,
     expiresAt,
   });
-
-  const userDoc = await userRef.get();
-  const userData = userDoc.data();
-  if (userData?.email) {
-    sendOrderEmail({
-      to: userData.email,
-      name: userData.name,
-      phoneNumber: orderData.phoneNumber as string,
-      serviceCode: orderData.serviceCode as string,
-      countryCode: orderData.countryCode as string,
-      priceEur,
-      expiresAt,
-      orderId,
-    }).catch(() => {});
-  }
 });
 
 // GET /api/orders/:id
@@ -310,21 +306,90 @@ router.get("/:id", requireAuth, async (req, res) => {
       const result = await checkOrder(parseInt(order.externalOrderId, 10));
 
       if (result.status === "received" && result.code) {
-        await orderRef.update({
-          smsCode: result.code,
-          smsText: result.code,
-          status: "completed",
-          updatedAt: new Date().toISOString(),
+        const userRef = firestoreDb.collection("users").doc(userId);
+        const notificationRef = userRef.collection("notifications").doc(`sms-${orderId}`);
+        let newlyCompleted = false;
+
+        // La transaction garantit qu'un code, une notification et les compteurs
+        // ne sont enregistrés qu'une seule fois, même si plusieurs appels arrivent ensemble.
+        await firestoreDb.runTransaction(async (transaction) => {
+          newlyCompleted = false;
+          const latestSnap = await transaction.get(orderRef);
+          if (!latestSnap.exists) return;
+          const latest = latestSnap.data() as any;
+          if (latest.smsCode || latest.status === "completed") return;
+
+          const nowIso = new Date().toISOString();
+          const serviceLabel = String(order.serviceCode || "votre service").toUpperCase();
+          transaction.update(orderRef, {
+            smsCode: result.code,
+            smsText: result.code,
+            status: "completed",
+            smsEmailStatus: "pending",
+            updatedAt: nowIso,
+          });
+          transaction.set(notificationRef, {
+            id: notificationRef.id,
+            type: "sms_code",
+            title: "Votre code SMS est arrivé",
+            message: `Le code ${result.code} pour ${serviceLabel} est disponible. Consultez votre commande pour le copier.`,
+            orderId,
+            serviceCode: order.serviceCode,
+            countryCode: order.countryCode,
+            phoneNumber: order.phoneNumber,
+            read: false,
+            createdAt: nowIso,
+          });
+          transaction.set(userRef, {
+            successfulOrdersCount: FieldValue.increment(1),
+            totalSuccessfulSpend: FieldValue.increment(Number(order.priceNum ?? order.price ?? 0)),
+            updatedAt: nowIso,
+          }, { merge: true });
+          newlyCompleted = true;
         });
 
-        finishOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
+        if (newlyCompleted) {
+          finishOrder(parseInt(order.externalOrderId, 10)).catch(() => {});
 
-        // ➕ NOUVEAU : création de la commission d'affiliation (idempotente)
+          // L'e-mail inclut le vrai code SMS et part après sa réception effective.
+          try {
+            const userDoc = await userRef.get();
+            const userData = userDoc.data();
+            if (userData?.email) {
+              const sent = await sendSmsCodeEmail({
+                to: String(userData.email),
+                name: String(userData.name ?? ""),
+                phoneNumber: String(order.phoneNumber ?? ""),
+                serviceCode: String(order.serviceCode ?? ""),
+                countryCode: String(order.countryCode ?? ""),
+                smsCode: String(result.code),
+                orderId,
+              });
+              await orderRef.update({
+                smsEmailStatus: sent ? "sent" : "failed",
+                smsEmailSentAt: sent ? new Date().toISOString() : null,
+              });
+            } else {
+              await orderRef.update({ smsEmailStatus: "skipped_no_email" });
+            }
+          } catch (emailErr) {
+            console.error("[orders] SMS code email error:", emailErr);
+            await orderRef.update({ smsEmailStatus: "failed" }).catch(() => {});
+          }
+        }
+
+        // ➕ Création de la commission d'affiliation (idempotente)
         //    Calcul basé sur la MARGE nette Texerra (50% de la marge
         //    = ~33% du chiffre d'affaires).
         //    try/catch non-bloquant : une erreur d'affiliation ne doit
         //    JAMAIS casser la commande client.
         try {
+          if (!newlyCompleted) {
+            const updatedDoc = await orderRef.get();
+            const updatedData = updatedDoc.data()!;
+            res.json({ ...updatedData, price: updatedData.price ? parseFloat(updatedData.price) : null });
+            return;
+          }
           const numericPrice = parseFloat(String(order.price ?? "0"));
           const numericMargin =
             typeof order.marginNum === "number"

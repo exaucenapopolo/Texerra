@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from "express";
-import { firestoreDb } from "../lib/firebase-admin.js";
+import { firestoreDb, getAdminAuth } from "../lib/firebase-admin.js";
 import { requireAdmin } from "../lib/requireAuth.js";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { sendAdminContactEmail } from "../lib/mailer.js";
 
 const router = Router();
 
@@ -507,59 +508,117 @@ type UserStats = {
 router.get("/users", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { page, pageSize } = parsePagination(req);
-    const search = String(req.query.search ?? "").trim().toLowerCase();
+    const rawSearch = String(req.query.search ?? "").trim();
+    const search = rawSearch.toLowerCase();
     const filter = String(req.query.filter ?? "all");
     const sort = String(req.query.sort ?? "recent");
+    const usersCol = firestoreDb.collection("users");
 
-    // 1. Fetch (avec plafond) de tous les users et toutes les commandes
-    const [usersSnap, ordersSnap] = await Promise.all([
-      firestoreDb.collection("users").limit(MAX_FETCH).get(),
-      firestoreDb.collection("orders").limit(MAX_FETCH).get(),
-    ]);
-
-    // 2. Agrégation en mémoire des stats de commandes par utilisateur
-    const statsMap = new Map<string, UserStats>();
-    for (const doc of ordersSnap.docs) {
-      const d = doc.data();
-      const uid = String(d.userId ?? "");
-      if (!uid) continue;
-      if (!statsMap.has(uid)) {
-        statsMap.set(uid, {
-          totalOrders: 0,
-          completedOrders: 0,
-          activeOrders: 0,
-          pendingOrders: 0,
-          cancelledOrders: 0,
-          expiredOrders: 0,
-          totalSpent: 0,
-        });
+    // Classement par commandes réellement réussies. Il n'est calculé que lorsque
+    // l'administrateur ouvre ce filtre, sur la période choisie (pas au chargement).
+    if (filter === "top") {
+      const topPeriod = String(req.query.topPeriod ?? "week");
+      const localNow = new Date(Date.now() + 60 * 60 * 1000); // Africa/Douala (UTC+1)
+      const localStart = new Date(localNow);
+      localStart.setUTCHours(0, 0, 0, 0);
+      if (topPeriod === "week") {
+        const day = localStart.getUTCDay() || 7;
+        localStart.setUTCDate(localStart.getUTCDate() - day + 1);
+      } else if (topPeriod === "month") localStart.setUTCDate(1);
+      else if (topPeriod === "year") { localStart.setUTCMonth(0, 1); }
+      else if (topPeriod === "all") localStart.setTime(new Date("2000-01-01T00:00:00Z").getTime() + 60 * 60 * 1000);
+      const queryLimit = topPeriod === "all" ? MAX_FETCH : 10000;
+      let ordersQuery: FirebaseFirestore.Query = firestoreDb.collection("orders");
+      if (topPeriod !== "all") {
+        const startIso = new Date(localStart.getTime() - 60 * 60 * 1000).toISOString();
+        ordersQuery = ordersQuery.where("createdAt", ">=", startIso);
       }
-      const s = statsMap.get(uid)!;
-      s.totalOrders += 1;
-      const st = d.status;
-      if (st === "completed") {
-        s.completedOrders += 1;
-        s.totalSpent += num(d.priceNum) ?? num(d.price, 0) ?? 0;
-      } else if (st === "active") s.activeOrders += 1;
-      else if (st === "pending_payment" || st === "pending") s.pendingOrders += 1;
-      else if (st === "cancelled") s.cancelledOrders += 1;
-      else if (st === "expired") s.expiredOrders += 1;
+      const rankingOrders = await ordersQuery.orderBy("createdAt", "desc").limit(queryLimit).get();
+      const rankMap = new Map<string, UserStats>();
+      for (const doc of rankingOrders.docs) {
+        const d = doc.data(); const uid = String(d.userId ?? "");
+        if (!uid) continue;
+        const stat = rankMap.get(uid) ?? { totalOrders: 0, completedOrders: 0, activeOrders: 0, pendingOrders: 0, cancelledOrders: 0, expiredOrders: 0, totalSpent: 0 };
+        stat.totalOrders += 1;
+        if (d.status === "completed") { stat.completedOrders += 1; stat.totalSpent += num(d.priceNum) ?? num(d.price, 0) ?? 0; }
+        else if (d.status === "active") stat.activeOrders += 1;
+        else if (d.status === "pending_payment" || d.status === "pending") stat.pendingOrders += 1;
+        else if (d.status === "cancelled") stat.cancelledOrders += 1;
+        else if (d.status === "expired") stat.expiredOrders += 1;
+        rankMap.set(uid, stat);
+      }
+      const ranked = [...rankMap.entries()].filter(([, stat]) => stat.completedOrders > 0).sort((a,b) => b[1].completedOrders - a[1].completedOrders || b[1].totalSpent - a[1].totalSpent);
+      const total = ranked.length;
+      const selected = ranked.slice((page - 1) * pageSize, page * pageSize);
+      const userRefs = selected.map(([id]) => usersCol.doc(id));
+      const profileDocs = userRefs.length ? await firestoreDb.getAll(...userRefs) : [];
+      const users = profileDocs.filter((doc) => doc.exists).map((doc) => {
+        const d = doc.data()!; const stat = rankMap.get(doc.id)!;
+        return { id: doc.id, name: d.name ?? "", email: d.email ?? "", phone: d.phone ?? "", balance: num(d.balance, 0) ?? 0, createdAt: getCreatedAtIso(d.createdAt), lastExportedAt: d.lastExportedAt ?? null, exportCount: Number(d.exportCount ?? 0), stats: stat, affiliate: null as any };
+      });
+      if (users.length) {
+        const byCustomer = new Map<string, FirebaseFirestore.DocumentData>();
+        for (let i = 0; i < users.length; i += 30) {
+          const group = users.slice(i, i + 30).map((u) => u.id);
+          const attribSnap = await firestoreDb.collection("affiliate_attributions").where("customerId", "in", group).get();
+          for (const doc of attribSnap.docs) byCustomer.set(String(doc.data().customerId), doc.data());
+        }
+        const commercialIds = [...new Set([...byCustomer.values()].map((a) => String(a.commercialId ?? "")).filter(Boolean))];
+        const commercialDocs = await Promise.all(commercialIds.map((id) => firestoreDb.collection("commercials").doc(id).get()));
+        const commercialMap = new Map(commercialDocs.filter((d) => d.exists).map((d) => [d.id, d.data()]));
+        for (const user of users) {
+          const a = byCustomer.get(user.id); if (!a) continue;
+          const c: any = commercialMap.get(String(a.commercialId));
+          user.affiliate = { commercialId: String(a.commercialId), commercialName: String(c?.name ?? "Commercial"), affiliateCode: String(a.affiliateCode ?? c?.affiliateCode ?? "") };
+        }
+      }
+      res.json({ users, total, page, pageSize, rankingPeriod: topPeriod, truncated: rankingOrders.size >= queryLimit });
+      return;
     }
 
-    // 3. Enrichissement
-    let enriched = usersSnap.docs.map((doc) => {
+    // Recherche ciblée : UID exact, début d'e-mail, de nom ou de téléphone.
+    // Une recherche ne déclenche plus une lecture des 50 000 profils.
+    let userDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+    let total = 0;
+    if (search) {
+      const candidates = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+      const exact = await usersCol.doc(rawSearch).get();
+      if (exact.exists) candidates.set(exact.id, exact as FirebaseFirestore.QueryDocumentSnapshot);
+      const prefixQueries: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+      const emailPrefix = usersCol.orderBy("email").startAt(search).endAt(search + "\uf8ff").limit(100).get();
+      prefixQueries.push(emailPrefix);
+      const nameVariants = [...new Set([rawSearch, rawSearch.charAt(0).toUpperCase() + rawSearch.slice(1)])];
+      for (const variant of nameVariants) {
+        prefixQueries.push(usersCol.orderBy("name").startAt(variant).endAt(variant + "\uf8ff").limit(100).get());
+      }
+      if (/^[+\d\s()-]+$/.test(rawSearch)) {
+        const phonePrefix = usersCol.orderBy("phone").startAt(rawSearch).endAt(rawSearch + "\uf8ff").limit(100).get();
+        prefixQueries.push(phonePrefix);
+      }
+      const matches = await Promise.all(prefixQueries);
+      for (const snap of matches) for (const doc of snap.docs) candidates.set(doc.id, doc);
+      userDocs = [...candidates.values()].filter((doc) => {
+        const d = doc.data();
+        return String(d.email ?? "").toLowerCase().startsWith(search)
+          || String(d.name ?? "").toLowerCase().startsWith(search)
+          || String(d.phone ?? "").replace(/\D/g, "").startsWith(search.replace(/\D/g, ""))
+          || doc.id.toLowerCase() === search;
+      });
+      total = userDocs.length;
+    } else {
+      const order = sort === "oldest" ? "asc" : "desc";
+      const [pageSnap, countSnap] = await Promise.all([
+        usersCol.orderBy("createdAt", order).offset((page - 1) * pageSize).limit(pageSize).get(),
+        usersCol.count().get(),
+      ]);
+      userDocs = pageSnap.docs;
+      total = countSnap.data().count;
+    }
+
+    // Une seule requête groupée récupère les commandes des seuls utilisateurs
+    // de la page, au lieu de lire toutes les commandes de toute la plateforme.
+    let enriched = userDocs.map((doc) => {
       const d = doc.data();
-      const s =
-        statsMap.get(doc.id) ??
-        ({
-          totalOrders: 0,
-          completedOrders: 0,
-          activeOrders: 0,
-          pendingOrders: 0,
-          cancelledOrders: 0,
-          expiredOrders: 0,
-          totalSpent: 0,
-        } as UserStats);
       return {
         id: doc.id,
         email: d.email ?? "",
@@ -567,70 +626,278 @@ router.get("/users", requireAdmin, async (req: Request, res: Response) => {
         phone: d.phone ?? "",
         balance: num(d.balance, 0) ?? 0,
         createdAt: getCreatedAtIso(d.createdAt),
-        stats: s,
+        lastSignInAt: d.lastSignInAt ?? null,
+        successfulOrdersCount: Number(d.successfulOrdersCount ?? 0),
+        totalOrdersCount: Number(d.totalOrdersCount ?? 0),
+        lastExportedAt: d.lastExportedAt ?? null,
+        exportCount: Number(d.exportCount ?? 0),
+        affiliate: null as null | { commercialId: string; commercialName: string; affiliateCode: string },
+        stats: {
+          totalOrders: Number(d.totalOrdersCount ?? 0),
+          completedOrders: Number(d.successfulOrdersCount ?? 0),
+          activeOrders: 0,
+          pendingOrders: 0,
+          cancelledOrders: 0,
+          expiredOrders: 0,
+          totalSpent: Number(d.totalSuccessfulSpend ?? 0),
+        } as UserStats,
       };
     });
 
-    // 4. Recherche (nom, email, téléphone, ID exact)
-    if (search) {
-      enriched = enriched.filter((u) => {
-        const n = (u.name || "").toLowerCase();
-        const e = (u.email || "").toLowerCase();
-        const p = (u.phone || "").toLowerCase();
-        const id = u.id.toLowerCase();
-        return (
-          n.includes(search) ||
-          e.includes(search) ||
-          p.includes(search) ||
-          id === search
-        );
+    // Les compteurs enregistrés sur le profil évitent de relire toutes les
+    // commandes à chaque affichage. Les anciens profils sont vérifiés avec
+    // des agrégations count() (aucun document commande n'est téléchargé).
+    if (userDocs.length) {
+      const ids = userDocs.map((doc) => doc.id);
+      const legacyUsers = userDocs.filter((doc) => {
+        const d = doc.data();
+        return d.totalOrdersCount === undefined || d.successfulOrdersCount === undefined;
       });
+      if (legacyUsers.length) {
+        const legacyStats = await Promise.all(legacyUsers.map(async (doc) => {
+          const uid = doc.id;
+          const [totalSnap, completedSnap] = await Promise.all([
+            firestoreDb.collection("orders").where("userId", "==", uid).count().get(),
+            firestoreDb.collection("orders").where("userId", "==", uid).where("status", "==", "completed").count().get(),
+          ]);
+          const counts = { totalOrders: totalSnap.data().count, successfulOrdersCount: completedSnap.data().count };
+          await firestoreDb.collection("users").doc(uid).set(counts, { merge: true });
+          return { uid, totalOrders: counts.totalOrders, completedOrders: counts.successfulOrdersCount };
+        }));
+        const legacyMap = new Map(legacyStats.map((item) => [item.uid, item]));
+        enriched = enriched.map((u) => {
+          const source = userDocs.find((doc) => doc.id === u.id)?.data() ?? {};
+          const legacy = legacyMap.get(u.id);
+          if (!legacy) return u;
+          return {
+            ...u,
+            stats: {
+              ...u.stats,
+              totalOrders: source.totalOrdersCount === undefined ? legacy.totalOrders : u.stats.totalOrders,
+              completedOrders: source.successfulOrdersCount === undefined ? legacy.completedOrders : u.stats.completedOrders,
+            },
+          };
+        });
+      }
+
+      // Attribution affiliée : une lecture bornée aux clients visibles.
+      for (let i = 0; i < ids.length; i += 30) {
+        const group = ids.slice(i, i + 30);
+        const attribSnap = await firestoreDb.collection("affiliate_attributions").where("customerId", "in", group).get();
+        const commercialIds = [...new Set(attribSnap.docs.map((d) => String(d.data().commercialId ?? "")).filter(Boolean))];
+        const commercialDocs = await Promise.all(commercialIds.map((id) => firestoreDb.collection("commercials").doc(id).get()));
+        const commercialMap = new Map(commercialDocs.filter((d) => d.exists).map((d) => [d.id, d.data()]));
+        const byCustomer = new Map(attribSnap.docs.map((d) => [String(d.data().customerId), d.data()]));
+        enriched = enriched.map((u) => {
+          const a = byCustomer.get(u.id);
+          if (!a) return u;
+          const c: any = commercialMap.get(String(a.commercialId));
+          return { ...u, affiliate: { commercialId: String(a.commercialId), commercialName: String(c?.name ?? "Commercial"), affiliateCode: String(a.affiliateCode ?? c?.affiliateCode ?? "") } };
+        });
+      }
     }
 
-    // 5. Filtres
-    if (filter === "hasOrders") {
-      enriched = enriched.filter((u) => u.stats.totalOrders > 0);
-    } else if (filter === "hasBalance") {
-      enriched = enriched.filter((u) => u.balance > 0);
-    } else if (filter === "neverOrdered") {
-      enriched = enriched.filter((u) => u.stats.totalOrders === 0);
-    } else if (filter === "top") {
-      enriched = enriched.filter((u) => u.stats.completedOrders > 0);
-    }
+    if (filter === "hasOrders") enriched = enriched.filter((u) => u.stats.totalOrders > 0);
+    else if (filter === "hasBalance") enriched = enriched.filter((u) => u.balance > 0);
+    else if (filter === "neverOrdered") enriched = enriched.filter((u) => u.stats.totalOrders === 0);
+    else if (filter === "top") enriched = enriched.filter((u) => u.stats.completedOrders > 0);
 
-    // 6. Tri
-    if (filter === "top" || sort === "completedOrdersDesc") {
-      enriched.sort((a, b) => {
-        if (b.stats.completedOrders !== a.stats.completedOrders) {
-          return b.stats.completedOrders - a.stats.completedOrders;
-        }
-        return b.stats.totalOrders - a.stats.totalOrders;
-      });
-    } else if (sort === "balanceDesc") {
-      enriched.sort((a, b) => b.balance - a.balance);
-    } else if (sort === "oldest") {
-      enriched.sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
-    } else {
-      // recent (défaut)
-      enriched.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    }
+    if (sort === "balanceDesc") enriched.sort((a, b) => b.balance - a.balance);
+    else if (sort === "completedOrdersDesc" || filter === "top") {
+      enriched.sort((a, b) => b.stats.completedOrders - a.stats.completedOrders || b.stats.totalOrders - a.stats.totalOrders);
+    } else if (sort === "oldest") enriched.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    else enriched.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // 7. Pagination
-    const total = enriched.length;
-    const offset = (page - 1) * pageSize;
-    const pageUsers = enriched.slice(offset, offset + pageSize);
-
-    res.json({ users: pageUsers, total, page, pageSize });
+    // Recherche = résultat ciblé paginé ; sans recherche, Firestore a déjà paginé.
+    const pageUsers = search ? enriched.slice((page - 1) * pageSize, page * pageSize) : enriched;
+    res.json({ users: pageUsers, total: filter === "all" ? total : enriched.length, page, pageSize, searchMode: !!search });
   } catch (err) {
     console.error("Admin users error:", err);
-    res.status(500).json({
-      error: "Erreur lors de la récupération des utilisateurs",
-      details: String(err),
+    res.status(500).json({ error: "Erreur lors de la récupération des utilisateurs", details: String(err) });
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/users/:id — fiche détaillée à la demande             */
+/* ────────────────────────────────────────────────────────────────── */
+router.get("/users/:id/profile", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id ?? "");
+    const userRef = firestoreDb.collection("users").doc(id);
+    const [userSnap, ordersSnap, attributionSnap] = await Promise.all([
+      userRef.get(),
+      firestoreDb.collection("orders").where("userId", "==", id).orderBy("createdAt", "desc").limit(25).get(),
+      firestoreDb.collection("affiliate_attributions").where("customerId", "==", id).limit(1).get(),
+    ]);
+    if (!userSnap.exists) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
+    const d = userSnap.data()!;
+    let authMeta: any = null;
+    try {
+      const authUser = await getAdminAuth().getUser(id);
+      authMeta = { creationTime: authUser.metadata.creationTime ?? null, lastSignInTime: authUser.metadata.lastSignInTime ?? null, emailVerified: authUser.emailVerified };
+    } catch { /* Certains comptes historiques peuvent ne plus être présents dans Firebase Auth. */ }
+    let affiliate: any = null;
+    if (!attributionSnap.empty) {
+      const a = attributionSnap.docs[0].data();
+      const commercialSnap = await firestoreDb.collection("commercials").doc(String(a.commercialId)).get();
+      const c = commercialSnap.data();
+      affiliate = { commercialId: a.commercialId, affiliateCode: a.affiliateCode, name: c?.name ?? "Commercial", email: c?.email ?? "", country: c?.country ?? "" };
+    }
+    const serviceLabels: Record<string, string> = {
+      wa: "WhatsApp", wb: "WhatsApp Business", ig: "Instagram", tg: "Telegram",
+      fb: "Facebook", go: "Google", tk: "TikTok", tw: "Twitter / X",
+      ap: "Apple", am: "Amazon", ms: "Microsoft", dc: "Discord",
+      sc: "Snapchat", nf: "Netflix", ub: "Uber", ln: "LinkedIn",
+      pp: "PayPal", bn: "Binance", vi: "Viber", yt: "YouTube",
+      wc: "WeChat", sp: "Spotify", si: "Signal", td: "TikTok",
+    };
+    const orders = ordersSnap.docs.map((doc) => {
+      const o = doc.data();
+      const serviceCode = String(o.serviceCode ?? "");
+      return { id: doc.id, createdAt: getCreatedAtIso(o.createdAt), status: o.status ?? "unknown", serviceCode, serviceName: o.serviceName ?? serviceLabels[serviceCode] ?? serviceCode.toUpperCase(), countryCode: o.countryCode ?? "", phoneNumber: o.phoneNumber ?? "", smsCode: o.smsCode ?? null, price: num(o.priceNum) ?? num(o.price, 0) ?? 0, margin: computeOrderMargin(o) };
     });
+    const totalOrdersSnap = await firestoreDb.collection("orders").where("userId", "==", id).count().get();
+    const successfulOrdersSnap = await firestoreDb.collection("orders").where("userId", "==", id).where("status", "==", "completed").count().get();
+    const historySnap = await userRef.collection("contactHistory").orderBy("createdAt", "desc").limit(20).get();
+    res.json({
+      user: { id, name: d.name ?? "", email: d.email ?? "", phone: d.phone ?? "", balance: num(d.balance, 0) ?? 0, currency: d.currency ?? "EUR", createdAt: getCreatedAtIso(d.createdAt), updatedAt: d.updatedAt ?? null, auth: authMeta, stats: { totalOrders: totalOrdersSnap.data().count, completedOrders: successfulOrdersSnap.data().count, totalSuccessfulSpend: num(d.totalSuccessfulSpend, 0) ?? 0 }, affiliate },
+      orders,
+      contactHistory: historySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    });
+  } catch (err) {
+    console.error("Admin user detail error:", err);
+    res.status(500).json({ error: "Impossible de charger la fiche utilisateur" });
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────── */
+/* POST /api/admin/contact/email — vrai envoi via Resend               */
+/* ────────────────────────────────────────────────────────────────── */
+router.post("/contact/email", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const userId = String(req.body?.userId ?? "");
+    const subject = String(req.body?.subject ?? "").trim().slice(0, 180);
+    const message = String(req.body?.message ?? "").trim().slice(0, 12000);
+    const templateId = String(req.body?.templateId ?? "custom").slice(0, 80);
+    if (!userId || !subject || !message) { res.status(400).json({ error: "Destinataire, objet et message sont obligatoires." }); return; }
+    const userSnap = await firestoreDb.collection("users").doc(userId).get();
+    if (!userSnap.exists) { res.status(404).json({ error: "Utilisateur introuvable." }); return; }
+    const user = userSnap.data()!;
+    const email = String(user.email ?? "").trim();
+    if (!email) { res.status(400).json({ error: "Cet utilisateur n'a pas d'adresse e-mail." }); return; }
+    const sent = await sendAdminContactEmail({ to: email, name: String(user.name ?? "cher client"), subject, message, contextLabel: "Message personnel de l'équipe Texerra SMS" });
+    const log = { channel: "email", status: "sent", templateId, subject, message, recipient: email, recipientName: String(user.name ?? ""), resendId: sent.id ?? null, createdAt: new Date().toISOString() };
+    const batch = firestoreDb.batch();
+    const historyRef = firestoreDb.collection("users").doc(userId).collection("contactHistory").doc();
+    batch.set(historyRef, log);
+    const globalRef = firestoreDb.collection("admin_contact_logs").doc(historyRef.id);
+    batch.set(globalRef, { ...log, userId });
+    await batch.commit();
+    res.json({ ok: true, id: sent.id ?? null, message: "E-mail envoyé avec succès." });
+  } catch (err) {
+    console.error("Admin email send error:", err);
+    res.status(502).json({ error: err instanceof Error ? err.message : "Échec de l'envoi de l'e-mail." });
+  }
+});
+
+/* Journalise une prise de contact WhatsApp (ou une tentative manuelle). */
+router.post("/contact/log", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const userId = String(req.body?.userId ?? "");
+    const channel = String(req.body?.channel ?? "");
+    const templateId = String(req.body?.templateId ?? "custom").slice(0, 80);
+    const subject = String(req.body?.subject ?? "").slice(0, 180);
+    if (!userId || !["whatsapp", "email", "call"].includes(channel)) { res.status(400).json({ error: "Paramètres de contact invalides." }); return; }
+    const userRef = firestoreDb.collection("users").doc(userId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) { res.status(404).json({ error: "Utilisateur introuvable." }); return; }
+    const log = { channel, status: channel === "whatsapp" ? "opened" : "initiated", templateId, subject, recipient: userSnap.data()?.email ?? "", createdAt: new Date().toISOString() };
+    const historyRef = userRef.collection("contactHistory").doc();
+    const batch = firestoreDb.batch();
+    batch.set(historyRef, log);
+    batch.set(firestoreDb.collection("admin_contact_logs").doc(historyRef.id), { ...log, userId });
+    await batch.commit();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin contact log error:", err);
+    res.status(500).json({ error: "Impossible d'enregistrer le contact." });
+  }
+});
+
+/* Notification interne de l'application, envoyée par l'administration. */
+router.post("/notifications", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const userId = String(req.body?.userId ?? "");
+    const title = String(req.body?.title ?? "").trim().slice(0, 120);
+    const message = String(req.body?.message ?? "").trim().slice(0, 1500);
+    if (!userId || !title || !message) { res.status(400).json({ error: "Utilisateur, titre et message obligatoires." }); return; }
+    const ref = firestoreDb.collection("users").doc(userId).collection("notifications").doc();
+    await ref.set({ id: ref.id, type: "admin_message", title, message, read: false, createdAt: new Date().toISOString() });
+    res.json({ ok: true, id: ref.id });
+  } catch (err) {
+    console.error("Admin notification error:", err);
+    res.status(500).json({ error: "Impossible d'envoyer la notification." });
+  }
+});
+
+/* Marque uniquement les profils réellement exportés. */
+router.post("/users/export/mark", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map((id: unknown) => String(id)).filter(Boolean))].slice(0, 200);
+    if (!ids.length) { res.status(400).json({ error: "Aucun utilisateur sélectionné." }); return; }
+    const now = new Date().toISOString();
+    const batch = firestoreDb.batch();
+    for (const id of ids) {
+      batch.set(firestoreDb.collection("users").doc(id), { lastExportedAt: now, exportCount: FieldValue.increment(1) }, { merge: true });
+    }
+    await batch.commit();
+    res.json({ ok: true, marked: ids.length, lastExportedAt: now });
+  } catch (err) {
+    console.error("Mark user export error:", err);
+    res.status(500).json({ error: "Impossible d'enregistrer les exports." });
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/export/full — export explicite, jamais chargé au rendu */
+/* ────────────────────────────────────────────────────────────────── */
+router.get("/export/full", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { startIso, endIso } = parseRange(req);
+    const [usersSnap, ordersSnap, topupsSnap, commercialsSnap, commissionsSnap, attributionsSnap, withdrawalsSnap] = await Promise.all([
+      firestoreDb.collection("users").orderBy("createdAt", "desc").limit(MAX_FETCH).get(),
+      firestoreDb.collection("orders").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "desc").limit(MAX_FETCH).get(),
+      firestoreDb.collection("topups").where("createdAt", ">=", startIso).where("createdAt", "<=", endIso).orderBy("createdAt", "desc").limit(MAX_FETCH).get(),
+      firestoreDb.collection("commercials").limit(MAX_FETCH).get(),
+      firestoreDb.collection("affiliate_commissions").limit(MAX_FETCH).get(),
+      firestoreDb.collection("affiliate_attributions").limit(MAX_FETCH).get(),
+      firestoreDb.collection("withdrawal_requests").limit(MAX_FETCH).get(),
+    ]);
+    const encode = (snap: FirebaseFirestore.QuerySnapshot) => snap.docs.map((doc) => {
+      const d = doc.data();
+      return { id: doc.id, ...d, createdAt: d.createdAt ? getCreatedAtIso(d.createdAt) : null };
+    });
+    const counts = await Promise.all([
+      firestoreDb.collection("users").count().get(), firestoreDb.collection("orders").count().get(),
+      firestoreDb.collection("topups").count().get(), firestoreDb.collection("commercials").count().get(),
+      firestoreDb.collection("affiliate_commissions").count().get(), firestoreDb.collection("affiliate_attributions").count().get(),
+    ]);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="texerra-admin-${startIso.slice(0,10)}-${endIso.slice(0,10)}.json"`);
+    res.json({
+      generatedAt: new Date().toISOString(), period: { start: startIso, end: endIso },
+      coverage: {
+        limits: { users: MAX_FETCH, orders: MAX_FETCH, topups: MAX_FETCH, affiliateCollections: MAX_FETCH },
+        totalAvailable: { users: counts[0].data().count, orders: counts[1].data().count, topups: counts[2].data().count, commercials: counts[3].data().count, commissions: counts[4].data().count, attributions: counts[5].data().count },
+        exported: { users: usersSnap.size, orders: ordersSnap.size, topups: topupsSnap.size, commercials: commercialsSnap.size, commissions: commissionsSnap.size, attributions: attributionsSnap.size, withdrawals: withdrawalsSnap.size },
+        truncated: usersSnap.size >= MAX_FETCH || ordersSnap.size >= MAX_FETCH || topupsSnap.size >= MAX_FETCH || commercialsSnap.size >= MAX_FETCH || commissionsSnap.size >= MAX_FETCH || attributionsSnap.size >= MAX_FETCH || withdrawalsSnap.size >= MAX_FETCH,
+      },
+      users: encode(usersSnap), orders: encode(ordersSnap), topups: encode(topupsSnap),
+      affiliation: { commercials: encode(commercialsSnap), commissions: encode(commissionsSnap), attributions: encode(attributionsSnap), withdrawals: encode(withdrawalsSnap) },
+    });
+  } catch (err) {
+    console.error("Full admin export error:", err);
+    res.status(500).json({ error: "Erreur pendant l'export complet", details: String(err) });
   }
 });
 
@@ -837,15 +1104,21 @@ router.get("/topups/export", requireAdmin, async (req: Request, res: Response) =
 router.get("/users/export", requireAdmin, async (req: Request, res: Response) => {
   try {
     const format = ((req.query.format as string) || "csv").toLowerCase();
+    const requestedIds = String(req.query.ids ?? "").split(",").map((id) => id.trim()).filter(Boolean).slice(0, 200);
     const all: any[] = [];
+    let docs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+    if (requestedIds.length) {
+      for (let i = 0; i < requestedIds.length; i += 30) {
+        const refs = requestedIds.slice(i, i + 30).map((id) => firestoreDb.collection("users").doc(id));
+        const found = await firestoreDb.getAll(...refs);
+        docs.push(...found.filter((doc) => doc.exists) as FirebaseFirestore.QueryDocumentSnapshot[]);
+      }
+    } else {
+      const snap = await firestoreDb.collection("users").orderBy("createdAt", "desc").limit(MAX_FETCH).get();
+      docs = snap.docs;
+    }
 
-    const snap = await firestoreDb
-      .collection("users")
-      .orderBy("createdAt", "desc")
-      .limit(MAX_FETCH)
-      .get();
-
-    for (const doc of snap.docs) {
+    for (const doc of docs) {
       const d = doc.data();
       all.push({
         id: doc.id,

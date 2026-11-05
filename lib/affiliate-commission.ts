@@ -21,6 +21,7 @@
 
 import { firestoreDb } from "./firebase-admin.js";
 import { getAttribution } from "./affiliate-attribution.js";
+import { sendCommissionEarnedEmail } from "./mailer.js";
 
 export interface Commission {
   id: string;
@@ -144,7 +145,7 @@ export async function createCommissionForOrder(
     .collection("commercial_balances")
     .doc(attribution.commercialId);
 
-  return await firestoreDb.runTransaction(async (transaction) => {
+  const result = await firestoreDb.runTransaction(async (transaction) => {
     const existing = await transaction.get(commissionRef);
     if (existing.exists) {
       return { success: false, reason: "commission_already_exists" };
@@ -185,6 +186,24 @@ export async function createCommissionForOrder(
 
     return { success: true, commission };
   });
+
+  // L'e-mail est envoyé uniquement par l'appel qui a réellement créé la commission.
+  // Une commande retraitée ne déclenche donc pas de félicitations en double.
+  if (result.success && result.commission && commercialData?.email) {
+    sendCommissionEarnedEmail({
+      to: String(commercialData.email),
+      name: String(commercialData.name ?? ""),
+      orderId,
+      orderAmount,
+      orderMargin: marginUsed,
+      commissionRate: rate,
+      commissionAmount,
+    }).catch((err) => {
+      console.warn("[commission] Email de félicitations non envoyé :", err);
+    });
+  }
+
+  return result;
 }
 
 /* ═══════════════════════════════════════════════════════════

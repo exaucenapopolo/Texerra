@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { logger } from "./logger.js";
+import { GRIZZLY_COUNTRIES } from "./grizzlysms.js";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = "Texerra <support@texerra.site>";
@@ -38,6 +39,24 @@ const cntName  = (c: string) => COUNTRY_NAMES[c] ?? `Pays #${c}`;
 const fmtEur   = (n: number) => n.toFixed(2).replace(".", ",") + "\u00a0€";
 const fmtDate  = (d: Date | string | null) =>
   d ? new Date(d).toLocaleString("fr-FR", { day:"2-digit", month:"long", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[char] as string));
+}
+
+function countryDetails(countryCode: string): { name: string; flag: string } {
+  const normalized = String(countryCode ?? "").trim();
+  const country = GRIZZLY_COUNTRIES[Number(normalized)]
+    ?? Object.values(GRIZZLY_COUNTRIES).find((item) => item.iso.toUpperCase() === normalized.toUpperCase());
+  if (!country) return { name: normalized ? `Pays (${normalized})` : "Pays non renseigné", flag: "🌍" };
+  const iso = country.iso.toUpperCase();
+  const flag = iso.length === 2
+    ? String.fromCodePoint(0x1f1e6 + iso.charCodeAt(0) - 65, 0x1f1e6 + iso.charCodeAt(1) - 65)
+    : "🌍";
+  return { name: country.fr, flag };
+}
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
 // Professional white-background design (renders well in all clients)
@@ -261,6 +280,156 @@ export async function sendOrderEmail(opts: {
 
   const text = `Commande confirmée !\n\nNuméro : ${phoneNumber}\nService : ${svc} | Pays : ${cnt}\nPrix : ${fmtEur(priceEur)} | Expire : ${fmtDate(expiresAt)}\n\nTableau de bord : ${SITE_URL}/dashboard\nSupport : ${SUPPORT_WA_DISP} | ${SUPPORT_EMAIL}\n\nPartenaire : ${PARTNER_NAME} — ${PARTNER_SLOGAN}\n${PARTNER_URL}`;
   await _send(to, `✅ Votre numéro ${svc} est prêt — ${phoneNumber}`, shell(`Numéro ${phoneNumber} activé pour ${svc}`, "commande", body), text);
+}
+
+// ─── Réception du code SMS ─────────────────────────────────────────────────────
+
+export async function sendSmsCodeEmail(opts: {
+  to: string;
+  name: string;
+  phoneNumber: string;
+  serviceCode: string;
+  countryCode: string;
+  smsCode: string;
+  orderId: string;
+}): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY) {
+    logger.warn("RESEND_API_KEY not set; SMS code email skipped");
+    return false;
+  }
+  const first = escapeHtml((opts.name || "Bonjour").trim().split(/\s+/)[0]);
+  const service = escapeHtml(svcName(opts.serviceCode));
+  const country = countryDetails(opts.countryCode);
+  const countryName = escapeHtml(country.name);
+  const phone = escapeHtml(opts.phoneNumber);
+  const code = escapeHtml(opts.smsCode);
+  const body = `
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:26px;">
+      <p style="margin:0;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.7px;">Votre code SMS est arrivé</p>
+    </div>
+    ${h1(`Bonne nouvelle${first ? `, ${first}` : ""} !`)}
+    ${p(`Le SMS destiné à votre commande <strong>${service}</strong> vient d'être reçu. Vous pouvez maintenant utiliser le code ci-dessous dans l'application ou le service que vous avez choisi.`)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin:22px 0;">
+      <tr><td style="padding:12px 18px;text-align:center;color:#166534;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Code de vérification</td></tr>
+      <tr><td style="padding:8px 18px 20px;text-align:center;"><div style="font-family:Courier New,monospace;font-size:34px;font-weight:900;letter-spacing:5px;color:#14532d;">${code}</div></td></tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      ${badge("📱", "Service choisi", service)}
+      ${badge(country.flag, "Pays", countryName)}
+      ${badge("☎", "Numéro utilisé", phone)}
+      ${badge("#", "Référence", escapeHtml(opts.orderId.slice(0, 12)))}
+    </table>
+    ${p(`<strong>Que faire maintenant ?</strong><br>1. Ouvrez ${service}.<br>2. Reprenez l'inscription ou la connexion que vous étiez en train d'effectuer.<br>3. Saisissez le code ci-dessus dans le champ de vérification.`)}
+    ${p("Pour votre sécurité, ne communiquez jamais ce code à une autre personne. Texerra ne vous le demandera pas par téléphone ou par message.")}
+    <div style="margin-top:6px;">${btn("Retrouver ma commande →", `${SITE_URL}/dashboard`)}</div>
+  `;
+  const text = `Votre code SMS Texerra est arrivé.
+
+Service : ${svcName(opts.serviceCode)}
+Pays : ${country.flag} ${country.name}
+Numéro : ${opts.phoneNumber}
+Code : ${opts.smsCode}
+
+Ouvrez ${svcName(opts.serviceCode)} et saisissez ce code dans le champ de vérification. Ne le communiquez à personne.
+
+Ma commande : ${SITE_URL}/dashboard
+Support : ${SUPPORT_EMAIL}`;
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: `Votre code ${svcName(opts.serviceCode)} est arrivé — Texerra`,
+    html: shell("Votre code de vérification vient d'être reçu", "code SMS reçu", body),
+    text,
+  });
+  if (error) {
+    logger.warn({ error, to: opts.to, orderId: opts.orderId }, "SMS code email failed");
+    return false;
+  }
+  logger.info({ to: opts.to, orderId: opts.orderId }, "SMS code email sent");
+  return true;
+}
+
+// ─── E-mail de contact envoyé depuis l'administration ─────────────────────────
+
+export async function sendAdminContactEmail(opts: {
+  to: string;
+  name: string;
+  subject: string;
+  message: string;
+  contextLabel?: string;
+}): Promise<{ success: boolean; id?: string }> {
+  if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY n'est pas configurée sur le serveur.");
+  const name = escapeHtml(opts.name || "cher client");
+  const safeSubject = escapeHtml(opts.subject);
+  const paragraphs = String(opts.message || "").trim().split(/\n{2,}/).map((part) =>
+    `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.75;">${escapeHtml(part).replace(/\n/g, "<br>")}</p>`
+  ).join("");
+  const context = opts.contextLabel
+    ? `<p style="margin:0 0 18px;font-size:12px;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 13px;">${escapeHtml(opts.contextLabel)}</p>`
+    : "";
+  const body = `${h1(`Bonjour ${name},`)}${context}${paragraphs}<p style="margin:20px 0 0;font-size:14px;color:#374151;line-height:1.7;">Bien cordialement,<br><strong>L'équipe Texerra SMS</strong></p>`;
+  const { data, error } = await resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: opts.subject,
+    html: shell(safeSubject, "communication client", body),
+    text: `Bonjour ${opts.name || "cher client"},\n\n${opts.message}\n\nBien cordialement,\nL'équipe Texerra SMS\n${SITE_URL}`,
+  });
+  if (error) {
+    logger.warn({ error, to: opts.to, subject: opts.subject }, "Admin contact email failed");
+    throw new Error("Resend n'a pas pu envoyer cet e-mail.");
+  }
+  logger.info({ to: opts.to, subject: opts.subject }, "Admin contact email sent");
+  return { success: true, id: data?.id };
+}
+
+// ─── Félicitations au commercial après une vente attribuée ─────────────────────
+
+export async function sendCommissionEarnedEmail(opts: {
+  to: string;
+  name: string;
+  orderId: string;
+  orderAmount: number;
+  orderMargin: number;
+  commissionRate: number;
+  commissionAmount: number;
+}): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY) return false;
+  const first = escapeHtml((opts.name || "Bonjour").trim().split(/\s+/)[0]);
+  const body = `
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:26px;">
+      <p style="margin:0;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.7px;">Nouvelle vente attribuée</p>
+    </div>
+    ${h1(`Bravo ${first} !`)}
+    ${p("Une nouvelle commande vient d'être finalisée grâce à votre lien ou à votre recommandation. Merci pour votre travail et votre engagement auprès de Texerra.")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      ${badge("✓", "Commande", escapeHtml(opts.orderId.slice(0, 12)))}
+      ${badge("€", "Vente réalisée", fmtEur(opts.orderAmount))}
+      ${badge("↗", "Marge générée pour Texerra", fmtEur(opts.orderMargin))}
+      ${badge("%", `Votre part (${opts.commissionRate}% de la marge)`, fmtEur(opts.commissionAmount))}
+    </table>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin-bottom:22px;">
+      <p style="margin:0 0 4px;font-size:12px;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:.6px;">Commission générée</p>
+      <p style="margin:0;font-size:28px;color:#14532d;font-weight:900;">${fmtEur(opts.commissionAmount)}</p>
+      <p style="margin:4px 0 0;font-size:12px;color:#166534;">Cette commission est enregistrée dans votre espace commercial.</p>
+    </div>
+    ${p("Continuez à partager votre lien et à accompagner vos clients. Chaque commande réussie peut contribuer à faire progresser vos commissions.")}
+    ${btn("Consulter mon espace commercial →", `${SITE_URL}/commercial`)}
+  `;
+  const text = `Bravo ${opts.name} !\n\nNouvelle vente attribuée.\nCommande : ${opts.orderId}\nVente : ${fmtEur(opts.orderAmount)}\nMarge Texerra : ${fmtEur(opts.orderMargin)}\nVotre commission (${opts.commissionRate} %) : ${fmtEur(opts.commissionAmount)}\n\nConsultez votre espace : ${SITE_URL}/commercial`;
+  const { error } = await resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: `Bravo ${opts.name.split(" ")[0]} ! Une nouvelle commission vient d'être générée`,
+    html: shell("Une nouvelle vente vient de générer une commission", "commission commerciale", body),
+    text,
+  });
+  if (error) {
+    logger.warn({ error, to: opts.to, orderId: opts.orderId }, "Commission email failed");
+    return false;
+  }
+  logger.info({ to: opts.to, orderId: opts.orderId }, "Commission email sent");
+  return true;
 }
 
 // ─── 3. Annulation de commande ────────────────────────────────────────────────

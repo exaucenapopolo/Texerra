@@ -26,6 +26,10 @@ import {
   adminProcessWithdrawal,
   adminGetStats,
   adminGetLeaderboard,
+  adminGetCommercialAccount,
+  adminGetCommercialClients,
+  adminSendAffiliateContact,
+  type AdminCommercialAccount,
   type AdminCommercialRow,
   type WithdrawalRow,
   type AdminStats,
@@ -711,6 +715,80 @@ function CommercialRow({
   const [editingRate, setEditingRate] = useState(false);
   const [rate, setRate] = useState(commercial.commissionRate.toString());
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [account, setAccount] = useState<AdminCommercialAccount | null>(null);
+  const [clients, setClients] = useState<any[]>([]);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [clientsTotal, setClientsTotal] = useState(0);
+  const [clientsPage, setClientsPage] = useState(1);
+  const [contactTarget, setContactTarget] = useState<{ targetType: "commercial" | "client"; targetId: string; name: string; email: string } | null>(null);
+  const [contactTemplate, setContactTemplate] = useState("");
+  const [contactSubject, setContactSubject] = useState("");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactSending, setContactSending] = useState(false);
+
+  const openContact = (targetType: "commercial" | "client", targetId: string, name: string, email: string) => {
+    if (!email) return;
+    setContactTarget({ targetType, targetId, name: name || "cher partenaire", email });
+    setContactTemplate("");
+    setContactSubject("");
+    setContactMessage("");
+  };
+
+  const applyContactTemplate = (templateId: string) => {
+    setContactTemplate(templateId);
+    const firstName = (contactTarget?.name || "").trim().split(/\s+/)[0] || "Bonjour";
+    const templates: Record<string, { subject: string; message: string }> = {
+      commercial_encouragement: {
+        subject: "Merci pour votre engagement auprès de Texerra",
+        message: `Bonjour ${firstName},\n\nNous tenions à vous remercier pour votre engagement dans le développement de Texerra SMS. Chaque démarche que vous faites pour faire connaître nos services compte. Continuez à avancer à votre rythme : notre équipe reste disponible pour vous accompagner et vous aider à trouver de nouvelles opportunités.\n\nN'hésitez pas à nous dire comment se passe votre activité et de quel soutien vous auriez besoin.\n\nBien cordialement,\nLa direction Texerra SMS`,
+      },
+      commercial_checkin: {
+        subject: "Faisons le point sur votre activité commerciale",
+        message: `Bonjour ${firstName},\n\nNous souhaitions prendre de vos nouvelles et savoir comment se déroule votre activité avec Texerra SMS. Rencontrez-vous des difficultés pour trouver des clients ou présenter nos services ?\n\nVous pouvez nous faire part de vos retours en répondant directement à cet e-mail. Nous serons heureux d'étudier avec vous des pistes concrètes pour vous aider.\n\nBien cordialement,\nLa direction Texerra SMS`,
+      },
+      commercial_support: {
+        subject: "Un accompagnement pour développer vos ventes",
+        message: `Bonjour ${firstName},\n\nNous aimerions vous aider à développer votre activité commerciale. Si vous avez besoin d'idées de prospection, de supports de présentation ou d'un point sur votre lien d'affiliation, dites-nous simplement ce qui vous serait le plus utile.\n\nNous pouvons avancer ensemble sur une méthode adaptée à votre marché et à votre pays.\n\nBien cordialement,\nLa direction Texerra SMS`,
+      },
+      client_followup: {
+        subject: "Comment se passe votre expérience avec Texerra SMS ?",
+        message: `Bonjour ${firstName},\n\nNous avons remarqué que vous n'avez pas utilisé Texerra SMS récemment et souhaitions simplement prendre de vos nouvelles. Est-ce que tout fonctionne correctement de votre côté ?\n\nVotre avis nous intéresse. Si vous avez rencontré une difficulté ou si un service vous a manqué, répondez à cet e-mail : notre équipe sera heureuse de vous aider.\n\nMerci pour votre confiance.\nL'équipe Texerra SMS`,
+      },
+      client_thanks: {
+        subject: "Merci pour votre confiance",
+        message: `Bonjour ${firstName},\n\nMerci d'avoir choisi Texerra SMS. Nous apprécions la confiance que vous accordez à notre service. Nous espérons que votre expérience s'est bien déroulée et restons disponibles pour vous accompagner lors de vos prochaines utilisations.\n\nBien cordialement,\nL'équipe Texerra SMS`,
+      },
+    };
+    const selected = templates[templateId];
+    if (selected) { setContactSubject(selected.subject); setContactMessage(selected.message); }
+  };
+
+  const sendContact = async () => {
+    if (!contactTarget || !contactSubject.trim() || !contactMessage.trim()) return;
+    setContactSending(true);
+    try {
+      await adminSendAffiliateContact({
+        targetType: contactTarget.targetType,
+        targetId: contactTarget.targetId,
+        templateId: contactTemplate || "custom",
+        subject: contactSubject.trim(),
+        message: contactMessage.trim(),
+      });
+      const sentTarget = contactTarget;
+      setContactTarget(null);
+      alert(`E-mail envoyé à ${sentTarget.email}.`);
+      if (sentTarget.targetType === "commercial") {
+        try {
+          const refreshed = await adminGetCommercialAccount(commercial.id);
+          setAccount(refreshed);
+        } catch { /* L'envoi est déjà confirmé ; l'historique se rafraîchira à la prochaine ouverture. */ }
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Échec de l'envoi de l'e-mail.");
+    } finally { setContactSending(false); }
+  };
 
   const handleSave = async () => {
     const n = parseFloat(rate);
@@ -725,6 +803,35 @@ function CommercialRow({
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleDetails = async () => {
+    if (expanded) { setExpanded(false); return; }
+    setExpanded(true);
+    if (account) return;
+    setDetailsLoading(true);
+    setDetailsError(null);
+    try {
+      const [a, c] = await Promise.all([adminGetCommercialAccount(commercial.id), adminGetCommercialClients(commercial.id, 1)]);
+      setAccount(a);
+      setClients(c.clients);
+      setClientsTotal(c.pagination.total);
+      setClientsPage(c.pagination.page);
+    } catch (e) {
+      setDetailsError(e instanceof Error ? e.message : "Erreur de chargement");
+    } finally { setDetailsLoading(false); }
+  };
+
+  const loadMoreClients = async () => {
+    if (detailsLoading || clients.length >= clientsTotal) return;
+    setDetailsLoading(true);
+    try {
+      const next = await adminGetCommercialClients(commercial.id, clientsPage + 1);
+      setClients((current) => [...current, ...next.clients]);
+      setClientsPage(next.pagination.page);
+    } catch (e) {
+      setDetailsError(e instanceof Error ? e.message : "Impossible de charger les clients suivants.");
+    } finally { setDetailsLoading(false); }
   };
 
   return (
@@ -749,6 +856,7 @@ function CommercialRow({
             </span>
           </div>
           <div className="text-sm text-gray-500 mt-1">{commercial.email}</div>
+          <div className="text-xs text-gray-500 mt-1">Pays : {commercial.country || "Non renseigné"} · Compte utilisateur : {commercial.firebaseUid ? "lié" : "à relier au premier accès"}</div>
 
           {/* Stats */}
           {stats && (
@@ -782,7 +890,9 @@ function CommercialRow({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => openContact("commercial", commercial.id, commercial.name, commercial.email)} className="text-xs px-3 py-1.5 border border-orange-200 rounded-lg text-orange-700 hover:bg-orange-50">Écrire au commercial</button>
+          <button onClick={toggleDetails} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{expanded ? "Masquer comptes" : "Compte utilisateur & clients"}</button>
           {editingRate ? (
             <>
               <input
@@ -833,6 +943,60 @@ function CommercialRow({
           )}
         </div>
       </div>
+      {expanded && (
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+          {detailsLoading && <p className="text-sm text-gray-400">Chargement du compte et des clients attribués…</p>}
+          {detailsError && <p className="text-sm text-red-600">{detailsError}</p>}
+          {account && !detailsLoading && (
+            <>
+              <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                <div className="font-semibold text-sm text-blue-900">Compte utilisateur normal</div>
+                {account.linked && account.user ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-xs">
+                    <div><div className="text-blue-700/70">Nom</div><strong>{account.user.name || "—"}</strong></div>
+                    <div><div className="text-blue-700/70">Email</div><strong>{account.user.email || "—"}</strong></div>
+                    <div><div className="text-blue-700/70">Inscription</div><strong>{new Date(account.user.createdAt).toLocaleDateString("fr-FR")}</strong></div>
+                    <div><div className="text-blue-700/70">Dernière connexion</div><strong>{account.user.lastSignInAt ? new Date(account.user.lastSignInAt).toLocaleString("fr-FR") : "Non disponible"}</strong></div>
+                    <div><div className="text-blue-700/70">Solde personnel</div><strong>{formatEur(account.user.balance)}</strong></div>
+                    <div><div className="text-blue-700/70">Commandes réussies</div><strong>{account.user.successfulOrders}</strong></div>
+                    <div><div className="text-blue-700/70">Commandes totales</div><strong>{account.user.totalOrders}</strong></div>
+                    <div><div className="text-blue-700/70">Dépenses réussies</div><strong>{formatEur(account.user.totalSuccessfulSpend)}</strong></div>
+                  </div>
+                ) : <p className="text-xs text-blue-800 mt-2">Aucun compte utilisateur Texerra trouvé pour cet e-mail. Le lien sera réessayé au premier accès commercial.</p>}
+              </div>
+              <div>
+                <div className="font-semibold text-sm mb-2">Historique des contacts du commercial</div>
+                {(account.contactHistory || []).length ? <div className="space-y-2">{account.contactHistory!.map((item) => <div key={item.id} className="border rounded-lg px-3 py-2 text-xs"><div className="flex flex-wrap justify-between gap-2"><strong>E-mail · {item.status === "sent" ? "Envoyé" : item.status || "Historique"}</strong><span className="text-gray-500">{new Date(item.createdAt).toLocaleString("fr-FR")}</span></div><div className="text-gray-500 mt-1">{item.subject || "Communication"}</div></div>)}</div> : <p className="text-xs text-gray-400">Aucun e-mail enregistré pour ce commercial.</p>}
+              </div>
+              <div>
+                <div className="font-semibold text-sm mb-2">Clients attribués à ce commercial ({clientsTotal})</div>
+                {clients.length ? <div className="overflow-x-auto border rounded-xl"><table className="w-full text-xs"><thead className="bg-gray-50"><tr><th className="p-2 text-left">Client</th><th className="p-2 text-left">Email</th><th className="p-2 text-left">Téléphone</th><th className="p-2 text-right">Commandes réussies</th><th className="p-2 text-left">Attribution</th><th className="p-2 text-center">Contact</th></tr></thead><tbody>{clients.map((client) => <tr key={client.id} className="border-t"><td className="p-2">{client.name}</td><td className="p-2">{client.email || "—"}</td><td className="p-2">{client.phone || "—"}</td><td className="p-2 text-right">{client.successfulOrders}</td><td className="p-2">{client.attributedAt ? new Date(client.attributedAt).toLocaleDateString("fr-FR") : "—"}</td><td className="p-2 text-center">{client.email ? <button onClick={() => openContact("client", client.id, client.name, client.email)} className="px-2 py-1 rounded border border-orange-200 text-orange-700 hover:bg-orange-50">E-mail</button> : "—"}</td></tr>)}</tbody></table></div> : <p className="text-xs text-gray-400">Aucun client attribué.</p>}
+                {clients.length < clientsTotal && <button onClick={loadMoreClients} disabled={detailsLoading} className="mt-2 px-3 py-1.5 rounded-lg border text-xs hover:bg-gray-50 disabled:opacity-50">{detailsLoading ? "Chargement…" : `Afficher les clients suivants (${clients.length}/${clientsTotal})`}</button>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {contactTarget && (
+        <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4" onClick={() => setContactTarget(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3">
+              <div><h3 className="font-semibold text-gray-900">Contacter {contactTarget.targetType === "commercial" ? "le commercial" : "le client"}</h3><p className="text-xs text-gray-500">{contactTarget.name} · {contactTarget.email}</p></div>
+              <button onClick={() => setContactTarget(null)} className="text-gray-400 hover:text-gray-700 text-xl" aria-label="Fermer">×</button>
+            </div>
+            <label className="block text-xs font-semibold text-gray-600">Modèle de message</label>
+            <select value={contactTemplate} onChange={(e) => applyContactTemplate(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm">
+              <option value="">Message personnalisé</option>
+              {contactTarget.targetType === "commercial" ? <><option value="commercial_encouragement">Encouragement et remerciement</option><option value="commercial_checkin">Prendre des nouvelles</option><option value="commercial_support">Proposer un accompagnement commercial</option></> : <><option value="client_followup">Demander un retour d'expérience</option><option value="client_thanks">Remercier le client</option></>}
+            </select>
+            <label className="block text-xs font-semibold text-gray-600">Objet</label>
+            <input value={contactSubject} onChange={(e) => setContactSubject(e.target.value)} maxLength={180} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Objet de l'e-mail" />
+            <label className="block text-xs font-semibold text-gray-600">Message (modifiable)</label>
+            <textarea value={contactMessage} onChange={(e) => setContactMessage(e.target.value)} maxLength={12000} rows={9} className="w-full border rounded-lg px-3 py-2 text-sm leading-relaxed" placeholder="Votre message..." />
+            <div className="flex justify-end gap-2"><button onClick={() => setContactTarget(null)} className="px-4 py-2 border rounded-lg text-sm">Annuler</button><button onClick={sendContact} disabled={contactSending || !contactSubject.trim() || !contactMessage.trim()} className="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-semibold disabled:opacity-50">{contactSending ? "Envoi via Resend…" : "Envoyer l'e-mail"}</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -846,6 +1010,7 @@ function CreateCommercialForm({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [country, setCountry] = useState("Cameroun");
   const [rate, setRate] = useState("50");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -858,6 +1023,7 @@ function CreateCommercialForm({
       await adminCreateCommercial({
         name: name.trim(),
         email: email.trim().toLowerCase(),
+        country,
         commissionRate: parseFloat(rate) || 50,
       });
       onSuccess();
@@ -881,7 +1047,7 @@ function CreateCommercialForm({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             Nom complet
@@ -907,6 +1073,12 @@ function CreateCommercialForm({
             className="w-full border border-gray-300 rounded-lg px-3 py-2.5"
             required
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Pays</label>
+          <select value={country} onChange={(e) => setCountry(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2.5" required>
+            { ["Cameroun", "Côte d'Ivoire", "Sénégal", "RD Congo", "Congo", "Gabon", "Nigeria", "Ghana", "Bénin", "Togo", "Mali", "Burkina Faso", "Niger", "Kenya", "Ouganda", "Rwanda", "Tanzanie", "Zambie", "Afrique du Sud", "Autre"] .map((value) => <option key={value} value={value}>{value}</option>) }
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
