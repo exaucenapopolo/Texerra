@@ -251,6 +251,233 @@ async function getProfileContactHistory(userRef: FirebaseFirestore.DocumentRefer
 }
 
 /* ────────────────────────────────────────────────────────────────── */
+/* OBJECTIFS MENSUELS ADMIN                                           */
+/* Les objectifs sont conservés par mois dans Firestore.              */
+/* Les résultats sont calculés à partir des données réelles.          */
+/* Fuseau métier : Africa/Douala.                                     */
+/* ────────────────────────────────────────────────────────────────── */
+
+type MonthlyObjectiveTargets = {
+  newUsers: number;
+  completedTopups: number;
+  topupAmount: number;
+  completedOrders: number;
+  revenue: number;
+  margin: number;
+};
+
+const MONTHLY_OBJECTIVE_KEYS: Array<keyof MonthlyObjectiveTargets> = [
+  "newUsers", "completedTopups", "topupAmount",
+  "completedOrders", "revenue", "margin",
+];
+
+function getDoualaDateParts(date = new Date()): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Douala", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return { year: value("year"), month: value("month"), day: value("day") };
+}
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Limites d'une journée locale à Douala (UTC+1). */
+function getDoualaBoundaryIso(year: number, month: number, day: number, endOfDay: boolean): string {
+  const date = endOfDay
+    ? new Date(Date.UTC(year, month - 1, day, 22, 59, 59, 999))
+    : new Date(Date.UTC(year, month - 1, day, -1, 0, 0, 0));
+  return date.toISOString();
+}
+
+function normalizeMonthlyObjectiveTargets(value: any): MonthlyObjectiveTargets {
+  const result = {} as MonthlyObjectiveTargets;
+  for (const key of MONTHLY_OBJECTIVE_KEYS) {
+    const parsed = num(value?.[key], 0) ?? 0;
+    result[key] = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  }
+  return result;
+}
+
+async function readMonthlyObjectiveMetrics(
+  year: number,
+  month: number,
+  elapsedDays: number
+): Promise<{
+  newUsers: number;
+  completedTopups: number;
+  topupAmount: number;
+  completedOrders: number;
+  revenue: number;
+  margin: number;
+  truncated: boolean;
+  scannedOrders: number;
+  scannedTopups: number;
+}> {
+  const empty = {
+    newUsers: 0, completedTopups: 0, topupAmount: 0,
+    completedOrders: 0, revenue: 0, margin: 0,
+    truncated: false, scannedOrders: 0, scannedTopups: 0,
+  };
+  if (elapsedDays < 1) return empty;
+
+  const startIso = getDoualaBoundaryIso(year, month, 1, false);
+  const endIso = getDoualaBoundaryIso(year, month, elapsedDays, true);
+  const usersQuery = firestoreDb.collection("users")
+    .where("createdAt", ">=", startIso).where("createdAt", "<=", endIso);
+  const topupsQuery = firestoreDb.collection("topups")
+    .where("status", "==", "completed")
+    .where("createdAt", ">=", startIso).where("createdAt", "<=", endIso);
+  const ordersQuery = firestoreDb.collection("orders")
+    .where("status", "==", "completed")
+    .where("createdAt", ">=", startIso).where("createdAt", "<=", endIso);
+
+  const [usersCountSnap, topupsCountSnap, ordersCountSnap, topupsDataSnap, ordersDataSnap] =
+    await Promise.all([
+      usersQuery.count().get(),
+      topupsQuery.count().get(),
+      ordersQuery.count().get(),
+      topupsQuery.limit(MAX_FETCH).get(),
+      ordersQuery.limit(MAX_FETCH).get(),
+    ]);
+
+  let topupAmount = 0;
+  for (const doc of topupsDataSnap.docs) {
+    const data = doc.data();
+    topupAmount += num(data.amountEurNum) ?? num(data.amountEur, 0) ?? 0;
+  }
+
+  let revenue = 0;
+  let margin = 0;
+  for (const doc of ordersDataSnap.docs) {
+    const data = doc.data();
+    const price = num(data.priceNum) ?? num(data.price, 0) ?? 0;
+    const realMargin = computeOrderMargin(data);
+    revenue += price;
+    margin += realMargin != null ? realMargin : price * MARGIN_RATE;
+  }
+
+  const newUsers = usersCountSnap.data().count;
+  const completedTopups = topupsCountSnap.data().count;
+  const completedOrders = ordersCountSnap.data().count;
+  return {
+    newUsers, completedTopups, topupAmount, completedOrders, revenue, margin,
+    truncated: completedTopups > topupsDataSnap.size || completedOrders > ordersDataSnap.size,
+    scannedOrders: ordersDataSnap.size,
+    scannedTopups: topupsDataSnap.size,
+  };
+}
+
+/**
+ * GET /api/admin/objectives?month=YYYY-MM
+ * Progression du mois et comparaison avec la même durée du mois précédent.
+ */
+router.get("/objectives", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const monthKey = String(req.query.month ?? "");
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey)) {
+      res.status(400).json({ error: "Mois invalide. Format attendu : YYYY-MM." });
+      return;
+    }
+
+    const [year, month] = monthKey.split("-").map(Number);
+    if (year < 2020 || year > 2100) {
+      res.status(400).json({ error: "Année hors limites." });
+      return;
+    }
+
+    const today = getDoualaDateParts();
+    const selectedIndex = year * 12 + month - 1;
+    const currentIndex = today.year * 12 + today.month - 1;
+    const daysInMonth = getDaysInMonth(year, month);
+    const elapsedDays = selectedIndex < currentIndex
+      ? daysInMonth
+      : selectedIndex === currentIndex ? today.day : 0;
+    const remainingDays = Math.max(0, daysInMonth - elapsedDays);
+
+    const previousDate = new Date(Date.UTC(year, month - 2, 1));
+    const previousYear = previousDate.getUTCFullYear();
+    const previousMonth = previousDate.getUTCMonth() + 1;
+    const previousDaysInMonth = getDaysInMonth(previousYear, previousMonth);
+    const previousElapsedDays = elapsedDays > 0
+      ? Math.min(elapsedDays, previousDaysInMonth)
+      : 0;
+
+    const [objectiveSnap, actual, previous] = await Promise.all([
+      firestoreDb.collection("adminMonthlyObjectives").doc(monthKey).get(),
+      readMonthlyObjectiveMetrics(year, month, elapsedDays),
+      readMonthlyObjectiveMetrics(previousYear, previousMonth, previousElapsedDays),
+    ]);
+
+    const saved = objectiveSnap.exists ? objectiveSnap.data() : null;
+    res.json({
+      month: monthKey,
+      hasObjective: Boolean(saved),
+      targets: normalizeMonthlyObjectiveTargets(saved?.targets),
+      actual,
+      previous,
+      period: {
+        daysInMonth, elapsedDays, remainingDays,
+        previousMonth: `${previousYear}-${String(previousMonth).padStart(2, "0")}`,
+        previousElapsedDays,
+      },
+      truncated: actual.truncated || previous.truncated,
+    });
+  } catch (err) {
+    console.error("Admin monthly objectives error:", err);
+    res.status(500).json({
+      error: "Erreur lors du calcul des objectifs mensuels",
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/** Crée ou met à jour les six objectifs du mois sélectionné. */
+router.put("/objectives", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const monthKey = String(req.body?.month ?? "");
+    const rawTargets = req.body?.targets;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey)) {
+      res.status(400).json({ error: "Mois invalide. Format attendu : YYYY-MM." });
+      return;
+    }
+    if (!rawTargets || typeof rawTargets !== "object" || Array.isArray(rawTargets)) {
+      res.status(400).json({ error: "Les objectifs du mois sont obligatoires." });
+      return;
+    }
+
+    const targets = {} as MonthlyObjectiveTargets;
+    for (const key of MONTHLY_OBJECTIVE_KEYS) {
+      const raw = rawTargets[key];
+      const parsed = raw === "" || raw == null ? 0 : Number(raw);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1_000_000_000) {
+        res.status(400).json({ error: `Valeur invalide pour l'objectif : ${key}.` });
+        return;
+      }
+      targets[key] = parsed;
+    }
+
+    const ref = firestoreDb.collection("adminMonthlyObjectives").doc(monthKey);
+    const existing = await ref.get();
+    await ref.set({
+      month: monthKey,
+      targets,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(existing.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge: true });
+
+    res.json({ ok: true, month: monthKey, targets });
+  } catch (err) {
+    console.error("Admin monthly objectives save error:", err);
+    res.status(500).json({
+      error: "Impossible d'enregistrer les objectifs mensuels",
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/stats                                               */
 /* Multi-pays : aucune restriction par pays.                          */
 /* Marge : somme des marginNum réels (fallback MARGIN_RATE).          */
