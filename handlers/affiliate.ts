@@ -608,7 +608,7 @@ router.patch("/admin/partner-applications/:id", requireAffiliateAdmin, async (re
       commercial = {
         id: commercialRef.id, firebaseUid: String(application.applicantUid ?? applicationId),
         name, email, country: String(application.country ?? application.city ?? ""),
-        affiliateCode, commissionRate: 50, status: "active",
+        affiliateCode, commissionRate: 50, status: "inactive",
         createdAt: now, updatedAt: now, applicationId,
       };
       await commercialRef.create(commercial);
@@ -1105,6 +1105,26 @@ router.patch(
     }
   }
 );
+
+/** Activer un commercial uniquement après vérification de son contrat signé. */
+router.patch("/admin/commercials/:id/status", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId as string;
+    const id = String(req.params.id ?? "").trim();
+    const status = String(req.body?.status ?? "");
+    if (!id || !["active", "inactive"].includes(status)) { res.status(400).json({ error: "Statut commercial invalide." }); return; }
+    const ref = firestoreDb.collection("commercials").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) { res.status(404).json({ error: "Commercial introuvable." }); return; }
+    const previousStatus = snap.data()?.status ?? "inactive";
+    await ref.update({ status, updatedAt: new Date().toISOString() });
+    await auditLog({ actorId: adminId, actorRole: "admin", action: status === "active" ? "activate_commercial_after_contract" : "deactivate_commercial", entityType: "commercials", entityId: id, metadataSafe: { previousStatus, status } });
+    res.status(200).json({ ok: true, status });
+  } catch (err) {
+    console.error("[affiliate/admin/commercials/status] error:", err);
+    res.status(500).json({ error: "Impossible de modifier le statut du commercial." });
+  }
+});
 
 /** GET /admin/leaderboard?period=today|week|month|year|all — Classement */
 router.get(

@@ -24,6 +24,7 @@ import {
   adminListCommercials,
   adminCreateCommercial,
   adminUpdateRate,
+  adminUpdateStatus,
   adminListWithdrawals,
   adminProcessWithdrawal,
   adminGetStats,
@@ -808,6 +809,7 @@ function CommercialRow({
   const [editingRate, setEditingRate] = useState(false);
   const [rate, setRate] = useState(commercial.commissionRate.toString());
   const [saving, setSaving] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [account, setAccount] = useState<AdminCommercialAccount | null>(null);
   const [clients, setClients] = useState<any[]>([]);
@@ -941,6 +943,18 @@ function CommercialRow({
     }
   };
 
+  const toggleCommercialStatus = async () => {
+    const nextStatus = commercial.status === "active" ? "inactive" : "active";
+    const message = nextStatus === "active"
+      ? "Confirmer l'activation ? Assurez-vous d'avoir reçu et vérifié le contrat signé."
+      : "Confirmer la désactivation de ce commercial ?";
+    if (!window.confirm(message)) return;
+    setStatusSaving(true);
+    try { await adminUpdateStatus(commercial.id, nextStatus); onUpdate(); }
+    catch (e) { alert(e instanceof Error ? e.message : "Impossible de modifier le statut."); }
+    finally { setStatusSaving(false); }
+  };
+
   const toggleDetails = async () => {
     if (expanded) { setExpanded(false); return; }
     setExpanded(true);
@@ -1029,6 +1043,9 @@ function CommercialRow({
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => openContact("commercial", commercial.id, commercial.name, commercial.email)} className="text-xs px-3 py-1.5 border border-orange-200 rounded-lg text-orange-700 hover:bg-orange-50">Écrire au commercial</button>
           <button onClick={toggleDetails} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{expanded ? "Masquer comptes" : "Compte utilisateur & clients"}</button>
+          <button onClick={toggleCommercialStatus} disabled={statusSaving} className={`text-xs px-3 py-1.5 border rounded-lg disabled:opacity-50 ${commercial.status === "active" ? "border-red-200 text-red-700 hover:bg-red-50" : "border-green-200 text-green-700 hover:bg-green-50"}`}>
+            {statusSaving ? "Mise à jour…" : commercial.status === "active" ? "Désactiver" : "Activer après contrat signé"}
+          </button>
           {editingRate ? (
             <>
               <input

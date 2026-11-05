@@ -271,6 +271,12 @@ export function adminGetCommercialClients(id: string, page = 1): Promise<{
   return apiCall(`/admin/commercials/${encodeURIComponent(id)}/clients?page=${page}&pageSize=20`);
 }
 
+export function adminUpdateStatus(commercialId: string, status: "active" | "inactive"): Promise<{ ok: boolean; status: "active" | "inactive" }> {
+  return apiCall("/admin/commercials/" + encodeURIComponent(commercialId) + "/status", {
+    method: "PATCH", body: JSON.stringify({ status }),
+  });
+}
+
 export function adminUpdateRate(
   commercialId: string,
   commissionRate: number
