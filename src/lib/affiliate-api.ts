@@ -124,8 +124,10 @@ async function apiCall<T>(
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const errorMsg = (data as any)?.error ?? `Erreur ${res.status}`;
-    throw new Error(errorMsg);
+    const payload = data as any;
+    const errorMsg = payload?.error ?? `Erreur ${res.status}`;
+    const detail = path.startsWith("/admin/") && payload?.details ? String(payload.details) : "";
+    throw new Error(detail ? `${errorMsg} — ${detail}` : errorMsg);
   }
 
   return data as T;
@@ -221,6 +223,7 @@ export function adminCreateCommercial(payload: {
 export interface AdminCommercialAccount {
   linked: boolean;
   contactHistory?: Array<{ id: string; channel?: string; status?: string; subject?: string; createdAt: string }>;
+  dataWarnings?: string[];
   commercial: { id: string; name: string; email: string; country?: string };
   user?: { id: string; name: string; email: string; phone: string; countryIso?: string; countryName?: string; countryFlag?: string; balance: number; createdAt: string; lastSignInAt: string | null; totalOrders: number; successfulOrders: number; totalSuccessfulSpend: number };
   orders?: Array<{ id: string; status: string; price: number; createdAt: string; serviceCode: string; phoneNumber: string }>;

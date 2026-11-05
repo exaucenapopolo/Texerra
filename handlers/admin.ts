@@ -197,6 +197,59 @@ async function fetchUsersByIds(ids: string[]): Promise<Map<string, PublicUser>> 
   return map;
 }
 
+/** Date de tri compatible avec les anciens ISO et les Timestamp Firestore. */
+function profileDateMillis(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value === "object" && "toDate" in (value as object)) {
+    try { return (value as Timestamp).toDate().getTime(); } catch { return 0; }
+  }
+  const time = new Date(String(value ?? "")).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+/** Lecture optimisée, avec solution de repli si l'index de tri manque. */
+async function getProfileOrders(userId: string, limit = 25): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+  const base = firestoreDb.collection("orders").where("userId", "==", userId);
+  try {
+    return (await base.orderBy("createdAt", "desc").limit(limit).get()).docs;
+  } catch (error) {
+    console.warn("Profile orders: indexed query failed; bounded fallback:", error);
+    const fallback = await base.limit(1000).get();
+    return fallback.docs.slice().sort((a, b) => profileDateMillis(b.data().createdAt) - profileDateMillis(a.data().createdAt)).slice(0, limit);
+  }
+}
+
+/** Les count() sont préférés pour ne pas télécharger tous les documents. */
+async function getProfileOrderCounts(userId: string): Promise<{ total: number; completed: number }> {
+  const base = firestoreDb.collection("orders").where("userId", "==", userId);
+  const [totalResult, completedResult] = await Promise.allSettled([
+    base.count().get(),
+    base.where("status", "==", "completed").count().get(),
+  ]);
+  if (totalResult.status === "fulfilled" && completedResult.status === "fulfilled") {
+    return { total: totalResult.value.data().count, completed: completedResult.value.data().count };
+  }
+  console.warn("Profile order count aggregation failed; bounded fallback.");
+  const docs = await base.limit(5000).get();
+  return {
+    total: totalResult.status === "fulfilled" ? totalResult.value.data().count : docs.size,
+    completed: completedResult.status === "fulfilled" ? completedResult.value.data().count : docs.docs.filter((doc) => doc.data().status === "completed").length,
+  };
+}
+
+async function getProfileContactHistory(userRef: FirebaseFirestore.DocumentReference, limit = 20) {
+  const history = userRef.collection("contactHistory");
+  try {
+    const snap = await history.orderBy("createdAt", "desc").limit(limit).get();
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.warn("Profile contact history ordered query failed; bounded fallback:", error);
+    const snap = await history.limit(limit).get();
+    return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a: any, b: any) => profileDateMillis(b.createdAt) - profileDateMillis(a.createdAt));
+  }
+}
+
 /* ────────────────────────────────────────────────────────────────── */
 /* GET /api/admin/stats                                               */
 /* Multi-pays : aucune restriction par pays.                          */
@@ -318,6 +371,73 @@ router.get("/stats", requireAdmin, async (req: Request, res: Response) => {
       error: "Erreur lors du calcul des statistiques",
       details: String(err),
     });
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────── */
+/* GET /api/admin/service-performance                                */
+/* Classement établi uniquement sur les commandes réussies.          */
+/* ────────────────────────────────────────────────────────────────── */
+router.get("/service-performance", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { startIso, endIso } = parseRange(req);
+    const snap = await firestoreDb.collection("orders")
+      .where("status", "==", "completed")
+      .where("createdAt", ">=", startIso)
+      .where("createdAt", "<=", endIso)
+      .orderBy("createdAt", "desc")
+      .limit(MAX_FETCH)
+      .get();
+
+    const labels: Record<string, string> = {
+      wa: "WhatsApp", wb: "WhatsApp Business", ig: "Instagram", tg: "Telegram", fb: "Facebook", go: "Google", tk: "TikTok", tw: "Twitter / X",
+      ap: "Apple", am: "Amazon", ms: "Microsoft", dc: "Discord", sc: "Snapchat", nf: "Netflix", ub: "Uber", ln: "LinkedIn",
+      pp: "PayPal", bn: "Binance", vi: "Viber", yt: "YouTube", wc: "WeChat", sp: "Spotify", si: "Signal", td: "TikTok",
+    };
+    const grouped = new Map<string, { serviceCode: string; serviceName: string; successfulOrders: number; revenue: number; margin: number; users: Set<string> }>();
+    let totalRevenue = 0;
+    let totalMargin = 0;
+
+    for (const doc of snap.docs) {
+      const order = doc.data();
+      const code = String(order.serviceCode ?? order.service ?? "unknown").trim().toLowerCase() || "unknown";
+      const revenue = num(order.priceNum) ?? num(order.price, 0) ?? 0;
+      const actualMargin = computeOrderMargin(order);
+      const margin = actualMargin !== null ? actualMargin : revenue * MARGIN_RATE;
+      let row = grouped.get(code);
+      if (!row) {
+        row = { serviceCode: code, serviceName: String(order.serviceName ?? labels[code] ?? code.toUpperCase()), successfulOrders: 0, revenue: 0, margin: 0, users: new Set<string>() };
+        grouped.set(code, row);
+      }
+      row.successfulOrders += 1;
+      row.revenue += revenue;
+      row.margin += margin;
+      if (order.userId) row.users.add(String(order.userId));
+      totalRevenue += revenue;
+      totalMargin += margin;
+    }
+
+    const services = Array.from(grouped.values()).map((row) => ({
+      serviceCode: row.serviceCode,
+      serviceName: row.serviceName,
+      successfulOrders: row.successfulOrders,
+      uniqueUsers: row.users.size,
+      revenue: row.revenue,
+      margin: row.margin,
+      averageOrderValue: row.successfulOrders ? row.revenue / row.successfulOrders : 0,
+      sharePercent: snap.size ? (row.successfulOrders / snap.size) * 100 : 0,
+    })).sort((a, b) => b.successfulOrders - a.successfulOrders || b.revenue - a.revenue);
+
+    res.json({
+      services,
+      period: { start: startIso, end: endIso },
+      totals: { successfulOrders: snap.size, revenue: totalRevenue, margin: totalMargin, services: services.length },
+      scanned: snap.size,
+      truncated: snap.size >= MAX_FETCH,
+    });
+  } catch (err) {
+    console.error("Admin service performance error:", err);
+    res.status(500).json({ error: "Impossible de calculer les services les plus commandés.", details: err instanceof Error ? err.message : String(err) });
   }
 });
 
@@ -770,52 +890,146 @@ router.get("/users", requireAdmin, async (req: Request, res: Response) => {
 /* GET /api/admin/users/:id — fiche détaillée à la demande             */
 /* ────────────────────────────────────────────────────────────────── */
 router.get("/users/:id/profile", requireAdmin, async (req: Request, res: Response) => {
+  const id = String(req.params.id ?? "").trim();
+  if (!id) { res.status(400).json({ error: "Identifiant utilisateur manquant." }); return; }
+
   try {
-    const id = String(req.params.id ?? "");
+    // Le document principal est le seul élément indispensable à la fiche.
     const userRef = firestoreDb.collection("users").doc(id);
-    const [userSnap, ordersSnap, attributionSnap] = await Promise.all([
-      userRef.get(),
-      firestoreDb.collection("orders").where("userId", "==", id).orderBy("createdAt", "desc").limit(25).get(),
-      firestoreDb.collection("affiliate_attributions").where("customerId", "==", id).limit(1).get(),
-    ]);
-    if (!userSnap.exists) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      res.status(404).json({ error: "Utilisateur introuvable dans la collection users.", userId: id });
+      return;
+    }
+
     const d = userSnap.data()!;
+    const dataWarnings: string[] = [];
+    const [orderDocs, attributionSnap, orderCounts] = await Promise.all([
+      getProfileOrders(id, 25).catch((error) => {
+        console.error("Admin profile: orders unavailable:", { userId: id, error });
+        dataWarnings.push("L'historique des commandes est temporairement indisponible.");
+        return [] as FirebaseFirestore.QueryDocumentSnapshot[];
+      }),
+      firestoreDb.collection("affiliate_attributions").where("customerId", "==", id).limit(1).get().catch((error) => {
+        console.warn("Admin profile: attribution lookup unavailable:", error);
+        dataWarnings.push("L'information d'affiliation est temporairement indisponible.");
+        return null;
+      }),
+      getProfileOrderCounts(id).catch((error) => {
+        console.error("Admin profile: order counts unavailable:", { userId: id, error });
+        dataWarnings.push("Les compteurs de commandes n'ont pas pu être actualisés ; les compteurs enregistrés sont affichés.");
+        return {
+          total: Math.max(0, Number(d.totalOrdersCount ?? 0) || 0),
+          completed: Math.max(0, Number(d.successfulOrdersCount ?? 0) || 0),
+        };
+      }),
+    ]);
+
+    // Les métadonnées Auth sont facultatives : leur indisponibilité ne bloque jamais la fiche.
     let authMeta: any = null;
     try {
       const authUser = await getAdminAuth().getUser(id);
-      authMeta = { creationTime: authUser.metadata.creationTime ?? null, lastSignInTime: authUser.metadata.lastSignInTime ?? null, emailVerified: authUser.emailVerified };
-    } catch { /* Certains comptes historiques peuvent ne plus être présents dans Firebase Auth. */ }
-    let affiliate: any = null;
-    if (!attributionSnap.empty) {
-      const a = attributionSnap.docs[0].data();
-      const commercialSnap = await firestoreDb.collection("commercials").doc(String(a.commercialId)).get();
-      const c = commercialSnap.data();
-      affiliate = { commercialId: a.commercialId, affiliateCode: a.affiliateCode, name: c?.name ?? "Commercial", email: c?.email ?? "", country: c?.country ?? "" };
+      authMeta = {
+        uid: authUser.uid,
+        creationTime: authUser.metadata.creationTime ?? null,
+        lastSignInTime: authUser.metadata.lastSignInTime ?? null,
+        emailVerified: authUser.emailVerified,
+        disabled: authUser.disabled,
+        providerIds: authUser.providerData.map((provider) => provider.providerId),
+      };
+    } catch (error) {
+      console.warn(`Admin profile: Auth metadata unavailable for ${id}:`, error);
+      dataWarnings.push("Les métadonnées de connexion Firebase Auth ne sont pas disponibles pour ce compte.");
     }
+
+    let affiliate: any = null;
+    if (attributionSnap && !attributionSnap.empty) {
+      const attribution = attributionSnap.docs[0].data();
+      try {
+        const commercialSnap = await firestoreDb.collection("commercials").doc(String(attribution.commercialId ?? "")).get();
+        const commercial = commercialSnap.data();
+        affiliate = {
+          commercialId: String(attribution.commercialId ?? ""),
+          affiliateCode: attribution.affiliateCode ?? commercial?.affiliateCode ?? "",
+          name: commercial?.name ?? "Commercial",
+          email: commercial?.email ?? "",
+          country: commercial?.country ?? "",
+        };
+      } catch (error) {
+        console.warn("Admin profile: commercial details unavailable:", error);
+        dataWarnings.push("Le nom du commercial attribué n'a pas pu être chargé.");
+        affiliate = { commercialId: String(attribution.commercialId ?? ""), affiliateCode: attribution.affiliateCode ?? "", name: "Commercial", email: "", country: "" };
+      }
+    }
+
     const serviceLabels: Record<string, string> = {
-      wa: "WhatsApp", wb: "WhatsApp Business", ig: "Instagram", tg: "Telegram",
-      fb: "Facebook", go: "Google", tk: "TikTok", tw: "Twitter / X",
-      ap: "Apple", am: "Amazon", ms: "Microsoft", dc: "Discord",
-      sc: "Snapchat", nf: "Netflix", ub: "Uber", ln: "LinkedIn",
-      pp: "PayPal", bn: "Binance", vi: "Viber", yt: "YouTube",
-      wc: "WeChat", sp: "Spotify", si: "Signal", td: "TikTok",
+      wa: "WhatsApp", wb: "WhatsApp Business", ig: "Instagram", tg: "Telegram", fb: "Facebook", go: "Google", tk: "TikTok", tw: "Twitter / X",
+      ap: "Apple", am: "Amazon", ms: "Microsoft", dc: "Discord", sc: "Snapchat", nf: "Netflix", ub: "Uber", ln: "LinkedIn",
+      pp: "PayPal", bn: "Binance", vi: "Viber", yt: "YouTube", wc: "WeChat", sp: "Spotify", si: "Signal", td: "TikTok",
     };
-    const orders = ordersSnap.docs.map((doc) => {
-      const o = doc.data();
-      const serviceCode = String(o.serviceCode ?? "");
-      return { id: doc.id, createdAt: getCreatedAtIso(o.createdAt), status: o.status ?? "unknown", serviceCode, serviceName: o.serviceName ?? serviceLabels[serviceCode] ?? serviceCode.toUpperCase(), countryCode: o.countryCode ?? "", phoneNumber: o.phoneNumber ?? "", smsCode: o.smsCode ?? null, price: num(o.priceNum) ?? num(o.price, 0) ?? 0, margin: computeOrderMargin(o) };
+    const orders = orderDocs.map((doc) => {
+      const order = doc.data();
+      const serviceCode = String(order.serviceCode ?? order.service ?? "").toLowerCase();
+      return {
+        id: doc.id,
+        createdAt: getCreatedAtIso(order.createdAt),
+        status: order.status ?? "unknown",
+        serviceCode,
+        serviceName: order.serviceName ?? serviceLabels[serviceCode] ?? serviceCode.toUpperCase(),
+        countryCode: order.countryCode ?? "",
+        countryName: order.countryName ?? "",
+        phoneNumber: order.phoneNumber ?? "",
+        smsCode: order.smsCode ?? null,
+        price: num(order.priceNum) ?? num(order.price, 0) ?? 0,
+        margin: computeOrderMargin(order),
+      };
     });
-    const totalOrdersSnap = await firestoreDb.collection("orders").where("userId", "==", id).count().get();
-    const successfulOrdersSnap = await firestoreDb.collection("orders").where("userId", "==", id).where("status", "==", "completed").count().get();
-    const historySnap = await userRef.collection("contactHistory").orderBy("createdAt", "desc").limit(20).get();
+
+    const contactHistory = await getProfileContactHistory(userRef, 20).catch((error) => {
+      console.warn("Admin profile: contact history unavailable:", error);
+      dataWarnings.push("L'historique des contacts n'a pas pu être chargé.");
+      return [];
+    });
+    const lastSuccessfulOrder = orders.find((order) => order.status === "completed");
+
     res.json({
-      user: { id, name: d.name ?? "", email: d.email ?? "", phone: d.phone ?? "", countryIso: d.countryIso ?? "", countryName: d.countryName ?? "", countryFlag: d.countryFlag ?? "", balance: num(d.balance, 0) ?? 0, currency: d.currency ?? "EUR", createdAt: getCreatedAtIso(d.createdAt), updatedAt: d.updatedAt ?? null, auth: authMeta, lastOrderAt: orders[0]?.createdAt ?? null, stats: { totalOrders: totalOrdersSnap.data().count, completedOrders: successfulOrdersSnap.data().count, totalSuccessfulSpend: num(d.totalSuccessfulSpend, 0) ?? 0 }, affiliate },
+      user: {
+        id,
+        name: d.name ?? "",
+        email: d.email ?? "",
+        phone: d.phone ?? d.phoneNumber ?? "",
+        countryIso: d.countryIso ?? "",
+        countryName: d.countryName ?? "",
+        countryFlag: d.countryFlag ?? "",
+        balance: num(d.balance, 0) ?? 0,
+        currency: d.currency ?? "EUR",
+        createdAt: getCreatedAtIso(d.createdAt ?? authMeta?.creationTime),
+        updatedAt: d.updatedAt ? getCreatedAtIso(d.updatedAt) : null,
+        emailVerified: authMeta?.emailVerified ?? null,
+        disabled: authMeta?.disabled ?? null,
+        auth: authMeta,
+        lastSignInAt: authMeta?.lastSignInTime ?? d.lastSignInAt ?? null,
+        lastOrderAt: orders[0]?.createdAt ?? null,
+        lastSuccessfulOrderAt: lastSuccessfulOrder?.createdAt ?? null,
+        stats: {
+          totalOrders: orderCounts.total,
+          completedOrders: orderCounts.completed,
+          totalSuccessfulSpend: num(d.totalSuccessfulSpend, 0) ?? 0,
+        },
+        affiliate,
+      },
       orders,
-      contactHistory: historySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      contactHistory,
+      dataWarnings,
     });
   } catch (err) {
-    console.error("Admin user detail error:", err);
-    res.status(500).json({ error: "Impossible de charger la fiche utilisateur" });
+    console.error("Admin user detail error:", { userId: id, error: err });
+    res.status(500).json({
+      error: "Impossible de charger la fiche utilisateur.",
+      details: err instanceof Error ? err.message : String(err),
+      code: (err as any)?.code ?? null,
+      userId: id,
+    });
   }
 });
 

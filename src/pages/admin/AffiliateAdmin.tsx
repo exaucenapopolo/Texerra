@@ -973,6 +973,11 @@ function CommercialRow({
         <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
           {detailsLoading && <p className="text-sm text-gray-400">Chargement du compte et des clients attribués…</p>}
           {detailsError && <p className="text-sm text-red-600">{detailsError}</p>}
+          {account?.dataWarnings?.length ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              {account.dataWarnings.join(" ")}
+            </div>
+          ) : null}
           {account && !detailsLoading && (
             <>
               <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">

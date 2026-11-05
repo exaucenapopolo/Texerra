@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth-context";
+import { downloadAdminFullDataPdf } from "../lib/admin-report";
 import {
   LineChart,
   Line,
@@ -561,7 +562,7 @@ export default function AdminPage() {
 
   const [firebaseToken, setFirebaseToken] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
-  const [fullExportFormat, setFullExportFormat] = useState<"xls" | "json">("xls");
+  const [fullExportFormat, setFullExportFormat] = useState<"xls" | "json" | "pdf">("xls");
   const [migrating, setMigrating] = useState(false);
   const [migrationResult, setMigrationResult] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -647,6 +648,12 @@ export default function AdminPage() {
   const chartQuery = useQuery({
     queryKey: ["admin-chart", start, end],
     queryFn: () => apiFetch(`/chart?start=${start}&end=${end}`, firebaseToken!),
+    enabled: !!firebaseToken,
+    staleTime: 60_000,
+  });
+  const servicePerformanceQuery = useQuery({
+    queryKey: ["admin-service-performance", start, end],
+    queryFn: () => apiFetch(`/service-performance?start=${start}&end=${end}`, firebaseToken!),
     enabled: !!firebaseToken,
     staleTime: 60_000,
   });
@@ -1089,7 +1096,13 @@ export default function AdminPage() {
   async function handleFullAdminExport() {
     try {
       setExporting("full-admin");
-      await downloadBlob(`/export/full?format=${fullExportFormat}&start=${start}&end=${end}`, `texerra-export-administrateur-${start}_${end}.${fullExportFormat}`, firebaseToken!);
+      const filename = `texerra-export-administrateur-${start}_${end}`;
+      if (fullExportFormat === "pdf") {
+        const data = await apiFetch(`/export/full?format=json&start=${start}&end=${end}`, firebaseToken!);
+        downloadAdminFullDataPdf(data, `${filename}.pdf`);
+      } else {
+        await downloadBlob(`/export/full?format=${fullExportFormat}&start=${start}&end=${end}`, `${filename}.${fullExportFormat}`, firebaseToken!);
+      }
       setToast("Export des données administrateur téléchargé.");
     } catch (e) { alert((e as Error).message); }
     finally { setExporting(null); }
@@ -1139,11 +1152,12 @@ export default function AdminPage() {
             <select
               aria-label="Format de l'export complet"
               value={fullExportFormat}
-              onChange={(event) => setFullExportFormat(event.target.value as "xls" | "json")}
+              onChange={(event) => setFullExportFormat(event.target.value as "xls" | "json" | "pdf")}
               className="px-3 py-1.5 rounded-lg border border-border bg-white text-sm"
-              title="Choisir le format du classeur administrateur"
+              title="Choisir le format de l'export administrateur"
             >
               <option value="xls">Excel — plusieurs feuilles</option>
+              <option value="pdf">PDF — rapport complet</option>
               <option value="json">JSON — données brutes</option>
             </select>
             <button
@@ -1346,6 +1360,51 @@ export default function AdminPage() {
             </ResponsiveContainer>
           )}
         </div>
+
+        {/* Analyse des services : seules les commandes réussies sont comptées. */}
+        <section className="bg-white rounded-2xl border p-5 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Services les plus commandés</h2>
+              <p className="text-sm text-muted-foreground mt-1">Classement calculé uniquement à partir des commandes réussies sur la période sélectionnée.</p>
+            </div>
+            <button onClick={() => servicePerformanceQuery.refetch()} disabled={servicePerformanceQuery.isFetching} className="px-3 py-1.5 border rounded-lg text-xs font-medium disabled:opacity-50">
+              {servicePerformanceQuery.isFetching ? "Actualisation…" : "Actualiser"}
+            </button>
+          </div>
+          {servicePerformanceQuery.isError && <p className="text-sm text-red-600">Impossible de charger le classement : {(servicePerformanceQuery.error as Error)?.message ?? "erreur inconnue"}</p>}
+          {servicePerformanceQuery.isLoading ? <p className="text-sm text-muted-foreground">Calcul des services les plus utilisés…</p> : null}
+          {servicePerformanceQuery.data && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <MiniStat label="Commandes réussies" value={servicePerformanceQuery.data.totals.successfulOrders} highlight />
+                <MiniStat label="Services utilisés" value={servicePerformanceQuery.data.totals.services} />
+                <MiniStat label="Chiffre d'affaires" value={`${Number(servicePerformanceQuery.data.totals.revenue || 0).toFixed(2)} €`} />
+                <MiniStat label="Marge générée" value={`${Number(servicePerformanceQuery.data.totals.margin || 0).toFixed(2)} €`} highlight />
+              </div>
+              <div className="overflow-x-auto border rounded-xl">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50"><tr><th className="p-3 text-left">Rang</th><th className="p-3 text-left">Service</th><th className="p-3 text-right">Commandes réussies</th><th className="p-3 text-right">Utilisateurs</th><th className="p-3 text-right">Chiffre d'affaires</th><th className="p-3 text-right">Marge générée</th><th className="p-3 text-right">Part</th></tr></thead>
+                  <tbody>
+                    {(servicePerformanceQuery.data.services || []).map((service: any, index: number) => (
+                      <tr key={service.serviceCode} className="border-t hover:bg-slate-50/70">
+                        <td className="p-3 text-muted-foreground">{index + 1}</td>
+                        <td className="p-3"><div className="font-semibold">{service.serviceName}</div><div className="text-xs text-muted-foreground">{String(service.serviceCode).toUpperCase()}</div></td>
+                        <td className="p-3 text-right font-semibold">{Number(service.successfulOrders).toLocaleString("fr-FR")}</td>
+                        <td className="p-3 text-right">{Number(service.uniqueUsers).toLocaleString("fr-FR")}</td>
+                        <td className="p-3 text-right">{Number(service.revenue || 0).toFixed(2)} €</td>
+                        <td className="p-3 text-right font-semibold text-emerald-700">{Number(service.margin || 0).toFixed(2)} €</td>
+                        <td className="p-3 text-right">{Number(service.sharePercent || 0).toFixed(1)} %</td>
+                      </tr>
+                    ))}
+                    {!servicePerformanceQuery.data.services?.length && <tr><td colSpan={7} className="p-5 text-center text-muted-foreground">Aucune commande réussie sur cette période.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              {servicePerformanceQuery.data.truncated && <p className="text-xs text-amber-700">Attention : le calcul a atteint la limite de {Number(servicePerformanceQuery.data.scanned).toLocaleString("fr-FR")} commandes. Réduisez la période pour obtenir un classement exhaustif.</p>}
+            </>
+          )}
+        </section>
 
         {/* Commandes */}
         <Section
@@ -1999,6 +2058,11 @@ export default function AdminPage() {
             </div>
             {profileLoading ? <div className="p-8 text-center text-muted-foreground">Chargement du profil…</div> : profileError ? <div className="p-6 text-sm text-red-700">{profileError}</div> : profileData?.user && (
               <div className="p-5 space-y-6">
+                {profileData.dataWarnings?.length ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {profileData.dataWarnings.join(" ")}
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div><div className="text-xl font-bold">{profileData.user.name || "Utilisateur"}</div><div className="text-sm text-muted-foreground">{profileData.user.email}</div><div className="text-xs text-muted-foreground mt-1">UID : {profileData.user.id}</div><div className="text-xs text-muted-foreground mt-1">Pays : {profileData.user.countryName ? `${profileData.user.countryFlag || countryFromIso(profileData.user.countryIso)?.flag || "🌍"} ${profileData.user.countryName}` : "Non détecté"}</div></div>
                   <div className="flex flex-wrap gap-2">

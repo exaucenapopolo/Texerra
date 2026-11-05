@@ -752,82 +752,186 @@ router.post("/admin/contact", requireAffiliateAdmin, async (req: Request, res: R
 
 /** Fiche liée du commercial : compte utilisateur normal + dernières commandes. */
 router.get("/admin/commercials/:id/account", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  const commercialId = String(req.params.id ?? "").trim();
+  const dataWarnings: string[] = [];
   try {
-    const commercialId = String(req.params.id);
-    const commercialSnap = await firestoreDb.collection("commercials").doc(commercialId).get();
-    if (!commercialSnap.exists) { res.status(404).json({ error: "Commercial introuvable" }); return; }
+    if (!commercialId) { res.status(400).json({ error: "Identifiant commercial manquant." }); return; }
+    const commercialRef = firestoreDb.collection("commercials").doc(commercialId);
+    const commercialSnap = await commercialRef.get();
+    if (!commercialSnap.exists) { res.status(404).json({ error: "Commercial introuvable." }); return; }
+
     const commercial = commercialSnap.data()!;
     const usersCol = firestoreDb.collection("users");
-    let userSnap: FirebaseFirestore.DocumentSnapshot | null = commercial.firebaseUid
-      ? await usersCol.doc(String(commercial.firebaseUid)).get()
-      : null;
     const commercialEmail = String(commercial.email ?? "").trim();
-    if (userSnap?.exists && commercialEmail) {
-      const linkedEmail = String(userSnap.data()?.email ?? "").trim().toLowerCase();
-      if (linkedEmail && linkedEmail !== commercialEmail.toLowerCase()) {
-        // Un UID ancien ne doit jamais lier le commercial au mauvais profil.
-        userSnap = null;
+    let userSnap: FirebaseFirestore.DocumentSnapshot | null = null;
+    let authMatch: any = null;
+
+    if (commercial.firebaseUid) {
+      try { userSnap = await usersCol.doc(String(commercial.firebaseUid)).get(); }
+      catch (error) {
+        console.warn("Commercial account: Firebase UID profile lookup failed:", error);
+        dataWarnings.push("Lecture du profil utilisateur par UID temporairement indisponible.");
       }
     }
+    if (userSnap?.exists && commercialEmail) {
+      const linkedEmail = String(userSnap.data()?.email ?? "").trim().toLowerCase();
+      if (linkedEmail && linkedEmail !== commercialEmail.toLowerCase()) userSnap = null;
+    }
+
+    // Firebase Auth est facultatif : son absence ne doit pas empêcher l'accès
+    // au document Firestore ni à la recherche par e-mail.
     if (!userSnap?.exists && commercialEmail) {
-      // L'UID Firebase est la source la plus fiable : l'e-mail peut avoir
-      // une casse différente ou ne pas encore être recopié dans le profil.
-      const authMatch = await getAdminAuth().getUserByEmail(commercialEmail).catch(() => null);
+      try { authMatch = await getAdminAuth().getUserByEmail(commercialEmail); }
+      catch (error) {
+        console.warn("Commercial account: Firebase Auth email lookup unavailable:", error);
+        dataWarnings.push("Les métadonnées Firebase Auth ne sont pas accessibles ; la recherche Firestore par e-mail a été tentée.");
+      }
       if (authMatch) {
-        const linkedUserRef = usersCol.doc(authMatch.uid);
-        userSnap = await linkedUserRef.get();
-        // Certains comptes Auth historiques n'ont pas encore de document
-        // Firestore : créer leur profil minimal pour rendre la liaison visible.
-        if (!userSnap.exists) {
-          const now = new Date().toISOString();
-          await linkedUserRef.set({
-            id: authMatch.uid,
-            email: authMatch.email ?? commercialEmail,
-            name: authMatch.displayName || (authMatch.email ?? commercialEmail).split("@")[0] || "Utilisateur",
-            phone: authMatch.phoneNumber ?? null,
-            avatarUrl: authMatch.photoURL ?? null,
-            currency: "EUR",
-            balance: "0.0000",
-            createdAt: authMatch.metadata.creationTime ? new Date(authMatch.metadata.creationTime).toISOString() : now,
-            updatedAt: now,
-            profileProvisionedBy: "affiliate-admin-sync",
-          }, { merge: true });
-          userSnap = await linkedUserRef.get();
+        try { userSnap = await usersCol.doc(authMatch.uid).get(); }
+        catch (error) {
+          console.warn("Commercial account: Auth UID Firestore lookup failed:", error);
+          dataWarnings.push("Le profil Firestore associé au compte Auth n'a pas pu être lu.");
         }
       }
     }
+
     if (!userSnap?.exists && commercialEmail) {
-      const emailVariants = [...new Set([commercialEmail, commercialEmail.toLowerCase()])];
-      for (const emailVariant of emailVariants) {
-        const linked = await usersCol.where("email", "==", emailVariant).limit(1).get();
-        if (!linked.empty) { userSnap = linked.docs[0]; break; }
+      for (const emailVariant of [...new Set([commercialEmail, commercialEmail.toLowerCase()])]) {
+        try {
+          const linked = await usersCol.where("email", "==", emailVariant).limit(1).get();
+          if (!linked.empty) { userSnap = linked.docs[0]; break; }
+        } catch (error) {
+          console.warn("Commercial account: Firestore email lookup failed:", error);
+          dataWarnings.push("La recherche du profil par e-mail a rencontré une erreur.");
+        }
       }
     }
-    const commercialHistorySnap = await firestoreDb.collection("commercials").doc(commercialId).collection("contactHistory").orderBy("createdAt", "desc").limit(10).get();
-    const contactHistory = commercialHistorySnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    if (!userSnap?.exists) {
-      res.json({ linked: false, contactHistory, commercial: { id: commercialId, name: commercial.name, email: commercial.email, country: commercial.country ?? "" } });
+
+    const contactHistory = await (async () => {
+      const history = commercialRef.collection("contactHistory");
+      try {
+        const snap = await history.orderBy("createdAt", "desc").limit(20).get();
+        return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.warn("Commercial account: ordered contact history failed; bounded fallback:", error);
+        const snap = await history.limit(20).get();
+        return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+          .sort((a: any, b: any) => new Date(affiliateDateIso(b.createdAt)).getTime() - new Date(affiliateDateIso(a.createdAt)).getTime());
+      }
+    })().catch((error) => {
+      console.warn("Commercial account: contact history unavailable:", error);
+      dataWarnings.push("L'historique des contacts du commercial est indisponible.");
+      return [];
+    });
+
+    const commercialInfo = { id: commercialId, name: commercial.name ?? "", email: commercial.email ?? "", country: commercial.country ?? "" };
+    if (!userSnap?.exists && !authMatch) {
+      res.json({ linked: false, contactHistory, dataWarnings, commercial: commercialInfo });
       return;
     }
-    const uid = userSnap.id;
-    if (commercial.firebaseUid !== uid) {
-      await firestoreDb.collection("commercials").doc(commercialId).update({ firebaseUid: uid, updatedAt: new Date().toISOString() });
+
+    const uid = userSnap?.exists ? userSnap.id : String(authMatch.uid);
+    const user = userSnap?.exists ? userSnap.data()! : {
+      id: uid,
+      name: authMatch?.displayName ?? commercial.name ?? "",
+      email: authMatch?.email ?? commercialEmail,
+      phone: authMatch?.phoneNumber ?? "",
+      createdAt: authMatch?.metadata?.creationTime ? new Date(authMatch.metadata.creationTime).toISOString() : null,
+      balance: 0,
+    };
+
+    if (userSnap?.exists && commercial.firebaseUid !== uid) {
+      try { await commercialRef.update({ firebaseUid: uid, updatedAt: new Date().toISOString() }); }
+      catch (error) { console.warn("Commercial account: UID link persistence skipped:", error); }
     }
-    const user = userSnap.data()!;
-    const [ordersSnap, allCount, successfulCount] = await Promise.all([
-      firestoreDb.collection("orders").where("userId", "==", uid).orderBy("createdAt", "desc").limit(10).get(),
-      firestoreDb.collection("orders").where("userId", "==", uid).count().get(),
-      firestoreDb.collection("orders").where("userId", "==", uid).where("status", "==", "completed").count().get(),
+
+    const ordersBase = firestoreDb.collection("orders").where("userId", "==", uid);
+    let ordersDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+    try {
+      ordersDocs = (await ordersBase.orderBy("createdAt", "desc").limit(15).get()).docs;
+    } catch (error) {
+      console.warn("Commercial account: recent order query failed; bounded fallback:", error);
+      try {
+        const fallback = await ordersBase.limit(1000).get();
+        ordersDocs = fallback.docs.slice().sort((a, b) => new Date(affiliateDateIso(b.data().createdAt)).getTime() - new Date(affiliateDateIso(a.data().createdAt)).getTime()).slice(0, 15);
+      } catch (fallbackError) {
+        console.error("Commercial account: recent order fallback unavailable:", fallbackError);
+        dataWarnings.push("L'historique des commandes du compte est temporairement indisponible.");
+      }
+    }
+
+    const [allCountResult, completedCountResult] = await Promise.allSettled([
+      ordersBase.count().get(),
+      ordersBase.where("status", "==", "completed").count().get(),
     ]);
-    let lastSignInAt: string | null = null;
-    try { const authUser = await getAdminAuth().getUser(uid); lastSignInAt = authUser.metadata.lastSignInTime ?? null; } catch { lastSignInAt = null; }
-    const orders = ordersSnap.docs.map((doc) => ({ id: doc.id, status: doc.data().status, price: affiliateNumber(doc.data().priceNum) ?? affiliateNumber(doc.data().price, 0) ?? 0, createdAt: affiliateDateIso(doc.data().createdAt), serviceCode: doc.data().serviceCode ?? "", phoneNumber: doc.data().phoneNumber ?? "" })).sort((a,b) => new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()).slice(0,10);
-    res.json({ linked: true, contactHistory, commercial: { id: commercialId, name: commercial.name, email: commercial.email, country: commercial.country ?? "" }, user: { id: uid, name: user.name ?? "", email: user.email ?? "", phone: user.phone ?? "", countryIso: user.countryIso ?? "", countryName: user.countryName ?? "", countryFlag: user.countryFlag ?? "", balance: affiliateNumber(user.balance, 0) ?? 0, createdAt: affiliateDateIso(user.createdAt), lastSignInAt, totalOrders: allCount.data().count, successfulOrders: successfulCount.data().count, totalSuccessfulSpend: affiliateNumber(user.totalSuccessfulSpend,0) ?? 0 }, orders });
+    let fallbackOrderDocs: FirebaseFirestore.QueryDocumentSnapshot[] | null = null;
+    if (allCountResult.status === "rejected" || completedCountResult.status === "rejected") {
+      try { fallbackOrderDocs = (await ordersBase.limit(5000).get()).docs; }
+      catch (error) {
+        console.warn("Commercial account: count fallback unavailable:", error);
+        dataWarnings.push("Les compteurs historiques n'ont pas pu être recalculés.");
+      }
+    }
+    const totalOrders = allCountResult.status === "fulfilled" ? allCountResult.value.data().count : (fallbackOrderDocs?.length ?? ordersDocs.length);
+    const successfulOrders = completedCountResult.status === "fulfilled" ? completedCountResult.value.data().count : (fallbackOrderDocs?.filter((doc) => doc.data().status === "completed").length ?? ordersDocs.filter((doc) => doc.data().status === "completed").length);
+
+    let lastSignInAt: string | null = authMatch?.metadata?.lastSignInTime ?? null;
+    let emailVerified: boolean | null = authMatch ? Boolean(authMatch.emailVerified) : null;
+    if (!lastSignInAt || emailVerified === null) {
+      try {
+        const authUser = await getAdminAuth().getUser(uid);
+        lastSignInAt = authUser.metadata.lastSignInTime ?? lastSignInAt;
+        emailVerified = authUser.emailVerified;
+      } catch (error) {
+        console.warn("Commercial account: optional Auth metadata unavailable:", error);
+      }
+    }
+
+    const orders = ordersDocs.map((doc) => {
+      const order = doc.data();
+      return {
+        id: doc.id,
+        status: order.status ?? "unknown",
+        price: affiliateNumber(order.priceNum) ?? affiliateNumber(order.price, 0) ?? 0,
+        margin: affiliateNumber(order.marginNum) ?? affiliateNumber(order.margin),
+        createdAt: affiliateDateIso(order.createdAt),
+        serviceCode: order.serviceCode ?? "",
+        serviceName: order.serviceName ?? "",
+        countryCode: order.countryCode ?? "",
+        phoneNumber: order.phoneNumber ?? "",
+      };
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({
+      linked: true,
+      contactHistory,
+      dataWarnings,
+      commercial: commercialInfo,
+      user: {
+        id: uid,
+        name: user.name ?? "",
+        email: user.email ?? commercialEmail,
+        phone: user.phone ?? user.phoneNumber ?? "",
+        countryIso: user.countryIso ?? "",
+        countryName: user.countryName ?? "",
+        countryFlag: user.countryFlag ?? "",
+        balance: affiliateNumber(user.balance, 0) ?? 0,
+        currency: user.currency ?? "EUR",
+        createdAt: affiliateDateIso(user.createdAt ?? authMatch?.metadata?.creationTime),
+        lastSignInAt,
+        emailVerified,
+        totalOrders,
+        successfulOrders,
+        totalSuccessfulSpend: affiliateNumber(user.totalSuccessfulSpend, 0) ?? 0,
+      },
+      orders,
+    });
   } catch (err) {
-    console.error("[affiliate/admin/commercial account] error:", err);
+    console.error("[affiliate/admin/commercial account] error:", { commercialId, error: err });
     res.status(500).json({
       error: "Impossible de charger le compte utilisateur du commercial.",
       details: err instanceof Error ? err.message : String(err),
+      code: (err as any)?.code ?? null,
     });
   }
 });

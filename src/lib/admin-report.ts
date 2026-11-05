@@ -242,3 +242,107 @@ export function rankColor(rank: number): string {
   if (rank === 3) return "text-orange-700 bg-orange-50 border-orange-200";
   return "text-gray-500 bg-gray-50 border-gray-200";
 }
+
+
+/**
+ * Génère le PDF de l'export administrateur complet reçu depuis
+ * GET /api/admin/export/full?format=json. Les sections utilisent toutes les
+ * lignes renvoyées par l'API et indiquent si le plafond serveur a été atteint.
+ */
+export function downloadAdminFullDataPdf(data: any, filename = "texerra-export-administrateur.pdf"): void {
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape", compress: true });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 10;
+  const users = Array.isArray(data?.users) ? data.users : [];
+  const orders = Array.isArray(data?.orders) ? data.orders : [];
+  const topups = Array.isArray(data?.topups) ? data.topups : [];
+  const affiliation = data?.affiliation ?? {};
+  const commercials = Array.isArray(affiliation.commercials) ? affiliation.commercials : [];
+  const commissions = Array.isArray(affiliation.commissions) ? affiliation.commissions : [];
+  const attributions = Array.isArray(affiliation.attributions) ? affiliation.attributions : [];
+  const withdrawals = Array.isArray(affiliation.withdrawals) ? affiliation.withdrawals : [];
+  const completedOrders = orders.filter((row: any) => row.status === "completed");
+  const amount = (row: any, primary: string, secondary?: string) => Number(row?.[primary] ?? (secondary ? row?.[secondary] : 0) ?? 0) || 0;
+  const money = (value: number) => `${value.toFixed(2)} €`;
+  const displayDate = (value: any) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("fr-FR");
+  };
+  const revenue = completedOrders.reduce((sum: number, row: any) => sum + amount(row, "priceNum", "price"), 0);
+  const margin = completedOrders.reduce((sum: number, row: any) => {
+    const price = amount(row, "priceNum", "price");
+    const rawMargin = row?.marginNum ?? row?.margin;
+    const actualMargin = rawMargin === null || rawMargin === undefined || rawMargin === "" ? NaN : Number(rawMargin);
+    return sum + (Number.isFinite(actualMargin) ? actualMargin : price * 0.65);
+  }, 0);
+  const generatedAt = displayDate(data?.generatedAt ?? new Date().toISOString());
+  const periodStart = String(data?.period?.start ?? "").slice(0, 10);
+  const periodEnd = String(data?.period?.end ?? "").slice(0, 10);
+
+  doc.setFillColor(201, 95, 45);
+  doc.rect(0, 0, pageWidth, 25, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(17);
+  doc.text("Texerra SMS — Export administrateur", margin, 11);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`Période : ${periodStart || "—"} au ${periodEnd || "—"}  |  Généré le ${generatedAt}`, margin, 19);
+
+  autoTable(doc, {
+    startY: 31,
+    head: [["Indicateur", "Valeur"]],
+    body: [
+      ["Utilisateurs exportés", users.length], ["Commandes exportées", orders.length],
+      ["Commandes réussies", completedOrders.length], ["Chiffre d'affaires réussi", money(revenue)],
+      ["Marge des commandes réussies", money(margin)], ["Dépôts exportés", topups.length],
+      ["Dépôts réussis", topups.filter((row: any) => row.status === "completed").length],
+      ["Commerciaux", commercials.length], ["Commissions", commissions.length],
+      ["Attributions clients", attributions.length], ["Retraits", withdrawals.length],
+      ["Export partiel (plafond serveur atteint)", data?.coverage?.truncated ? "Oui — consulter la période ou le JSON" : "Non"],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: [201, 95, 45], textColor: 255 },
+    styles: { fontSize: 8, cellPadding: 2 },
+    margin: { left: margin, right: margin },
+  });
+
+  const addSection = (title: string, headers: string[], rows: any[][]) => {
+    doc.addPage("a4", "landscape");
+    doc.setTextColor(35, 40, 45);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(title, margin, 13);
+    autoTable(doc, {
+      startY: 19,
+      head: [headers],
+      body: rows.length ? rows : [["Aucune donnée", ...headers.slice(1).map(() => "")]],
+      theme: "grid",
+      headStyles: { fillColor: [201, 95, 45], textColor: 255 },
+      styles: { fontSize: 6.5, cellPadding: 1.6, overflow: "linebreak" },
+      bodyStyles: { textColor: [45, 50, 55] },
+      margin: { left: margin, right: margin, bottom: 13 },
+      horizontalPageBreak: true,
+      horizontalPageBreakRepeat: 0,
+    });
+  };
+
+  addSection("Utilisateurs", ["UID", "Inscription", "Nom", "E-mail", "Téléphone", "Pays", "Solde"], users.map((row: any) => [row.id, displayDate(row.createdAt), row.name ?? "", row.email ?? "", row.phone ?? "", row.countryName ?? row.countryIso ?? "", money(amount(row, "balance"))]));
+  addSection("Commandes", ["ID", "UID utilisateur", "Date", "Service", "Pays", "Numéro", "Statut", "Prix", "Marge"], orders.map((row: any) => [row.id, row.userId ?? "", displayDate(row.createdAt), row.serviceName ?? row.serviceCode ?? "", row.countryName ?? row.countryCode ?? "", row.phoneNumber ?? "", row.status ?? "", money(amount(row, "priceNum", "price")), money(amount(row, "marginNum", "margin"))]));
+  addSection("Dépôts", ["ID", "UID utilisateur", "Date", "Montant EUR", "Montant local", "Devise", "Pays", "Statut", "Référence"], topups.map((row: any) => [row.id, row.userId ?? "", displayDate(row.createdAt), money(amount(row, "amountEurNum", "amountEur")), amount(row, "amountLocal"), row.localCurrency ?? "", row.countryIso ?? "", row.status ?? "", row.externalId ?? ""]));
+  addSection("Commerciaux", ["ID", "Nom", "E-mail", "Pays", "Code affilié", "UID Firebase", "Statut", "Taux %"], commercials.map((row: any) => [row.id, row.name ?? "", row.email ?? "", row.country ?? "", row.affiliateCode ?? "", row.firebaseUid ?? "", row.status ?? "", amount(row, "commissionRate")]));
+  addSection("Commissions", ["ID", "Commercial", "Client", "Commande", "Vente", "Marge", "Commission", "Statut", "Date"], commissions.map((row: any) => [row.id, row.commercialId ?? "", row.customerId ?? "", row.orderId ?? "", money(amount(row, "orderAmount")), money(amount(row, "orderMargin")), money(amount(row, "commissionAmount")), row.status ?? "", displayDate(row.createdAt)]));
+  addSection("Attributions", ["ID", "Commercial", "Client", "Code affilié", "Source", "Date"], attributions.map((row: any) => [row.id, row.commercialId ?? "", row.customerId ?? "", row.affiliateCode ?? "", row.source ?? "", displayDate(row.createdAt)]));
+  addSection("Retraits", ["ID", "Commercial", "Montant", "Statut", "Méthode", "Date demande", "Date mise à jour"], withdrawals.map((row: any) => [row.id, row.commercialId ?? "", money(amount(row, "amount")), row.status ?? "", row.method ?? "", displayDate(row.requestedAt), displayDate(row.updatedAt)]));
+
+  const pages = doc.getNumberOfPages();
+  for (let page = 1; page <= pages; page += 1) {
+    doc.setPage(page);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(120, 125, 130);
+    doc.text(`Texerra SMS · Document administratif · ${page}/${pages}`, pageWidth - margin, doc.internal.pageSize.getHeight() - 5, { align: "right" });
+  }
+  doc.save(filename);
+}

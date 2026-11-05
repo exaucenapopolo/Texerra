@@ -102,11 +102,12 @@ function shell(preheader: string, _accentLine: string, body: string, dashboardUr
   <tr>
     <td align="center" style="padding:4px 0 20px;">
       <a href="${SITE_URL}" style="text-decoration:none;">
-        <img src="${SITE_URL}/logo-email.png" width="226" height="44" alt="Texerra SMS" style="display:block;width:226px;max-width:70%;height:auto;border:0;outline:none;text-decoration:none;"/>
+        <img src="${SITE_URL}/logo-full.png" width="84" height="84" alt="Logo Texerra" style="display:block;width:84px;max-width:28%;height:auto;border:0;outline:none;text-decoration:none;margin:0 auto;"/>
+        <span style="display:block;margin-top:8px;font-size:16px;line-height:1.3;font-weight:700;letter-spacing:.2px;color:#25282d;">Texerra SMS</span>
       </a>
     </td>
   </tr>
-  <tr><td style="height:3px;background:#c95f2d;font-size:0;line-height:0;">&nbsp;</td></tr>
+  <tr><td style="height:3px;background:#f36f16;font-size:0;line-height:0;">&nbsp;</td></tr>
   <tr>
     <td style="background:#ffffff;padding:34px 38px 28px;border:1px solid #e3e6e9;border-top:0;">
       ${body}
@@ -114,15 +115,15 @@ function shell(preheader: string, _accentLine: string, body: string, dashboardUr
         <tr><td style="padding:18px 0 8px;border-top:1px solid #eceff1;">
           <p style="margin:0 0 7px;font-size:14px;font-weight:700;color:#20252b;">${dashboardTitle}</p>
           <p style="margin:0 0 15px;font-size:13px;line-height:1.6;color:#68717b;">${dashboardDescription}</p>
-          <a href="${dashboardUrl}" style="display:inline-block;padding:12px 19px;background:#c95f2d;border-radius:5px;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;">${dashboardButton}</a>
+          <a href="${dashboardUrl}" style="display:inline-block;padding:12px 19px;background:#f36f16;border-radius:5px;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;">${dashboardButton}</a>
         </td></tr>
       </table>
       <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-top:24px;background:#fafafa;border:1px solid #e8ebee;">
         <tr><td style="padding:15px 17px;">
           <p style="margin:0 0 5px;font-size:13px;font-weight:700;color:#20252b;">Besoin d’une assistance humaine ?</p>
           <p style="margin:0;font-size:12px;line-height:1.8;color:#68717b;">
-            Écrivez-nous sur <a href="${SUPPORT_WA}" target="_blank" style="color:#a84b25;font-weight:700;text-decoration:underline;">WhatsApp ${SUPPORT_WA_DISP}</a> pour une réponse rapide.<br/>
-            Vous pouvez également répondre à cet e-mail ou écrire à <a href="mailto:${SUPPORT_EMAIL}" style="color:#a84b25;text-decoration:underline;">${SUPPORT_EMAIL}</a>.
+            Écrivez-nous sur <a href="${SUPPORT_WA}" target="_blank" style="color:#b94e0c;font-weight:700;text-decoration:underline;">WhatsApp ${SUPPORT_WA_DISP}</a> pour une réponse rapide.<br/>
+            Vous pouvez également répondre à cet e-mail ou écrire à <a href="mailto:${SUPPORT_EMAIL}" style="color:#b94e0c;text-decoration:underline;">${SUPPORT_EMAIL}</a>.
           </p>
         </td></tr>
       </table>
@@ -181,9 +182,9 @@ export async function sendWelcomeEmail(to: string, name: string) {
     ${p("Votre compte est maintenant prêt. Texerra vous permet de recevoir des codes SMS de vérification pour WhatsApp, Instagram, Telegram, TikTok et plus de 200 services, dans plus de 100 pays.")}
     ${p("Pour commencer, il vous suffit de suivre ces trois étapes :")}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 22px;border-collapse:collapse;">
-      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#a84b25;">01</td><td style="padding:9px 0;border-bottom:1px solid #eceff1;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Approvisionnez votre solde</strong><br/>Orange Money, MTN Mobile Money ou carte bancaire.</td></tr>
-      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#a84b25;">02</td><td style="padding:9px 0;border-bottom:1px solid #eceff1;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Sélectionnez votre service et votre pays</strong><br/>Choisissez le service que vous souhaitez vérifier et le pays du numéro.</td></tr>
-      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;font-size:13px;font-weight:700;color:#a84b25;">03</td><td style="padding:9px 0;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Utilisez le numéro et recevez votre code</strong><br/>Le code reçu est affiché dans votre espace Texerra.</td></tr>
+      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#b94e0c;">01</td><td style="padding:9px 0;border-bottom:1px solid #eceff1;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Approvisionnez votre solde</strong><br/>Orange Money, MTN Mobile Money ou carte bancaire.</td></tr>
+      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#b94e0c;">02</td><td style="padding:9px 0;border-bottom:1px solid #eceff1;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Sélectionnez votre service et votre pays</strong><br/>Choisissez le service que vous souhaitez vérifier et le pays du numéro.</td></tr>
+      <tr><td width="28" valign="top" style="padding:9px 8px 9px 0;font-size:13px;font-weight:700;color:#b94e0c;">03</td><td style="padding:9px 0;font-size:14px;line-height:1.6;color:#3f4852;"><strong>Utilisez le numéro et recevez votre code</strong><br/>Le code reçu est affiché dans votre espace Texerra.</td></tr>
     </table>
     ${p("Votre solde n’expire pas. Vous pouvez consulter vos commandes et vos recharges à tout moment depuis votre tableau de bord. Si vous avez besoin d’un conseil avant votre première commande, notre équipe est disponible pour vous accompagner.")}
     <div style="margin-top:4px;">${btn("Accéder aux services Texerra", `${SITE_URL}/order`)}</div>
@@ -260,36 +261,32 @@ export async function sendSmsCodeEmail(opts: {
   const phone = escapeHtml(opts.phoneNumber);
   const code = escapeHtml(opts.smsCode);
   const body = `
-    <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:26px;">
-      <p style="margin:0;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.7px;">Votre code SMS est arrivé</p>
-    </div>
-    ${h1(`Bonne nouvelle${first ? `, ${first}` : ""} !`)}
-    ${p(`Le SMS destiné à votre commande <strong>${service}</strong> vient d'être reçu. Vous pouvez maintenant utiliser le code ci-dessous dans l'application ou le service que vous avez choisi.`)}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;margin:22px 0;">
-      <tr><td style="padding:12px 18px;text-align:center;color:#166534;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Code de vérification</td></tr>
-      <tr><td style="padding:8px 18px 20px;text-align:center;"><div style="font-family:Courier New,monospace;font-size:34px;font-weight:900;letter-spacing:5px;color:#14532d;">${code}</div></td></tr>
+    ${h1(`Votre code est arrivé${first ? `, ${first}` : ""}.`)}
+    ${p(`Nous venons de recevoir le SMS associé à votre commande <strong>${service}</strong>. Vous pouvez maintenant saisir le code ci-dessous dans l'application ou le service que vous avez choisi.`)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0;border:1px solid #e5e7eb;background:#f8f8f8;border-collapse:collapse;">
+      <tr><td style="padding:10px 16px;text-align:center;color:#555d66;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;">Code de vérification</td></tr>
+      <tr><td style="padding:8px 16px 20px;text-align:center;"><div style="font-family:Courier New,monospace;font-size:32px;font-weight:700;letter-spacing:5px;color:#f36f16;">${code}</div></td></tr>
     </table>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
-      ${badge("📱", "Service choisi", service)}
-      ${badge(country.flag, "Pays", countryName)}
-      ${badge("☎", "Numéro utilisé", phone)}
-      ${badge("#", "Référence", escapeHtml(opts.orderId.slice(0, 12)))}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border-collapse:collapse;">
+      <tr><td style="padding:8px 0;border-bottom:1px solid #eceff1;font-size:13px;color:#68717b;">Service</td><td align="right" style="padding:8px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#303943;">${service}</td></tr>
+      <tr><td style="padding:8px 0;border-bottom:1px solid #eceff1;font-size:13px;color:#68717b;">Pays</td><td align="right" style="padding:8px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#303943;">${escapeHtml(country.flag)} ${countryName}</td></tr>
+      <tr><td style="padding:8px 0;border-bottom:1px solid #eceff1;font-size:13px;color:#68717b;">Numéro</td><td align="right" style="padding:8px 0;border-bottom:1px solid #eceff1;font-size:13px;font-weight:700;color:#303943;">${phone}</td></tr>
+      <tr><td style="padding:8px 0;font-size:13px;color:#68717b;">Référence</td><td align="right" style="padding:8px 0;font-size:13px;font-weight:700;color:#303943;">${escapeHtml(opts.orderId.slice(0, 12))}</td></tr>
     </table>
-    ${p(`<strong>Que faire maintenant ?</strong><br>1. Ouvrez ${service}.<br>2. Reprenez l'inscription ou la connexion que vous étiez en train d'effectuer.<br>3. Saisissez le code ci-dessus dans le champ de vérification.`)}
-    ${p("Pour votre sécurité, ne communiquez jamais ce code à une autre personne. Texerra ne vous le demandera pas par téléphone ou par message.")}
-    <div style="margin-top:6px;">${btn("Retrouver ma commande →", `${SITE_URL}/dashboard`)}</div>
+    ${p(`<strong>Pour terminer votre vérification :</strong><br/>Ouvrez ${service}, reprenez l'inscription ou la connexion en cours, puis saisissez le code ci-dessus dans le champ prévu à cet effet.`)}
+    ${p("Pour votre sécurité, ne partagez jamais ce code. Texerra SMS ne vous le demandera jamais par téléphone ou par message.")}
   `;
-  const text = `Votre code SMS Texerra est arrivé.
+  const text = `Bonjour ${opts.name || ""},
 
+Votre code de vérification est arrivé.
+
+Code : ${opts.smsCode}
 Service : ${svcName(opts.serviceCode)}
 Pays : ${country.flag} ${country.name}
 Numéro : ${opts.phoneNumber}
-Code : ${opts.smsCode}
+Référence : ${opts.orderId.slice(0, 12)}
 
-Ouvrez ${svcName(opts.serviceCode)} et saisissez ce code dans le champ de vérification. Ne le communiquez à personne.
-
-Ma commande : ${SITE_URL}/dashboard
-Support : ${SUPPORT_EMAIL}`;
+Ouvrez ${svcName(opts.serviceCode)} et saisissez ce code dans le champ de vérification. Ne le communiquez à personne.`;
   const { error } = await resend.emails.send({
     from: FROM,
     replyTo: SUPPORT_EMAIL,
