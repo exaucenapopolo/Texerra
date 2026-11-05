@@ -2130,10 +2130,20 @@ export default function Dashboard() {
   const markNotificationRead = async (notificationId: string) => {
     const token = await auth.currentUser?.getIdToken().catch(() => null);
     if (!token) return;
-    await fetch(`/api/me/notifications/${encodeURIComponent(notificationId)}/read`, {
+
+    const response = await fetch(`/api/me/notifications/${encodeURIComponent(notificationId)}/read`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (!response.ok) throw new Error("Impossible de marquer cette notification comme lue.");
+
+    queryClient.setQueryData<{ notifications: any[]; unreadCount: number }>(
+      ["/api/me/notifications"],
+      (current) => current ? {
+        notifications: current.notifications.filter((item) => item.id !== notificationId),
+        unreadCount: Math.max(0, current.unreadCount - (current.notifications.some((item) => item.id === notificationId) ? 1 : 0)),
+      } : current
+    );
     await queryClient.invalidateQueries({ queryKey: ["/api/me/notifications"] });
   };
 

@@ -64,12 +64,20 @@ function countryDetails(countryCode: string): { name: string; flag: string } {
 // Professional white-background design (renders well in all clients)
 
 function shell(preheader: string, _accentLine: string, body: string, dashboardUrl = `${SITE_URL}/dashboard`): string {
-  const isCommercialDashboard = dashboardUrl.replace(/\/$/, "").endsWith("/commercial");
-  const dashboardTitle = isCommercialDashboard ? "Retrouvez votre espace commercial" : "Retrouvez votre espace Texerra";
-  const dashboardDescription = isCommercialDashboard
-    ? "Vos clients attribués, vos ventes et le suivi de vos commissions sont accessibles depuis votre espace commercial."
-    : "Vos commandes, vos numéros, vos dépôts et votre solde sont accessibles depuis votre tableau de bord.";
-  const dashboardButton = isCommercialDashboard ? "Ouvrir mon espace commercial" : "Ouvrir mon tableau de bord";
+  const normalizedDashboardUrl = dashboardUrl.replace(/\/$/, "");
+  const isCommercialDashboard = normalizedDashboardUrl.endsWith("/commercial");
+  const isAdminDashboard = normalizedDashboardUrl.endsWith("/admin");
+  const dashboardTitle = isAdminDashboard
+    ? "Accédez à l'administration Texerra"
+    : isCommercialDashboard ? "Retrouvez votre espace commercial" : "Retrouvez votre espace Texerra";
+  const dashboardDescription = isAdminDashboard
+    ? "Retrouvez les outils de suivi et de gestion de l'équipe Texerra SMS."
+    : isCommercialDashboard
+      ? "Vos clients attribués, vos ventes et le suivi de vos commissions sont accessibles depuis votre espace commercial."
+      : "Vos commandes, vos numéros, vos dépôts et votre solde sont accessibles depuis votre tableau de bord.";
+  const dashboardButton = isAdminDashboard
+    ? "Ouvrir l'administration"
+    : isCommercialDashboard ? "Ouvrir mon espace commercial" : "Ouvrir mon tableau de bord";
   const partnerRows = PARTNERS.map((partner) => `
     <tr>
       <td style="padding:13px 0;border-bottom:1px solid #eceff1;">
@@ -341,6 +349,143 @@ export async function sendAdminContactEmail(opts: {
   logger.info({ to: opts.to, subject: opts.subject }, "Admin contact email sent");
   return { success: true, id: data?.id };
 }
+
+
+// ─── Candidature d'agent commercial : notification équipe + accusé réception ──
+
+export async function sendPartnerApplicationEmails(opts: {
+  firstName: string;
+  lastName: string;
+  city: string;
+  whatsappPhone: string;
+  email: string;
+  submittedAt: string;
+}): Promise<{ success: true; applicantEmailSent: boolean; adminMessageId?: string; applicantMessageId?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY n'est pas configurée sur le serveur.");
+  }
+
+  const fullName = opts.firstName + " " + opts.lastName;
+  const safeFirstName = escapeHtml(opts.firstName);
+  const safeFullName = escapeHtml(fullName);
+  const safeCity = escapeHtml(opts.city);
+  const safePhone = escapeHtml(opts.whatsappPhone);
+  const safeEmail = escapeHtml(opts.email);
+  const submittedDate = escapeHtml(fmtDate(opts.submittedAt));
+  const phoneDigits = opts.whatsappPhone.replace(/\D/g, "");
+  const whatsappMessage = encodeURIComponent(
+    "Bonjour " + fullName + ", nous avons bien reçu votre candidature d'agent commercial auprès de Texerra SMS. Nous souhaitons échanger avec vous au sujet de votre demande."
+  );
+  const whatsappUrl = "https://wa.me/" + phoneDigits + "?text=" + whatsappMessage;
+
+  const adminBody = [
+    '<div style="background:#fff7ed;border-left:4px solid #f97316;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:26px;"><p style="margin:0;font-size:12px;font-weight:800;color:#9a3412;text-transform:uppercase;letter-spacing:.7px;">Nouvelle demande à examiner</p></div>',
+    h1("Nouvelle candidature d'agent commercial"),
+    p("Une personne vient de transmettre une demande pour rejoindre l'équipe commerciale de Texerra SMS. Vous trouverez ci-dessous les coordonnées communiquées et la confirmation de lecture du contrat."),
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border-collapse:collapse;">',
+    badge("", "Nom complet", safeFullName),
+    badge("", "Ville", safeCity),
+    badge("", "Téléphone WhatsApp", safePhone),
+    badge("", "E-mail du compte", safeEmail),
+    badge("", "Contrat", "Lecture et acceptation confirmées"),
+    badge("", "Demande reçue le", submittedDate),
+    '</table><div style="margin:10px 0 24px;">',
+    btn("Contacter le candidat sur WhatsApp", whatsappUrl, "#16A34A"),
+    '</div>',
+    p("Nous vous invitons à prendre connaissance de cette demande, à vérifier les informations avec le candidat et à échanger avec lui sur les prochaines étapes éventuelles de collaboration."),
+    p("Cette candidature constitue une demande de collaboration. Elle ne vaut pas, à elle seule, validation définitive ni signature du contrat par Texerra SMS.")
+  ].join("");
+
+  const adminText = "Nouvelle candidature d'agent commercial — Texerra SMS\n\n"
+    + "Nom complet : " + fullName + "\n"
+    + "Ville : " + opts.city + "\n"
+    + "Téléphone WhatsApp : " + opts.whatsappPhone + "\n"
+    + "E-mail du compte : " + opts.email + "\n"
+    + "Contrat : lecture et acceptation confirmées\n"
+    + "Demande reçue le : " + opts.submittedAt + "\n\n"
+    + "Contacter le candidat sur WhatsApp : " + whatsappUrl + "\n\n"
+    + "La demande doit être examinée par l'équipe avant toute validation de la collaboration.";
+
+  // L'e-mail à l'équipe part en premier : on ne confirme pas à tort une demande
+  // si l'adresse administrative n'a pas pu recevoir la candidature.
+  const adminResult = await resend.emails.send({
+    from: FROM,
+    replyTo: opts.email,
+    to: "texerra.sms@gmail.com",
+    subject: "Nouvelle candidature d'agent commercial — " + fullName,
+    html: shell("Une nouvelle candidature d'agent commercial vient d'être reçue.", "candidature", adminBody, SITE_URL + "/admin"),
+    text: adminText,
+  });
+  if (adminResult.error) {
+    logger.warn({ error: adminResult.error, applicantEmail: opts.email }, "Partner application admin email failed");
+    throw new Error("Resend n'a pas pu transmettre la candidature à l'équipe.");
+  }
+
+  const applicantBody = [
+    h1("Merci " + safeFirstName + " pour votre démarche."),
+    p("Nous vous remercions sincèrement pour l'intérêt que vous portez à Texerra SMS et pour votre initiative de rejoindre notre équipe commerciale en qualité d'agent indépendant."),
+    '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin:0 0 22px;"><p style="margin:0 0 5px;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.6px;">Candidature reçue</p><p style="margin:0;font-size:14px;line-height:1.7;color:#166534;">Votre demande a bien été transmise à l'équipe chargée des candidatures commerciales.</p></div>',
+    p("Nous avons enregistré les informations communiquées ainsi que votre confirmation d'avoir pris connaissance des conditions du contrat d'agent commercial. Votre demande va maintenant être examinée par notre équipe."),
+    p("Nous prendrons contact avec vous sous peu afin de mieux comprendre votre disponibilité, votre expérience et votre approche commerciale, puis d'échanger sur les possibilités et les modalités d'une collaboration avec Texerra SMS."),
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">',
+    badge("", "Nom", safeFullName),
+    badge("", "Ville", safeCity),
+    badge("", "WhatsApp", safePhone),
+    badge("", "Demande reçue le", submittedDate),
+    '</table>',
+    p("En attendant notre retour, nous vous invitons simplement à rester joignable sur le numéro WhatsApp indiqué dans votre demande."),
+    p("La réception de ce message confirme la bonne transmission de votre candidature. Elle ne constitue pas encore une acceptation définitive de la collaboration ni une signature du contrat par les deux parties."),
+    '<div style="margin:8px 0 0;">' + btn("Revoir la présentation du partenariat", SITE_URL + "/partners") + '</div>',
+    '<p style="margin:24px 0 0;font-size:14px;line-height:1.7;color:#3f4852;">Merci encore pour votre confiance.<br/><strong>L\'équipe Texerra SMS</strong></p>'
+  ].join("");
+
+  const applicantText = "Bonjour " + opts.firstName + ",\n\n"
+    + "Nous vous remercions sincèrement pour l'intérêt que vous portez à Texerra SMS et pour votre initiative de rejoindre notre équipe commerciale en qualité d'agent indépendant.\n\n"
+    + "Nous confirmons que votre demande a bien été transmise à l'équipe chargée des candidatures commerciales. Les informations communiquées et votre confirmation de lecture du contrat ont été enregistrées.\n\n"
+    + "Notre équipe examinera votre demande et prendra contact avec vous sous peu afin d'échanger sur votre disponibilité, votre expérience, votre approche commerciale et les possibilités de collaboration.\n\n"
+    + "Récapitulatif :\n"
+    + "Nom : " + fullName + "\n"
+    + "Ville : " + opts.city + "\n"
+    + "WhatsApp : " + opts.whatsappPhone + "\n"
+    + "Date de réception : " + opts.submittedAt + "\n\n"
+    + "La réception de ce message confirme la bonne transmission de votre demande. Elle ne constitue pas encore une acceptation définitive de la collaboration ni une signature du contrat par les deux parties.\n\n"
+    + "Merci encore pour votre confiance.\n\nL'équipe Texerra SMS\n" + SITE_URL + "/partners";
+
+  let applicantEmailSent = false;
+  let applicantMessageId: string | undefined;
+  try {
+    const applicantResult = await resend.emails.send({
+      from: FROM,
+      replyTo: SUPPORT_EMAIL,
+      to: opts.email,
+      subject: "Nous avons bien reçu votre candidature — Texerra SMS",
+      html: shell("Votre demande pour rejoindre l'équipe commerciale a bien été reçue.", "candidature reçue", applicantBody),
+      text: applicantText,
+    });
+    if (applicantResult.error) throw applicantResult.error;
+    applicantEmailSent = true;
+    applicantMessageId = applicantResult.data?.id;
+  } catch (error) {
+    // L'équipe a déjà reçu la demande : on conserve un succès côté utilisateur
+    // afin d'éviter qu'une nouvelle tentative ne lui envoie une seconde candidature.
+    logger.warn({ error, applicantEmail: opts.email, adminMessageId: adminResult.data?.id }, "Partner application confirmation email failed");
+  }
+
+  logger.info({
+    applicantEmail: opts.email,
+    adminMessageId: adminResult.data?.id,
+    applicantMessageId,
+    applicantEmailSent,
+  }, "Partner application processed");
+
+  return {
+    success: true,
+    applicantEmailSent,
+    adminMessageId: adminResult.data?.id,
+    applicantMessageId,
+  };
+}
+
 
 // ─── Félicitations au commercial après une vente attribuée ─────────────────────
 

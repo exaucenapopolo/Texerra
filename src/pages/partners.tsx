@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { auth } from "../lib/firebase";
 import { useMeta } from "../lib/use-meta";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
 import {
-  ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Check, MessageCircle,
+  ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Check,
   FileText, ListChecks, Briefcase, Wallet, Target, Ban, TrendingUp, Megaphone,
   UserCheck, Users, Shield, Lock, Scale, BadgeCheck, Clock, XCircle, Building2,
   Handshake,
@@ -36,12 +37,6 @@ const BRAND = {
   surface: "#FFFFFF",
   canvas: "#F9FAFB",
 };
-
-/* ────────────────────────────────────────────────────────────────── */
-/* WhatsApp                                                           */
-/* ────────────────────────────────────────────────────────────────── */
-
-const WHATSAPP_NUMBER = "12424542961"; // +1 (242) 454-2961
 
 /* ────────────────────────────────────────────────────────────────── */
 /* Résumé — 6 points clés sans icônes                                */
@@ -348,6 +343,9 @@ export default function Partners() {
   const [openArticles, setOpenArticles] = useState<number[]>([]);
   const [form, setForm] = useState({ firstName: "", lastName: "", city: "", phone: "" });
   const [accepted, setAccepted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
 
   const toggleArticle = (n: number) => {
     setOpenArticles((prev) =>
@@ -360,29 +358,58 @@ export default function Partners() {
     setOpenArticles(allOpen ? [] : ARTICLES.map((a) => a.number));
   };
 
+  const normalizedWhatsAppPhone = form.phone.trim().replace(/[\s().-]/g, "");
+  const isValidWhatsAppPhone = /^\+[1-9]\d{7,14}$/.test(normalizedWhatsAppPhone);
+
   const isFormFilled =
     form.firstName.trim() !== "" &&
     form.lastName.trim() !== "" &&
     form.city.trim() !== "" &&
     form.phone.trim() !== "";
 
-  const isValid = isFormFilled && accepted;
+  const isValid = isFormFilled && isValidWhatsAppPhone && accepted && !submitting;
 
-  const buildWhatsAppUrl = () => {
-    const message = `Bonjour Texerra SMS,
+  const submitApplication = async () => {
+    if (!isValid || submitting) return;
 
-Je me permets de vous contacter concernant le poste d'Agent Commercial.
+    setSubmitting(true);
+    setSubmissionError(null);
+    setSubmissionSuccess(false);
 
-Nom : ${form.lastName.trim().toUpperCase()}
-Prénom : ${form.firstName.trim()}
-Ville : ${form.city.trim()}
-Téléphone : ${form.phone.trim()}
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error("Connectez-vous à votre compte Texerra pour envoyer votre candidature.");
+      }
 
-J'ai lu et j'accepte l'intégralité du contrat d'agent commercial Texerra SMS. Je souhaite signer et commencer à travailler.
+      const token = await currentUser.getIdToken();
+      const response = await fetch("/api/me/partner-application", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          city: form.city.trim(),
+          whatsappPhone: normalizedWhatsAppPhone,
+          acceptedContract: accepted,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.error || "Votre candidature n'a pas pu être transmise. Réessayez.");
+      }
 
-Cordialement,
-${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
-    return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+      setSubmissionSuccess(true);
+      setForm({ firstName: "", lastName: "", city: "", phone: "" });
+      setAccepted(false);
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "Une erreur est survenue. Réessayez.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -618,8 +645,8 @@ ${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
               Prêt(e) à rejoindre l'équipe ?
             </h2>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Renseignez vos informations et envoyez votre candidature via WhatsApp.
-              Notre équipe vous recontactera pour finaliser la signature du contrat.
+              Renseignez vos coordonnées et confirmez votre accord avec les conditions du contrat.
+              Notre équipe étudiera votre demande et vous recontactera sous peu pour échanger sur une éventuelle collaboration.
             </p>
           </div>
 
@@ -632,9 +659,11 @@ ${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
                 <input
                   type="text"
                   value={form.firstName}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, firstName: e.target.value }))
-                  }
+                  onChange={(e) => {
+                  setForm((f) => ({ ...f, firstName: e.target.value }));
+                  setSubmissionError(null);
+                  setSubmissionSuccess(false);
+                }}
                   placeholder="Jean"
                   className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
                   style={{
@@ -650,9 +679,11 @@ ${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
                 <input
                   type="text"
                   value={form.lastName}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, lastName: e.target.value }))
-                  }
+                  onChange={(e) => {
+                  setForm((f) => ({ ...f, lastName: e.target.value }));
+                  setSubmissionError(null);
+                  setSubmissionSuccess(false);
+                }}
                   placeholder="Dupont"
                   className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
                   style={{
@@ -670,9 +701,11 @@ ${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
               <input
                 type="text"
                 value={form.city}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, city: e.target.value }))
-                }
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, city: e.target.value }));
+                  setSubmissionError(null);
+                  setSubmissionSuccess(false);
+                }}
                 placeholder="Douala"
                 className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
                 style={{
@@ -684,21 +717,35 @@ ${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
 
             <div>
               <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                Téléphone
+                Numéro WhatsApp
               </label>
               <input
                 type="tel"
+                required
+                autoComplete="tel"
+                inputMode="tel"
                 value={form.phone}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, phone: e.target.value }))
-                }
-                placeholder="+237 6 XX XX XX XX"
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, phone: e.target.value }));
+                  setSubmissionError(null);
+                  setSubmissionSuccess(false);
+                }}
+                placeholder="+237 6 12 34 56 78"
+                aria-invalid={form.phone.trim() !== "" && !isValidWhatsAppPhone}
                 className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
                 style={{
                   background: BRAND.borderSoft,
-                  border: `1px solid ${BRAND.border}`,
+                  border: `1px solid ${form.phone.trim() !== "" && !isValidWhatsAppPhone ? BRAND.danger : BRAND.border}`,
                 }}
               />
+              <p className="text-[11px] text-gray-500 mt-1.5">
+                Indiquez un numéro au format international, avec le signe + et l'indicatif du pays.
+              </p>
+              {form.phone.trim() !== "" && !isValidWhatsAppPhone && (
+                <p className="text-[11px] text-red-600 mt-1">
+                  Format invalide. Exemple : +237 6 12 34 56 78.
+                </p>
+              )}
             </div>
 
             {/* Case à cocher */}
@@ -727,44 +774,46 @@ ${form.firstName.trim()} ${form.lastName.trim().toUpperCase()}`;
                 type="checkbox"
                 className="sr-only"
                 checked={accepted}
-                onChange={(e) => setAccepted(e.target.checked)}
+                onChange={(e) => {
+                  setAccepted(e.target.checked);
+                  setSubmissionError(null);
+                  setSubmissionSuccess(false);
+                }}
               />
             </label>
 
-            {/* Bouton */}
-            {isValid ? (
-              <a
-                href={buildWhatsAppUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
-                style={{
-                  background: "#25D366",
-                  boxShadow: "0 6px 16px rgba(37,211,102,0.28)",
-                }}
-              >
-                <MessageCircle className="w-4 h-4" />
-                Envoyer ma candidature sur WhatsApp
-                <ArrowRight className="w-4 h-4" />
-              </a>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold cursor-not-allowed"
-                style={{
-                  background: BRAND.borderSoft,
-                  color: BRAND.inkMuted,
-                }}
-              >
-                <MessageCircle className="w-4 h-4" />
-                Envoyer ma candidature sur WhatsApp
-              </button>
+            {submissionError && (
+              <div role="alert" className="rounded-xl px-4 py-3 text-sm text-red-700" style={{ background: BRAND.dangerSoft, border: `1px solid ${BRAND.dangerBorder}` }}>
+                {submissionError}
+              </div>
             )}
 
-            {!isValid && (
+            {submissionSuccess && (
+              <div role="status" className="rounded-xl px-4 py-4 text-sm leading-relaxed text-green-800" style={{ background: BRAND.successSoft, border: `1px solid ${BRAND.successBorder}` }}>
+                <p className="font-bold mb-1">Votre candidature a bien été transmise.</p>
+                <p>Merci pour l'intérêt que vous portez à Texerra SMS et pour votre confiance. Notre équipe a reçu votre demande et prendra contact avec vous sous peu afin d'échanger sur votre candidature et les possibilités de collaboration.</p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void submitApplication()}
+              disabled={!isValid}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                background: BRAND.primary,
+                boxShadow: "0 6px 16px rgba(197,90,52,0.22)",
+              }}
+            >
+              {submitting ? "Envoi de votre candidature…" : "Envoyer ma candidature"}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            {!isValid && !submitting && !submissionSuccess && !submissionError && (
               <p className="text-[11px] text-gray-500 text-center leading-relaxed">
-                Remplissez tous les champs et cochez la case pour activer l'envoi.
+                {form.phone.trim() !== "" && !isValidWhatsAppPhone
+                  ? "Saisissez un numéro WhatsApp au format international pour continuer."
+                  : "Remplissez tous les champs et confirmez votre lecture du contrat pour activer l'envoi."}
               </p>
             )}
           </div>

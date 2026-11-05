@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { firestoreDb, getAdminAuth } from "../lib/firebase-admin.js";
 import { requireAuth } from "../lib/requireAuth.js";
-import { sendWelcomeEmail } from "../lib/mailer.js";
+import { sendWelcomeEmail, sendPartnerApplicationEmails } from "../lib/mailer.js";
 
 const router = Router();
 
@@ -179,20 +179,81 @@ router.patch("/", requireAuth, async (req, res) => {
   }
 });
 
-// Notifications in-app : lecture limitée pour ne pas multiplier les lectures Firestore.
+// Candidature commerciale : l'identité et l'adresse e-mail viennent du compte Firebase authentifié.
+router.post("/partner-application", requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).userId as string;
+    const firstName = String(req.body?.firstName ?? "").trim();
+    const lastName = String(req.body?.lastName ?? "").trim();
+    const city = String(req.body?.city ?? "").trim();
+    const rawPhone = String(req.body?.whatsappPhone ?? "").trim();
+    const whatsappPhone = rawPhone.replace(/[\s().-]/g, "");
+
+    if (!firstName || firstName.length > 80 || !lastName || lastName.length > 80 || !city || city.length > 120) {
+      res.status(400).json({ error: "Veuillez renseigner un prénom, un nom et une ville valides." });
+      return;
+    }
+    if (!/^\+[1-9]\d{7,14}$/.test(whatsappPhone)) {
+      res.status(400).json({ error: "Le numéro WhatsApp doit être au format international, avec + et l'indicatif du pays." });
+      return;
+    }
+    if (req.body?.acceptedContract !== true) {
+      res.status(400).json({ error: "Vous devez confirmer avoir lu et accepté le contrat d'agent commercial." });
+      return;
+    }
+
+    // L'adresse de confirmation est toujours celle du compte Firebase authentifié.
+    // Aucun e-mail fourni par le navigateur n'est utilisé comme destinataire.
+    const account = await getAdminAuth().getUser(userId);
+    const accountEmail = String(account.email ?? "").trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail)) {
+      res.status(400).json({ error: "Aucune adresse e-mail valide n'est associée à votre compte Texerra. Mettez d'abord votre compte à jour." });
+      return;
+    }
+
+    const submittedAt = new Date().toISOString();
+    const emailResult = await sendPartnerApplicationEmails({
+      firstName,
+      lastName,
+      city,
+      whatsappPhone,
+      email: accountEmail,
+      submittedAt,
+    });
+
+    res.status(201).json({
+      ok: true,
+      confirmationEmailSent: emailResult.applicantEmailSent,
+    });
+  } catch (err) {
+    console.error("[me/partner-application] error:", err);
+    res.status(500).json({ error: "Votre demande n'a pas pu être transmise pour le moment. Veuillez réessayer." });
+  }
+});
+
+// Notifications in-app : seules les notifications non lues sont renvoyées.
+// Le tri en mémoire évite de créer un nouvel index Firestore.
 router.get("/notifications", requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId as string;
     const rawLimit = Number(req.query.limit ?? 20);
     const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 20, 1), 30);
     const notificationsRef = firestoreDb.collection("users").doc(userId).collection("notifications");
-    const [snap, unreadSnap] = await Promise.all([
-      notificationsRef.orderBy("createdAt", "desc").limit(limit).get(),
-      notificationsRef.where("read", "==", false).count().get(),
-    ]);
+    const unreadSnap = await notificationsRef.where("read", "==", false).get();
+    const unreadNotifications = unreadSnap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a: any, b: any) => {
+        const getTime = (value: any) => {
+          if (value && typeof value.toDate === "function") return value.toDate().getTime();
+          const time = value ? new Date(value).getTime() : 0;
+          return Number.isFinite(time) ? time : 0;
+        };
+        return getTime(b.createdAt) - getTime(a.createdAt);
+      });
+
     res.json({
-      notifications: snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-      unreadCount: unreadSnap.data().count,
+      notifications: unreadNotifications.slice(0, limit),
+      unreadCount: unreadSnap.size,
     });
   } catch (err) {
     console.error("[me/notifications] error:", err);
