@@ -212,19 +212,34 @@ router.post("/partner-application", requireAuth, async (req, res) => {
     }
 
     const submittedAt = new Date().toISOString();
-    const emailResult = await sendPartnerApplicationEmails({
+    const userProfile = await firestoreDb.collection("users").doc(userId).get();
+    const profileData = userProfile.data() ?? {};
+    const applicationRef = firestoreDb.collection("partner_applications").doc(userId);
+    const previousApplication = await applicationRef.get();
+    if (previousApplication.exists && ["pending", "approved"].includes(String(previousApplication.data()?.status ?? ""))) {
+      res.status(409).json({ error: "Une candidature est déjà enregistrée pour ce compte." });
+      return;
+    }
+    await applicationRef.set({
+      applicantUid: userId, firstName, lastName, name: firstName + " " + lastName,
+      city, country: String(profileData.countryName ?? profileData.countryIso ?? city),
+      whatsappPhone, email: accountEmail, acceptedContract: true, status: "pending",
+      submittedAt, updatedAt: submittedAt,
+    }, { merge: true });
+    let emailResult: { applicantEmailSent: boolean } = { applicantEmailSent: false };
+    try {
+      emailResult = await sendPartnerApplicationEmails({
       firstName,
       lastName,
       city,
       whatsappPhone,
       email: accountEmail,
       submittedAt,
-    });
-
-    res.status(201).json({
-      ok: true,
-      confirmationEmailSent: emailResult.applicantEmailSent,
-    });
+      });
+    } catch (emailError) {
+      console.error("[me/partner-application] notification email failed:", emailError);
+    }
+    res.status(201).json({ ok: true, confirmationEmailSent: emailResult.applicantEmailSent });
   } catch (err) {
     console.error("[me/partner-application] error:", err);
     res.status(500).json({ error: "Votre demande n'a pas pu être transmise pour le moment. Veuillez réessayer." });

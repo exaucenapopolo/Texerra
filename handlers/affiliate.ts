@@ -18,7 +18,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { firestoreDb, getAdminAuth } from "../lib/firebase-admin.js";
 import { requireAuth } from "../lib/requireAuth.js";
-import { sendAdminContactEmail } from "../lib/mailer.js";
+import { sendAdminContactEmail, sendPartnerApprovalEmail } from "../lib/mailer.js";
 
 import {
   checkRateLimit,
@@ -552,6 +552,105 @@ router.post(
 /* ═══════════════════════════════════════════════════════════
  * ROUTES ADMIN
  * ═══════════════════════════════════════════════════════════ */
+
+/** Candidatures commerciales : consultation, approbation et refus */
+router.get("/admin/partner-applications", requireAffiliateAdmin, async (_req: Request, res: Response) => {
+  try {
+    const snap = await firestoreDb.collection("partner_applications").orderBy("submittedAt", "desc").limit(200).get();
+    res.status(200).json({ applications: snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) });
+  } catch (err) {
+    console.error("[affiliate/admin/partner-applications GET] error:", err);
+    res.status(500).json({ error: "Impossible de récupérer les candidatures." });
+  }
+});
+
+router.patch("/admin/partner-applications/:id", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId as string;
+    const applicationId = String(req.params.id ?? "").trim();
+    const action = String(req.body?.action ?? "");
+    if (!applicationId || !["approve", "reject"].includes(action)) { res.status(400).json({ error: "Action ou candidature invalide." }); return; }
+    const applicationRef = firestoreDb.collection("partner_applications").doc(applicationId);
+    const applicationSnap = await applicationRef.get();
+    if (!applicationSnap.exists) { res.status(404).json({ error: "Candidature introuvable." }); return; }
+    const application = applicationSnap.data()!;
+    if (action === "reject") {
+      if (application.status === "approved") { res.status(409).json({ error: "Cette candidature est déjà approuvée." }); return; }
+      await applicationRef.set({ status: "rejected", rejectedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
+      await auditLog({ actorId: adminId, actorRole: "admin", action: "reject_partner_application", entityType: "partner_applications", entityId: applicationId, metadataSafe: { email: application.email } });
+      res.status(200).json({ ok: true, status: "rejected" }); return;
+    }
+    if (application.status === "approved" && application.commercialId) {
+      const existing = await firestoreDb.collection("commercials").doc(String(application.commercialId)).get();
+      if (existing.exists) {
+        res.status(200).json({ ok: true, status: "approved", commercial: { id: existing.id, ...existing.data() }, emailSent: application.approvalEmailStatus === "sent" });
+        return;
+      }
+    }
+    const email = String(application.email ?? "").trim().toLowerCase();
+    const name = String(application.name ?? [application.firstName, application.lastName].filter(Boolean).join(" ")).trim();
+    if (!email.includes("@") || !name) { res.status(400).json({ error: "Les informations de cette candidature sont incomplètes." }); return; }
+    const existingByEmail = await firestoreDb.collection("commercials").where("email", "==", email).limit(1).get();
+    let commercial: any;
+    if (!existingByEmail.empty) {
+      const doc = existingByEmail.docs[0]; commercial = { id: doc.id, ...doc.data() };
+    } else {
+      const baseCode = name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "").slice(0, 8) || "COM";
+      let affiliateCode = "TX-" + baseCode, counter = 0;
+      while (true) {
+        const codeSnap = await firestoreDb.collection("commercials").where("affiliateCode", "==", affiliateCode).limit(1).get();
+        if (codeSnap.empty) break;
+        counter++; affiliateCode = "TX-" + baseCode + counter;
+        if (counter > 999) { affiliateCode = "TX-" + baseCode + "-" + Date.now().toString(36).toUpperCase(); break; }
+      }
+      const commercialRef = firestoreDb.collection("commercials").doc("partner-" + applicationId);
+      const now = new Date().toISOString();
+      commercial = {
+        id: commercialRef.id, firebaseUid: String(application.applicantUid ?? applicationId),
+        name, email, country: String(application.country ?? application.city ?? ""),
+        affiliateCode, commissionRate: 50, status: "active",
+        createdAt: now, updatedAt: now, applicationId,
+      };
+      await commercialRef.create(commercial);
+    }
+    const approvedAt = new Date().toISOString();
+    await applicationRef.set({ status: "approved", commercialId: commercial.id, approvedAt, updatedAt: approvedAt, approvalEmailStatus: "pending" }, { merge: true });
+    await auditLog({ actorId: adminId, actorRole: "admin", action: "approve_partner_application", entityType: "partner_applications", entityId: applicationId, metadataSafe: { email, commercialId: commercial.id, commissionRate: commercial.commissionRate } });
+    let emailSent = false, emailError: string | null = null;
+    try {
+      await sendPartnerApprovalEmail({ to: email, name, affiliateCode: String(commercial.affiliateCode ?? ""), commissionRate: Number(commercial.commissionRate ?? 50) });
+      emailSent = true;
+      await applicationRef.set({ approvalEmailStatus: "sent", approvalEmailSentAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+      emailError = err instanceof Error ? err.message : "Envoi du courriel impossible.";
+      await applicationRef.set({ approvalEmailStatus: "failed", approvalEmailError: emailError }, { merge: true });
+    }
+    res.status(200).json({ ok: true, status: "approved", commercial, emailSent, emailError });
+  } catch (err) {
+    console.error("[affiliate/admin/partner-applications PATCH] error:", err);
+    res.status(500).json({ error: "Impossible de traiter cette candidature." });
+  }
+});
+
+router.post("/admin/partner-applications/:id/resend", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id ?? "").trim();
+    const ref = firestoreDb.collection("partner_applications").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) { res.status(404).json({ error: "Candidature introuvable." }); return; }
+    const app = snap.data()!;
+    if (app.status !== "approved" || !app.commercialId) { res.status(409).json({ error: "Cette candidature n'est pas encore approuvée." }); return; }
+    const commercialSnap = await firestoreDb.collection("commercials").doc(String(app.commercialId)).get();
+    if (!commercialSnap.exists) { res.status(404).json({ error: "Fiche commerciale introuvable." }); return; }
+    const commercial = commercialSnap.data()!;
+    await sendPartnerApprovalEmail({ to: String(app.email), name: String(app.name), affiliateCode: String(commercial.affiliateCode), commissionRate: Number(commercial.commissionRate ?? 50) });
+    await ref.set({ approvalEmailStatus: "sent", approvalEmailSentAt: new Date().toISOString(), approvalEmailError: null }, { merge: true });
+    res.status(200).json({ ok: true, emailSent: true });
+  } catch (err) {
+    console.error("[affiliate/admin/partner-applications resend] error:", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "Échec de l'envoi du courriel." });
+  }
+});
 
 /** GET /admin/commercials — Liste */
 router.get(

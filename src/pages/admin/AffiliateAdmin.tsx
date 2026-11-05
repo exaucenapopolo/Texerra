@@ -17,6 +17,8 @@ import {
   Bell,
   Trophy,
   DollarSign,
+  Mail,
+  ExternalLink,
 } from "lucide-react";
 import {
   adminListCommercials,
@@ -29,6 +31,10 @@ import {
   adminGetCommercialAccount,
   adminGetCommercialClients,
   adminSendAffiliateContact,
+  adminListPartnerApplications,
+  adminProcessPartnerApplication,
+  adminResendPartnerApprovalEmail,
+  type PartnerApplicationRow,
   type AdminCommercialAccount,
   type AdminCommercialRow,
   type WithdrawalRow,
@@ -44,7 +50,7 @@ import {
   type AdminReportPayload,
 } from "../../lib/admin-report";
 
-type Tab = "overview" | "leaderboard" | "commercials" | "withdrawals";
+type Tab = "overview" | "leaderboard" | "applications" | "commercials" | "withdrawals";
 type Period = "today" | "week" | "month" | "year" | "all";
 
 const PERIODS: { value: Period; label: string }[] = [
@@ -108,6 +114,13 @@ export default function AffiliateAdmin() {
             Classement
           </TabButton>
           <TabButton
+            active={tab === "applications"}
+            onClick={() => setTab("applications")}
+            icon={<Mail className="w-4 h-4" />}
+          >
+            Candidatures
+          </TabButton>
+          <TabButton
             active={tab === "commercials"}
             onClick={() => setTab("commercials")}
             icon={<Users className="w-4 h-4" />}
@@ -127,6 +140,7 @@ export default function AffiliateAdmin() {
         {tab === "leaderboard" && (
           <LeaderboardTab period={period} />
         )}
+        {tab === "applications" && <ApplicationsTab />}
         {tab === "commercials" && <CommercialsTab />}
         {tab === "withdrawals" && <WithdrawalsTab />}
       </div>
@@ -600,6 +614,85 @@ function LeaderboardTab({ period }: { period: Period }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * CANDIDATURES COMMERCIALES
+ * ═══════════════════════════════════════════════════════════ */
+function ApplicationsTab() {
+  const [applications, setApplications] = useState<PartnerApplicationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = async () => {
+    setLoading(true); setError(null);
+    try { const result = await adminListPartnerApplications(); setApplications(result.applications); }
+    catch (err) { setError(err instanceof Error ? err.message : "Impossible de charger les candidatures."); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  const process = async (application: PartnerApplicationRow, action: "approve" | "reject") => {
+    const prompt = action === "approve" ? "approuver cette candidature et créer le commercial avec 50 % de commission sur la marge" : "refuser cette candidature";
+    if (!window.confirm("Confirmer : " + prompt + " ?")) return;
+    setBusyId(application.id); setError(null);
+    try {
+      const result = await adminProcessPartnerApplication(application.id, action);
+      if (action === "approve") alert(result.emailSent
+        ? "Candidature approuvée. Le commercial a été créé et le courriel envoyé à " + application.email + "."
+        : "Le commercial a été créé, mais le courriel n'a pas pu être envoyé. Vous pourrez le renvoyer depuis cette fiche.");
+      else alert("La candidature a été refusée.");
+      await load();
+    } catch (err) { setError(err instanceof Error ? err.message : "Une erreur est survenue."); }
+    finally { setBusyId(null); }
+  };
+  const resend = async (application: PartnerApplicationRow) => {
+    setBusyId(application.id); setError(null);
+    try { await adminResendPartnerApprovalEmail(application.id); alert("Courriel envoyé à " + application.email + "."); await load(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Échec de l'envoi du courriel."); }
+    finally { setBusyId(null); }
+  };
+  const pendingCount = applications.filter((a) => a.status === "pending").length;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div><h2 className="font-semibold text-gray-900">Demandes de partenariat commercial</h2>
+          <p className="text-sm text-gray-500">{pendingCount} candidature{pendingCount > 1 ? "s" : ""} en attente · {applications.length} au total</p></div>
+        <button onClick={load} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Actualiser
+        </button>
+      </div>
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {loading ? <div className="rounded-xl border bg-white p-10 text-center text-gray-400">Chargement des candidatures…</div>
+      : applications.length === 0 ? <div className="rounded-xl border bg-white p-10 text-center text-gray-500">Aucune candidature enregistrée pour le moment.</div>
+      : <div className="space-y-3">{applications.map((application) => (
+        <div key={application.id} className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0"><div className="font-semibold text-gray-900">{application.name || [application.firstName, application.lastName].filter(Boolean).join(" ")}</div>
+              <div className="mt-1 text-sm text-gray-500 break-all">{application.email}</div>
+              <div className="mt-1 text-sm text-gray-500">{application.city}{application.country && application.country !== application.city ? " · " + application.country : ""}</div></div>
+            <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${application.status === "pending" ? "border-amber-200 bg-amber-50 text-amber-700" : application.status === "approved" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+              {application.status === "pending" ? "En attente" : application.status === "approved" ? "Approuvée" : "Refusée"}
+            </span>
+          </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg bg-gray-50 p-3"><div className="text-xs text-gray-500">WhatsApp</div><div className="mt-1 font-medium text-gray-800">{application.whatsappPhone || "—"}</div></div>
+            <div className="rounded-lg bg-gray-50 p-3"><div className="text-xs text-gray-500">Candidature reçue</div><div className="mt-1 font-medium text-gray-800">{application.submittedAt ? new Date(application.submittedAt).toLocaleString("fr-FR") : "—"}</div></div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a href={`mailto:${application.email}?subject=${encodeURIComponent("Votre candidature commerciale Texerra SMS")}`} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"><Mail className="h-4 w-4" /> Contacter par e-mail</a>
+            <a href={`https://wa.me/${String(application.whatsappPhone || "").replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-green-200 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-50"><ExternalLink className="h-4 w-4" /> WhatsApp</a>
+            {application.status === "pending" && <>
+              <button onClick={() => process(application, "approve")} disabled={busyId === application.id} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">{busyId === application.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approuver et créer le commercial</button>
+              <button onClick={() => process(application, "reject")} disabled={busyId === application.id} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"><X className="h-4 w-4" /> Refuser</button>
+            </>}
+            {application.status === "approved" && application.approvalEmailStatus !== "sent" && <button onClick={() => resend(application)} disabled={busyId === application.id} className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50">{busyId === application.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Renvoyer le courriel de confirmation</button>}
+            {application.status === "approved" && application.approvalEmailStatus === "sent" && <span className="self-center text-xs font-medium text-green-700">Courriel de confirmation envoyé</span>}
+          </div>
+          {application.status === "approved" && application.commercialId && <p className="mt-3 text-xs text-gray-500">Fiche commerciale créée : {application.commercialId} · Commission configurée à 50 % de la marge éligible.</p>}
+        </div>
+      ))}</div>}
     </div>
   );
 }

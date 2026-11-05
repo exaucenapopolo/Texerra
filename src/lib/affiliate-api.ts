@@ -202,6 +202,24 @@ export interface AdminCommercialRow {
   firebaseUid?: string | null;
 }
 
+export interface PartnerApplicationRow {
+  id: string; applicantUid: string; firstName: string; lastName: string; name: string;
+  city: string; country?: string; whatsappPhone: string; email: string;
+  status: "pending" | "approved" | "rejected"; submittedAt: string;
+  commercialId?: string; approvalEmailStatus?: "pending" | "sent" | "failed";
+}
+export function adminListPartnerApplications(): Promise<{ applications: PartnerApplicationRow[] }> {
+  return apiCall("/admin/partner-applications");
+}
+export function adminProcessPartnerApplication(id: string, action: "approve" | "reject"): Promise<{
+  ok: boolean; status: string; commercial?: AdminCommercialRow; emailSent?: boolean; emailError?: string | null;
+}> {
+  return apiCall("/admin/partner-applications/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify({ action }) });
+}
+export function adminResendPartnerApprovalEmail(id: string): Promise<{ ok: boolean; emailSent: boolean }> {
+  return apiCall("/admin/partner-applications/" + encodeURIComponent(id) + "/resend", { method: "POST" });
+}
+
 export function adminListCommercials(): Promise<{
   commercials: AdminCommercialRow[];
 }> {
