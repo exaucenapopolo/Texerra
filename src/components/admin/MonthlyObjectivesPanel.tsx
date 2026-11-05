@@ -329,7 +329,7 @@ export default function AdminMonthlyObjectivesPanel({ token }: Props) {
 
                   <div className="border-t border-slate-100 pt-3 grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <div className="text-slate-500">À réaliser / jour restant</div>
+                      <div className="text-slate-500">Rythme quotidien nécessaire</div>
                       <div className="mt-1 font-semibold text-slate-800">
                         {noTarget ? "Définir la cible" : goalReached ? "Objectif atteint" : daysLeft > 0 ? formatPace(dailyNeeded, metric.unit) : "Mois terminé"}
                       </div>
