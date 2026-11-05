@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../lib/auth-context";
 import { downloadAdminFullDataPdf } from "../lib/admin-report";
+import AdminMonthlyObjectivesPanel from "../components/admin/MonthlyObjectivesPanel";
 import {
   LineChart,
   Line,
@@ -1320,6 +1321,8 @@ export default function AdminPage() {
             />
           </div>
         )}
+
+        <AdminMonthlyObjectivesPanel token={firebaseToken} />
 
         {/* Graphique */}
         <div className="bg-white rounded-2xl border p-5 shadow-sm">
