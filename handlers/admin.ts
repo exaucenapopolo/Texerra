@@ -453,7 +453,8 @@ router.put("/objectives", requireAdmin, async (req: Request, res: Response) => {
     for (const key of MONTHLY_OBJECTIVE_KEYS) {
       const raw = rawTargets[key];
       const parsed = raw === "" || raw == null ? 0 : Number(raw);
-      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1_000_000_000) {
+      const isCountMetric = key === "newUsers" || key === "completedTopups" || key === "completedOrders";
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1_000_000_000 || (isCountMetric && !Number.isInteger(parsed))) {
         res.status(400).json({ error: `Valeur invalide pour l'objectif : ${key}.` });
         return;
       }
