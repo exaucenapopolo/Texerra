@@ -424,7 +424,7 @@ export async function sendPartnerApplicationEmails(opts: {
   const applicantBody = [
     h1("Merci " + safeFirstName + " pour votre démarche."),
     p("Nous vous remercions sincèrement pour l'intérêt que vous portez à Texerra SMS et pour votre initiative de rejoindre notre équipe commerciale en qualité d'agent indépendant."),
-    '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin:0 0 22px;"><p style="margin:0 0 5px;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.6px;">Candidature reçue</p><p style="margin:0;font-size:14px;line-height:1.7;color:#166534;">Votre demande a bien été transmise à l'équipe chargée des candidatures commerciales.</p></div>',
+    '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin:0 0 22px;"><p style="margin:0 0 5px;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.6px;">Candidature reçue</p><p style="margin:0;font-size:14px;line-height:1.7;color:#166534;">Votre demande a bien été transmise à l\'équipe chargée des candidatures commerciales.</p></div>',
     p("Nous avons enregistré les informations communiquées ainsi que votre confirmation d'avoir pris connaissance des conditions du contrat d'agent commercial. Votre demande va maintenant être examinée par notre équipe."),
     p("Nous prendrons contact avec vous sous peu afin de mieux comprendre votre disponibilité, votre expérience et votre approche commerciale, puis d'échanger sur les possibilités et les modalités d'une collaboration avec Texerra SMS."),
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">',
