@@ -394,7 +394,9 @@ router.get("/objectives", requireAdmin, async (req: Request, res: Response) => {
     const elapsedDays = selectedIndex < currentIndex
       ? daysInMonth
       : selectedIndex === currentIndex ? today.day : 0;
-    const remainingDays = Math.max(0, daysInMonth - elapsedDays);
+    const remainingDays = selectedIndex === currentIndex
+      ? Math.max(0, daysInMonth - elapsedDays + 1)
+      : Math.max(0, daysInMonth - elapsedDays);
 
     const previousDate = new Date(Date.UTC(year, month - 2, 1));
     const previousYear = previousDate.getUTCFullYear();
