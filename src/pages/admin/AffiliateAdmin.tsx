@@ -755,8 +755,25 @@ function CommercialRow({
       ? `\n\nVotre activité actuelle dans notre programme :\n- Clients attribués : ${stats.clientsCount}\n- Ventes enregistrées : ${stats.salesCount}\n- Volume de ventes : ${formatEur(stats.totalSales)}\n- Commissions générées : ${formatEur(stats.totalCommissions)}.\n\nCes chiffres nous permettent de mieux comprendre votre progression et de voir où un accompagnement pourrait vous être utile.`
       : "\n\nNous souhaitons faire le point sur votre progression et comprendre les besoins qui pourraient vous aider à avancer.";
     const countryLine = commercial?.country ? `\nVotre marché déclaré : ${commercial.country}.` : "";
-    const clientFacts = contactTarget?.meta
-      ? `\n\nInformations liées à votre relation avec Texerra :\n- Pays : ${contactTarget.meta.country || "Non renseigné"}\n- Commandes réussies : ${contactTarget.meta.successfulOrders ?? 0}\n- Attribution au programme : ${contactTarget.meta.attributedAt ? new Date(contactTarget.meta.attributedAt).toLocaleString("fr-FR") : "Date non disponible"}.`
+    const clientMetaFacts: string[] = [];
+    const clientMeta = contactTarget?.meta;
+    if (clientMeta) {
+      const country = String(clientMeta.country ?? "").trim();
+      if (country) clientMetaFacts.push(`- Pays : ${country}`);
+
+      if (typeof clientMeta.successfulOrders === "number" && Number.isFinite(clientMeta.successfulOrders)) {
+        clientMetaFacts.push(`- Commandes réussies : ${clientMeta.successfulOrders}`);
+      }
+
+      if (clientMeta.attributedAt) {
+        const attributedDate = new Date(clientMeta.attributedAt);
+        if (!Number.isNaN(attributedDate.getTime())) {
+          clientMetaFacts.push(`- Attribution au programme : ${attributedDate.toLocaleString("fr-FR")}`);
+        }
+      }
+    }
+    const clientFacts = clientMetaFacts.length
+      ? `\n\nInformations liées à votre relation avec Texerra :\n${clientMetaFacts.join("\n")}.`
       : "";
     const templates: Record<string, { subject: string; message: string }> = {
       commercial_encouragement: {

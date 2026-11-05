@@ -50,8 +50,6 @@ export const ICON_COLORS: Record<string, string> = {
   coinbase: "0052FF",
   kucoin: "24AE8F",
   tencentqq: "EB192D",
-  binance: "F0B90B",
-  tiktok: "000000",
   // Local fallbacks
   microsoft: "5E5E5E",
   outlook: "0078D4",

@@ -383,9 +383,9 @@ type MessageTemplate = {
 };
 
 function formatContactDate(value?: string | null): string {
-  if (!value) return "information non disponible";
+  if (!value) return "";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "information non disponible";
+  if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleString("fr-FR", {
     day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
@@ -393,18 +393,28 @@ function formatContactDate(value?: string | null): string {
 
 function contactProfileFacts(profile?: UserContactProfile): string {
   if (!profile) return "";
-  const signup = profile.createdAt
-    ? `Votre compte Texerra a été créé le ${formatContactDate(profile.createdAt)}.`
-    : "La date de création de votre compte n’est pas disponible dans notre historique.";
-  const activity = profile.lastSignInAt
-    ? `La dernière connexion enregistrée sur votre compte date du ${formatContactDate(profile.lastSignInAt)}.`
-    : profile.lastOrderAt
-      ? `Nous ne disposons pas d’une heure de dernière connexion fiable ; votre dernière activité enregistrée est une commande du ${formatContactDate(profile.lastOrderAt)}.`
-      : "Nous ne disposons pas d’une date de dernière connexion suffisamment fiable pour vous l’indiquer.";
-  const count = Number.isFinite(profile.completedOrders)
-    ? `Vous avez déjà réalisé ${profile.completedOrders ?? 0} commande(s) réussie(s) sur ${profile.totalOrders ?? 0} commande(s) enregistrée(s) sur la plateforme.`
-    : "Nous suivons votre historique afin de mieux vous accompagner.";
-  return `${signup}\n${activity}\n${count}`;
+  const facts: string[] = [];
+  const signupDate = formatContactDate(profile.createdAt);
+  if (signupDate) facts.push(`Votre compte Texerra a été créé le ${signupDate}.`);
+
+  const lastSignIn = formatContactDate(profile.lastSignInAt);
+  const lastOrder = formatContactDate(profile.lastOrderAt);
+  if (lastSignIn) {
+    facts.push(`La dernière connexion enregistrée sur votre compte date du ${lastSignIn}.`);
+  } else if (lastOrder) {
+    facts.push(`Votre dernière activité enregistrée est une commande du ${lastOrder}.`);
+  }
+
+  if (typeof profile.completedOrders === "number" && Number.isFinite(profile.completedOrders)) {
+    const count = profile.completedOrders;
+    if (typeof profile.totalOrders === "number" && Number.isFinite(profile.totalOrders)) {
+      facts.push(`Vous avez déjà réalisé ${count} commande(s) réussie(s) sur ${profile.totalOrders} commande(s) enregistrée(s) sur la plateforme.`);
+    } else {
+      facts.push(`Vous avez déjà réalisé ${count} commande(s) réussie(s) sur la plateforme.`);
+    }
+  }
+
+  return facts.join("\n");
 }
 
 function contextStatusLabel(status: string): string {
@@ -418,13 +428,28 @@ function contextStatusLabel(status: string): string {
 
 function messageContextFacts(context?: MessageContext): string {
   if (!context) return "";
+  const date = formatContactDate(context.date);
   if (context.kind === "order") {
-    return `Commande : ${context.id}\nDate : ${formatContactDate(context.date)}\nService choisi : ${context.service || "non précisé"}\nPays du numéro : ${context.country || "non précisé"}\nNuméro acheté : ${context.number || "non renseigné"}\nMontant : ${Number(context.amount || 0).toFixed(2)} €\nÉtat enregistré : ${contextStatusLabel(context.status)}`;
+    const facts = [`Commande : ${context.id}`];
+    if (date) facts.push(`Date : ${date}`);
+    if (context.service?.trim()) facts.push(`Service choisi : ${context.service}`);
+    if (context.country?.trim()) facts.push(`Pays du numéro : ${context.country}`);
+    if (context.number?.trim()) facts.push(`Numéro acheté : ${context.number}`);
+    if (Number.isFinite(context.amount)) facts.push(`Montant : ${context.amount.toFixed(2)} €`);
+    if (context.status?.trim()) facts.push(`État enregistré : ${contextStatusLabel(context.status)}`);
+    return facts.join("\n");
   }
-  const local = context.localAmount != null && context.currency
-    ? `\nMontant indiqué par le moyen de paiement : ${context.localAmount} ${context.currency}`
-    : "";
-  return `Dépôt : ${context.id}\nDate : ${formatContactDate(context.date)}\nMontant : ${Number(context.amount || 0).toFixed(2)} €${local}\nPays : ${context.country || "non renseigné"}\nMoyen de paiement : ${context.provider || "non précisé"}\nStatut enregistré : ${contextStatusLabel(context.status)}${context.reference ? `\nRéférence : ${context.reference}` : ""}`;
+  const facts = [`Dépôt : ${context.id}`];
+  if (date) facts.push(`Date : ${date}`);
+  if (Number.isFinite(context.amount)) facts.push(`Montant : ${context.amount.toFixed(2)} €`);
+  if (context.localAmount != null && context.currency?.trim()) {
+    facts.push(`Montant indiqué par le moyen de paiement : ${context.localAmount} ${context.currency}`);
+  }
+  if (context.country?.trim()) facts.push(`Pays : ${context.country}`);
+  if (context.provider?.trim()) facts.push(`Moyen de paiement : ${context.provider}`);
+  if (context.status?.trim()) facts.push(`Statut enregistré : ${contextStatusLabel(context.status)}`);
+  if (context.reference?.trim()) facts.push(`Référence : ${context.reference}`);
+  return facts.join("\n");
 }
 
 const MESSAGE_TEMPLATES: MessageTemplate[] = [

@@ -270,7 +270,7 @@ export function downloadAdminFullDataPdf(data: any, filename = "texerra-export-a
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("fr-FR");
   };
   const revenue = completedOrders.reduce((sum: number, row: any) => sum + amount(row, "priceNum", "price"), 0);
-  const margin = completedOrders.reduce((sum: number, row: any) => {
+  const grossMargin = completedOrders.reduce((sum: number, row: any) => {
     const price = amount(row, "priceNum", "price");
     const rawMargin = row?.marginNum ?? row?.margin;
     const actualMargin = rawMargin === null || rawMargin === undefined || rawMargin === "" ? NaN : Number(rawMargin);
@@ -296,7 +296,7 @@ export function downloadAdminFullDataPdf(data: any, filename = "texerra-export-a
     body: [
       ["Utilisateurs exportés", users.length], ["Commandes exportées", orders.length],
       ["Commandes réussies", completedOrders.length], ["Chiffre d'affaires réussi", money(revenue)],
-      ["Marge des commandes réussies", money(margin)], ["Dépôts exportés", topups.length],
+      ["Marge des commandes réussies", money(grossMargin)], ["Dépôts exportés", topups.length],
       ["Dépôts réussis", topups.filter((row: any) => row.status === "completed").length],
       ["Commerciaux", commercials.length], ["Commissions", commissions.length],
       ["Attributions clients", attributions.length], ["Retraits", withdrawals.length],
