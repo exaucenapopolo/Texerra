@@ -489,11 +489,13 @@ export async function sendPartnerApplicationEmails(opts: {
 
 // ─── Validation officielle d'une candidature commerciale ─────────────────────
 export async function sendPartnerApprovalEmail(opts: {
-  to: string; name: string; affiliateCode: string; commissionRate: number;
+  to: string; name: string; affiliateCode: string; affiliateLink: string; commissionRate: number;
 }): Promise<{ success: boolean; id?: string }> {
   if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY n'est pas configurée sur le serveur.");
   const firstName = String(opts.name || "Bonjour").trim().split(/\s+/)[0];
   const safeFirstName = escapeHtml(firstName), safeName = escapeHtml(opts.name), safeCode = escapeHtml(opts.affiliateCode);
+  const affiliateLink = String(opts.affiliateLink || (SITE_URL + "/?ref=" + encodeURIComponent(opts.affiliateCode)));
+  const safeAffiliateLink = escapeHtml(affiliateLink);
   const rate = Number.isFinite(opts.commissionRate) ? opts.commissionRate : 50;
   const dashboardUrl = SITE_URL + "/commercial";
   const whatsappUrl = SUPPORT_WA + "?text=" + encodeURIComponent("Bonjour Texerra SMS, ma candidature commerciale a été approuvée. Je souhaite recevoir et signer mon contrat avant de commencer officiellement.");
@@ -502,7 +504,9 @@ export async function sendPartnerApprovalEmail(opts: {
     p("Nous avons le plaisir de vous confirmer que votre candidature pour rejoindre l'équipe commerciale de Texerra SMS a été approuvée. Nous vous remercions pour l'intérêt que vous portez à notre activité et pour la confiance que vous nous accordez."),
     '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin:0 0 22px;"><p style="margin:0 0 5px;font-size:12px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.6px;">Candidature approuvée</p><p style="margin:0;font-size:14px;line-height:1.7;color:#166534;">Votre profil commercial a été créé dans notre système. Votre taux de commission est fixé à ' + rate + ' % de la marge commerciale éligible générée par vos ventes.</p></div>',
     p("Votre espace personnel vous permettra de consulter les clients qui vous sont attribués, suivre les ventes réalisées grâce à votre activité, voir les marges et commissions générées, consulter votre solde disponible et soumettre vos demandes de retrait lorsque les conditions sont réunies. Vous pouvez dès maintenant découvrir son fonctionnement."),
-    p("Par mesure de sécurité, votre lien commercial restera inactif et aucune attribution de nouveaux clients ne sera possible avant la signature du contrat. Notre équipe activera votre activité après réception du contrat signé."),
+    p("Voici votre lien de parrainage personnel. Vous pouvez le copier et le conserver dès maintenant."),
+    '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px 18px;margin:0 0 18px;word-break:break-all;"><a href="' + safeAffiliateLink + '" style="color:#9a3412;font-size:14px;font-weight:700;">' + safeAffiliateLink + '</a></div>',
+    p("Le lien ne permettra de créer des attributions qu’après la signature et la validation de votre contrat par Texerra SMS. Notre équipe activera votre profil après vérification du contrat signé."),
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border-collapse:collapse;">',
     badge("", "Nom", safeName), badge("", "Code commercial", safeCode),
     badge("", "Commission", rate + " % de la marge éligible (et non du chiffre d'affaires)"), '</table>',
@@ -514,7 +518,7 @@ export async function sendPartnerApprovalEmail(opts: {
   const plainText = "Bonjour " + firstName + ",\n\nVotre candidature pour rejoindre l'équipe commerciale de Texerra SMS a été approuvée. Votre profil commercial a été créé.\n\n"
     + "Votre espace commercial : " + dashboardUrl + "\nVous pourrez y consulter vos clients attribués, vos ventes, les marges et commissions générées, votre solde disponible et vos demandes de retrait.\n\n"
     + "Votre code commercial : " + opts.affiliateCode + "\nVotre commission : " + rate + " % de la marge commerciale éligible générée par vos ventes, et non du chiffre d'affaires.\n\n"
-    + "Votre lien commercial restera inactif jusqu'à la signature du contrat. Texerra activera votre activité après réception du contrat signé.\\n"
+    + "Votre lien de parrainage personnel : " + affiliateLink + "\nVous pouvez copier ce lien et le conserver dès maintenant. Les attributions seront prises en compte après la signature et la validation du contrat.\n\n"
     + "IMPORTANT : l'approbation ne remplace pas la signature du contrat. Écrivez-nous sur WhatsApp au +1 (242) 454-2961 pour recevoir et signer votre contrat. Vous pourrez commencer officiellement après la signature.\n"
     + "WhatsApp : " + whatsappUrl + "\n\nBienvenue dans l'équipe.\nL'équipe Texerra SMS";
   const { data, error } = await resend.emails.send({

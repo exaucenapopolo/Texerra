@@ -9,6 +9,17 @@ import { auth } from "./firebase";
 
 const API_BASE = "/api/affiliate";
 
+export class AffiliateApiError extends Error {
+  code: string;
+  status: number;
+  constructor(message: string, code: string, status: number) {
+    super(message);
+    this.name = "AffiliateApiError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 /* ─────────────────────────────────────────────
  * TYPES
  * ───────────────────────────────────────────── */
@@ -19,7 +30,7 @@ export interface CommercialProfile {
   email: string;
   affiliateCode: string;
   commissionRate: number;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending_contract";
 }
 
 export interface CommercialKpis {
@@ -127,7 +138,7 @@ async function apiCall<T>(
     const payload = data as any;
     const errorMsg = payload?.error ?? `Erreur ${res.status}`;
     const detail = path.startsWith("/admin/") && payload?.details ? String(payload.details) : "";
-    throw new Error(detail ? `${errorMsg} — ${detail}` : errorMsg);
+    throw new AffiliateApiError(detail ? `${errorMsg} — ${detail}` : errorMsg, String(payload?.code ?? ""), res.status);
   }
 
   return data as T;
@@ -195,9 +206,11 @@ export interface AdminCommercialRow {
   name: string;
   email: string;
   country?: string;
+  city?: string;
+  whatsappPhone?: string;
   affiliateCode: string;
   commissionRate: number;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending_contract";
   createdAt: string;
   firebaseUid?: string | null;
 }
@@ -271,9 +284,25 @@ export function adminGetCommercialClients(id: string, page = 1): Promise<{
   return apiCall(`/admin/commercials/${encodeURIComponent(id)}/clients?page=${page}&pageSize=20`);
 }
 
-export function adminUpdateStatus(commercialId: string, status: "active" | "inactive"): Promise<{ ok: boolean; status: "active" | "inactive" }> {
+export function adminUpdateStatus(commercialId: string, status: "active" | "inactive", contractSignedConfirmed = false): Promise<{ ok: boolean; status: "active" | "inactive" }> {
   return apiCall("/admin/commercials/" + encodeURIComponent(commercialId) + "/status", {
-    method: "PATCH", body: JSON.stringify({ status }),
+    method: "PATCH", body: JSON.stringify({ status, contractSignedConfirmed }),
+  });
+}
+
+export function adminUpdateCommercialDetails(payload: {
+  id: string;
+  name: string;
+  country: string;
+  whatsappPhone: string;
+}): Promise<{ ok: boolean }> {
+  return apiCall("/admin/commercials/" + encodeURIComponent(payload.id), {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: payload.name,
+      country: payload.country,
+      whatsappPhone: payload.whatsappPhone,
+    }),
   });
 }
 

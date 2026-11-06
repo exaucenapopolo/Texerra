@@ -1,6 +1,6 @@
 // Fichier : src/pages/commercial/CommercialLayout.tsx
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -13,6 +13,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { getAuth, signOut } from "firebase/auth";
+import { getMe, AffiliateApiError } from "../../lib/affiliate-api";
 
 interface Props {
   children: React.ReactNode;
@@ -33,6 +34,25 @@ const LOGO_URL =
 export default function CommercialLayout({ children }: Props) {
   const [location, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accessState, setAccessState] = useState<"checking" | "active" | "pending" | "inactive" | "not-commercial" | "error">("checking");
+
+  const verifyCommercialAccess = async () => {
+    setAccessState("checking");
+    try {
+      await getMe();
+      setAccessState("active");
+    } catch (error) {
+      const code = error instanceof AffiliateApiError ? error.code : "";
+      if (code === "COMMERCIAL_CONTRACT_PENDING") setAccessState("pending");
+      else if (code === "COMMERCIAL_INACTIVE") setAccessState("inactive");
+      else if (code === "COMMERCIAL_NOT_FOUND") setAccessState("not-commercial");
+      else setAccessState("error");
+    }
+  };
+
+  useEffect(() => {
+    void verifyCommercialAccess();
+  }, []);
 
   const isActive = (to: string, exact?: boolean) => {
     if (exact) return location === to;
@@ -48,6 +68,60 @@ export default function CommercialLayout({ children }: Props) {
       console.error("Logout failed:", err);
     }
   };
+
+  if (accessState !== "active") {
+    const pending = accessState === "pending";
+    const inactive = accessState === "inactive";
+    const notCommercial = accessState === "not-commercial";
+    const title = pending
+      ? "Votre contrat doit encore être signé"
+      : inactive
+        ? "Vos droits commerciaux ont été désactivés"
+        : notCommercial
+          ? "Ce compte n’est pas encore commercial"
+          : accessState === "checking"
+            ? "Vérification de votre accès"
+            : "Impossible de vérifier votre accès commercial";
+    const message = pending
+      ? "Votre candidature a été approuvée, mais votre espace commercial et votre lien de parrainage resteront bloqués jusqu’à la signature du contrat et sa validation par Texerra SMS."
+      : inactive
+        ? "Vous n’avez plus le statut de commercial sur Texerra SMS. Votre compte utilisateur normal reste disponible, mais l’espace commercial et les nouvelles attributions sont désactivés."
+        : notCommercial
+          ? "Pour devenir partenaire commercial, consultez les conditions du contrat, puis envoyez votre candidature depuis la page partenaire."
+          : accessState === "checking"
+            ? "Nous vérifions que votre compte dispose toujours des droits commerciaux."
+            : "La vérification n’a pas abouti. Réessayez sans fermer votre session.";
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-7 sm:p-9 shadow-sm">
+          <img src={LOGO_URL} alt="Texerra SMS" className="h-9 w-auto object-contain mb-8" />
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{title}</h1>
+          <p className="mt-3 text-sm sm:text-base leading-relaxed text-gray-600">{message}</p>
+          {pending && (
+            <a href="https://wa.me/12424542961?text=Bonjour%20Texerra%20SMS%2C%20ma%20candidature%20a%20%C3%A9t%C3%A9%20approuv%C3%A9e.%20Je%20souhaite%20recevoir%20et%20signer%20mon%20contrat." target="_blank" rel="noreferrer" className="mt-5 inline-flex rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700">
+              Contacter Texerra pour signer le contrat
+            </a>
+          )}
+          {notCommercial && (
+            <Link href="/partners" className="mt-5 inline-flex rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
+              Lire les conditions et déposer ma candidature
+            </Link>
+          )}
+          {accessState === "error" && (
+            <button onClick={() => void verifyCommercialAccess()} className="mt-5 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-600">
+              Réessayer
+            </button>
+          )}
+          {accessState === "checking" && <div className="mt-5 text-sm text-gray-400">Contrôle en cours…</div>}
+          <div className="mt-7 border-t border-gray-100 pt-5 flex flex-wrap items-center gap-3">
+            <Link href="/dashboard" className="text-sm font-semibold text-orange-700 hover:text-orange-800">Retour à mon compte Texerra</Link>
+            <span className="text-gray-300">·</span>
+            <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-800">Déconnexion</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">

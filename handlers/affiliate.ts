@@ -161,7 +161,32 @@ function requireCommercial(req: Request, res: Response, next: NextFunction) {
 
       // ─── Étape 3 : Vérification finale ───
       if (!commercial) {
-        res.status(403).json({ error: "Accès commercial requis" });
+        res.status(403).json({
+          error: "Ce compte n’est pas encore enregistré comme commercial.",
+          code: "COMMERCIAL_NOT_FOUND",
+        });
+        return;
+      }
+
+      const commercialStatus = String((commercial as any).status ?? "active");
+      const pendingContract = commercialStatus === "pending_contract" || (
+        commercialStatus === "inactive" &&
+        !!(commercial as any).applicationId &&
+        !(commercial as any).contractVerifiedAt &&
+        !(commercial as any).accessRevokedAt
+      );
+      if (pendingContract) {
+        res.status(403).json({
+          error: "Votre candidature est approuvée, mais votre contrat doit encore être signé et validé par Texerra SMS.",
+          code: "COMMERCIAL_CONTRACT_PENDING",
+        });
+        return;
+      }
+      if (commercialStatus !== "active") {
+        res.status(403).json({
+          error: "Vos droits commerciaux ont été désactivés. Votre compte Texerra reste accessible comme compte utilisateur normal.",
+          code: "COMMERCIAL_INACTIVE",
+        });
         return;
       }
 
@@ -590,35 +615,87 @@ router.patch("/admin/partner-applications/:id", requireAffiliateAdmin, async (re
     const email = String(application.email ?? "").trim().toLowerCase();
     const name = String(application.name ?? [application.firstName, application.lastName].filter(Boolean).join(" ")).trim();
     if (!email.includes("@") || !name) { res.status(400).json({ error: "Les informations de cette candidature sont incomplètes." }); return; }
+    const applicantUid = String(application.applicantUid ?? applicationId);
+    const country = String(application.country ?? application.city ?? "").trim();
+    const city = String(application.city ?? "").trim();
+    const whatsappPhone = String(application.whatsappPhone ?? "").trim();
     const existingByEmail = await firestoreDb.collection("commercials").where("email", "==", email).limit(1).get();
-    let commercial: any;
-    if (!existingByEmail.empty) {
-      const doc = existingByEmail.docs[0]; commercial = { id: doc.id, ...doc.data() };
-    } else {
+    const createUniqueAffiliateCode = async () => {
       const baseCode = name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/g, "").slice(0, 8) || "COM";
-      let affiliateCode = "TX-" + baseCode, counter = 0;
+      let code = "TX-" + baseCode;
+      let counter = 0;
       while (true) {
-        const codeSnap = await firestoreDb.collection("commercials").where("affiliateCode", "==", affiliateCode).limit(1).get();
-        if (codeSnap.empty) break;
-        counter++; affiliateCode = "TX-" + baseCode + counter;
-        if (counter > 999) { affiliateCode = "TX-" + baseCode + "-" + Date.now().toString(36).toUpperCase(); break; }
+        const codeSnap = await firestoreDb.collection("commercials").where("affiliateCode", "==", code).limit(1).get();
+        if (codeSnap.empty) return code;
+        counter++;
+        code = "TX-" + baseCode + counter;
+        if (counter > 999) return "TX-" + baseCode + "-" + Date.now().toString(36).toUpperCase();
       }
-      const commercialRef = firestoreDb.collection("commercials").doc("partner-" + applicationId);
-      const now = new Date().toISOString();
+    };
+
+    let commercial: any;
+    const now = new Date().toISOString();
+    if (!existingByEmail.empty) {
+      const doc = existingByEmail.docs[0];
+      const existing = doc.data();
+      const affiliateCode = String(existing.affiliateCode ?? "") || await createUniqueAffiliateCode();
+      const commissionRate = Number(existing.commissionRate ?? 50);
+      const firebaseUid = String(existing.firebaseUid ?? "") || applicantUid;
+      await doc.ref.set({
+        id: doc.id,
+        firebaseUid,
+        name,
+        email,
+        country,
+        city,
+        whatsappPhone,
+        affiliateCode,
+        commissionRate,
+        status: "pending_contract",
+        applicationId,
+        updatedAt: now,
+      }, { merge: true });
       commercial = {
-        id: commercialRef.id, firebaseUid: String(application.applicantUid ?? applicationId),
-        name, email, country: String(application.country ?? application.city ?? ""),
-        affiliateCode, commissionRate: 50, status: "inactive",
-        createdAt: now, updatedAt: now, applicationId,
+        ...existing,
+        id: doc.id,
+        firebaseUid,
+        name,
+        email,
+        country,
+        city,
+        whatsappPhone,
+        affiliateCode,
+        commissionRate,
+        status: "pending_contract",
+        applicationId,
+        updatedAt: now,
+      };
+    } else {
+      const affiliateCode = await createUniqueAffiliateCode();
+      const commercialRef = firestoreDb.collection("commercials").doc("partner-" + applicationId);
+      commercial = {
+        id: commercialRef.id,
+        firebaseUid: applicantUid,
+        name,
+        email,
+        country,
+        city,
+        whatsappPhone,
+        affiliateCode,
+        commissionRate: 50,
+        status: "pending_contract",
+        createdAt: now,
+        updatedAt: now,
+        applicationId,
       };
       await commercialRef.create(commercial);
     }
     const approvedAt = new Date().toISOString();
-    await applicationRef.set({ status: "approved", commercialId: commercial.id, approvedAt, updatedAt: approvedAt, approvalEmailStatus: "pending" }, { merge: true });
+    await applicationRef.set({ status: "approved", commercialId: commercial.id, approvedAt, updatedAt: approvedAt, contractStatus: "awaiting_signature", approvalEmailStatus: "pending" }, { merge: true });
     await auditLog({ actorId: adminId, actorRole: "admin", action: "approve_partner_application", entityType: "partner_applications", entityId: applicationId, metadataSafe: { email, commercialId: commercial.id, commissionRate: commercial.commissionRate } });
     let emailSent = false, emailError: string | null = null;
     try {
-      await sendPartnerApprovalEmail({ to: email, name, affiliateCode: String(commercial.affiliateCode ?? ""), commissionRate: Number(commercial.commissionRate ?? 50) });
+      await sendPartnerApprovalEmail({ to: email, name, affiliateCode: String(commercial.affiliateCode ?? ""), affiliateLink: "https://www.texerra.site/?ref=" + encodeURIComponent(String(commercial.affiliateCode ?? "")), commissionRate: Number(commercial.commissionRate ?? 50) });
       emailSent = true;
       await applicationRef.set({ approvalEmailStatus: "sent", approvalEmailSentAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
@@ -643,7 +720,7 @@ router.post("/admin/partner-applications/:id/resend", requireAffiliateAdmin, asy
     const commercialSnap = await firestoreDb.collection("commercials").doc(String(app.commercialId)).get();
     if (!commercialSnap.exists) { res.status(404).json({ error: "Fiche commerciale introuvable." }); return; }
     const commercial = commercialSnap.data()!;
-    await sendPartnerApprovalEmail({ to: String(app.email), name: String(app.name), affiliateCode: String(commercial.affiliateCode), commissionRate: Number(commercial.commissionRate ?? 50) });
+    await sendPartnerApprovalEmail({ to: String(app.email), name: String(app.name), affiliateCode: String(commercial.affiliateCode), affiliateLink: "https://www.texerra.site/?ref=" + encodeURIComponent(String(commercial.affiliateCode)), commissionRate: Number(commercial.commissionRate ?? 50) });
     await ref.set({ approvalEmailStatus: "sent", approvalEmailSentAt: new Date().toISOString(), approvalEmailError: null }, { merge: true });
     res.status(200).json({ ok: true, emailSent: true });
   } catch (err) {
@@ -671,9 +748,11 @@ router.get(
           name: d.name,
           email: d.email,
           country: d.country ?? "",
+          city: d.city ?? "",
+          whatsappPhone: d.whatsappPhone ?? "",
           affiliateCode: d.affiliateCode,
           commissionRate: d.commissionRate,
-          status: d.status,
+          status: d.status === "inactive" && d.applicationId && !d.contractVerifiedAt && !d.accessRevokedAt ? "pending_contract" : (d.status ?? "active"),
           createdAt: d.createdAt,
           firebaseUid: d.firebaseUid ?? null,
         };
@@ -686,6 +765,45 @@ router.get(
     }
   }
 );
+
+
+/** Modifier les informations de contact autorisées. L’adresse e-mail reste immuable. */
+router.patch("/admin/commercials/:id", requireAffiliateAdmin, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId as string;
+    const id = String(req.params.id ?? "").trim();
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    if (!id) { res.status(400).json({ error: "Identifiant commercial manquant." }); return; }
+    if (Object.prototype.hasOwnProperty.call(body, "email")) {
+      res.status(400).json({ error: "L’adresse e-mail du commercial ne peut pas être modifiée." });
+      return;
+    }
+    const name = sanitizeString(body.name, 100);
+    const country = sanitizeString(body.country, 100);
+    const whatsappPhone = sanitizeString(body.whatsappPhone, 30).replace(/[\s().-]/g, "");
+    if (!name) { res.status(400).json({ error: "Le nom du commercial est obligatoire." }); return; }
+    if (whatsappPhone && !/^\+[1-9]\d{7,14}$/.test(whatsappPhone)) {
+      res.status(400).json({ error: "Le numéro WhatsApp doit être au format international, par exemple +237..." });
+      return;
+    }
+    const ref = firestoreDb.collection("commercials").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) { res.status(404).json({ error: "Commercial introuvable." }); return; }
+    await ref.update({ name, country, whatsappPhone, updatedAt: new Date().toISOString() });
+    await auditLog({
+      actorId: adminId,
+      actorRole: "admin",
+      action: "update_commercial_profile",
+      entityType: "commercials",
+      entityId: id,
+      metadataSafe: { updatedFields: ["name", "country", "whatsappPhone"] },
+    });
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("[affiliate/admin/commercials profile] error:", err);
+    res.status(500).json({ error: "Impossible de mettre à jour les informations du commercial." });
+  }
+});
 
 /** POST /admin/commercials — Créer */
 router.post(
@@ -772,7 +890,7 @@ router.post(
         country,
         affiliateCode,
         commissionRate,
-        status: "active",
+        status: "inactive",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -1106,19 +1224,63 @@ router.patch(
   }
 );
 
-/** Activer un commercial uniquement après vérification de son contrat signé. */
+/** Révoquer les droits ou activer après confirmation obligatoire du contrat signé. */
 router.patch("/admin/commercials/:id/status", requireAffiliateAdmin, async (req: Request, res: Response) => {
   try {
     const adminId = (req as any).userId as string;
     const id = String(req.params.id ?? "").trim();
     const status = String(req.body?.status ?? "");
-    if (!id || !["active", "inactive"].includes(status)) { res.status(400).json({ error: "Statut commercial invalide." }); return; }
+    const contractSignedConfirmed = req.body?.contractSignedConfirmed === true;
+    if (!id || !["active", "inactive"].includes(status)) {
+      res.status(400).json({ error: "Statut commercial invalide." });
+      return;
+    }
+    if (status === "active" && !contractSignedConfirmed) {
+      res.status(400).json({
+        error: "Activation bloquée : confirmez que le contrat signé a été reçu et vérifié.",
+        code: "SIGNED_CONTRACT_CONFIRMATION_REQUIRED",
+      });
+      return;
+    }
     const ref = firestoreDb.collection("commercials").doc(id);
     const snap = await ref.get();
     if (!snap.exists) { res.status(404).json({ error: "Commercial introuvable." }); return; }
-    const previousStatus = snap.data()?.status ?? "inactive";
-    await ref.update({ status, updatedAt: new Date().toISOString() });
-    await auditLog({ actorId: adminId, actorRole: "admin", action: status === "active" ? "activate_commercial_after_contract" : "deactivate_commercial", entityType: "commercials", entityId: id, metadataSafe: { previousStatus, status } });
+    const previous = snap.data() ?? {};
+    const previousStatus = String(previous.status ?? "inactive");
+    const now = new Date().toISOString();
+    if (status === "active") {
+      await ref.update({
+        status: "active",
+        updatedAt: now,
+        contractVerifiedAt: now,
+        contractVerifiedBy: adminId,
+        accessRevokedAt: null,
+        accessRevokedBy: null,
+      });
+    } else {
+      await ref.update({
+        status: "inactive",
+        updatedAt: now,
+        accessRevokedAt: now,
+        accessRevokedBy: adminId,
+      });
+    }
+    const applicationId = String(previous.applicationId ?? "");
+    if (applicationId) {
+      await firestoreDb.collection("partner_applications").doc(applicationId).set({
+        contractStatus: status === "active" ? "signed_verified" : "access_revoked",
+        contractVerifiedAt: status === "active" ? now : (previous.contractVerifiedAt ?? null),
+        updatedAt: now,
+      }, { merge: true });
+    }
+    await auditLog({
+      actorId: adminId,
+      actorRole: "admin",
+      action: status === "active" ? "activate_commercial_after_contract" : "revoke_commercial_access",
+      entityType: "commercials",
+      entityId: id,
+      metadataSafe: { previousStatus, status, contractSignedConfirmed },
+    });
     res.status(200).json({ ok: true, status });
   } catch (err) {
     console.error("[affiliate/admin/commercials/status] error:", err);

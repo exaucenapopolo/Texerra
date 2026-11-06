@@ -37,9 +37,14 @@ export interface Commercial {
   name: string;
   email: string;
   country?: string;
+  city?: string;
+  whatsappPhone?: string;
+  applicationId?: string;
+  contractVerifiedAt?: string;
+  accessRevokedAt?: string | null;
   affiliateCode: string;
   commissionRate: number;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending_contract";
   createdAt: string;
   updatedAt: string;
 }

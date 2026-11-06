@@ -25,6 +25,7 @@ import {
   adminCreateCommercial,
   adminUpdateRate,
   adminUpdateStatus,
+  adminUpdateCommercialDetails,
   adminListWithdrawals,
   adminProcessWithdrawal,
   adminGetStats,
@@ -708,6 +709,7 @@ function CommercialsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "pending_contract" | "inactive">("all");
 
   const load = async () => {
     setLoading(true);
@@ -739,19 +741,37 @@ function CommercialsTab() {
     return m;
   }, [leaderboard]);
 
+  const filteredCommercials = commercials.filter((commercial) => statusFilter === "all" || commercial.status === statusFilter);
+  const activeCount = commercials.filter((commercial) => commercial.status === "active").length;
+  const pendingCount = commercials.filter((commercial) => commercial.status === "pending_contract").length;
+  const inactiveCount = commercials.filter((commercial) => commercial.status === "inactive").length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="text-sm text-gray-500">
-          {commercials.length} commercial{commercials.length > 1 ? "aux" : ""}
+        <div>
+          <div className="text-sm font-medium text-gray-700">{commercials.length} commercial{commercials.length > 1 ? "aux" : ""}</div>
+          <div className="mt-1 text-xs text-gray-500">{activeCount} actif(s) · {pendingCount} contrat(s) à signer · {inactiveCount} désactivé(s)</div>
         </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Nouveau commercial
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+          >
+            <option value="all">Tous les commerciaux</option>
+            <option value="active">Commerciaux actifs</option>
+            <option value="pending_contract">Contrat à signer</option>
+            <option value="inactive">Commerciaux désactivés</option>
+          </select>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Nouveau commercial
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -774,15 +794,15 @@ function CommercialsTab() {
         {loading && (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
         )}
-        {!loading && commercials.length === 0 && (
+        {!loading && filteredCommercials.length === 0 && (
           <div className="p-12 text-center">
             <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <div className="text-gray-500 font-medium">Aucun commercial</div>
+            <div className="text-gray-500 font-medium">{commercials.length === 0 ? "Aucun commercial" : "Aucun commercial pour ce filtre"}</div>
           </div>
         )}
-        {!loading && commercials.length > 0 && (
+        {!loading && filteredCommercials.length > 0 && (
           <div className="divide-y divide-gray-100">
-            {commercials.map((c) => (
+            {filteredCommercials.map((c) => (
               <CommercialRow
                 key={c.id}
                 commercial={c}
@@ -808,6 +828,11 @@ function CommercialRow({
 }) {
   const [editingRate, setEditingRate] = useState(false);
   const [rate, setRate] = useState(commercial.commissionRate.toString());
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [infoName, setInfoName] = useState(commercial.name);
+  const [infoCountry, setInfoCountry] = useState(commercial.country ?? "");
+  const [infoWhatsApp, setInfoWhatsApp] = useState(commercial.whatsappPhone ?? "");
+  const [infoSaving, setInfoSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -945,14 +970,50 @@ function CommercialRow({
 
   const toggleCommercialStatus = async () => {
     const nextStatus = commercial.status === "active" ? "inactive" : "active";
-    const message = nextStatus === "active"
-      ? "Confirmer l'activation ? Assurez-vous d'avoir reçu et vérifié le contrat signé."
-      : "Confirmer la désactivation de ce commercial ?";
-    if (!window.confirm(message)) return;
+    if (nextStatus === "active") {
+      const confirmation = window.prompt("Vérifiez le contrat signé, puis saisissez exactement CONTRAT SIGNE pour confirmer l’activation.");
+      if (confirmation !== "CONTRAT SIGNE") return;
+    } else if (!window.confirm("Confirmer la révocation immédiate des droits commerciaux ? Les commissions déjà enregistrées seront conservées.")) {
+      return;
+    }
     setStatusSaving(true);
-    try { await adminUpdateStatus(commercial.id, nextStatus); onUpdate(); }
-    catch (e) { alert(e instanceof Error ? e.message : "Impossible de modifier le statut."); }
-    finally { setStatusSaving(false); }
+    try {
+      await adminUpdateStatus(commercial.id, nextStatus, nextStatus === "active");
+      onUpdate();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Impossible de modifier le statut.");
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  const saveCommercialInfo = async () => {
+    const cleanName = infoName.trim();
+    const cleanCountry = infoCountry.trim();
+    const cleanPhone = infoWhatsApp.trim().replace(/[\s().-]/g, "");
+    if (!cleanName) { alert("Le nom du commercial est obligatoire."); return; }
+    if (cleanPhone && !/^\+[1-9]\d{7,14}$/.test(cleanPhone)) {
+      alert("Le numéro WhatsApp doit être au format international, avec + et indicatif du pays.");
+      return;
+    }
+    setInfoSaving(true);
+    try {
+      await adminUpdateCommercialDetails({
+        id: commercial.id,
+        name: cleanName,
+        country: cleanCountry,
+        whatsappPhone: cleanPhone,
+      });
+      setInfoName(cleanName);
+      setInfoCountry(cleanCountry);
+      setInfoWhatsApp(cleanPhone);
+      setEditingInfo(false);
+      onUpdate();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Impossible de mettre à jour les informations.");
+    } finally {
+      setInfoSaving(false);
+    }
   };
 
   const toggleDetails = async () => {
@@ -994,19 +1055,17 @@ function CommercialRow({
             </span>
             <span
               className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                commercial.status === "active"
-                  ? "bg-green-50 text-green-700"
-                  : "bg-gray-100 text-gray-600"
+                commercial.status === "active" ? "bg-green-50 text-green-700" : commercial.status === "pending_contract" ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"
               }`}
             >
-              {commercial.status === "active" ? "Actif" : "Inactif"}
+              {commercial.status === "active" ? "Actif" : commercial.status === "pending_contract" ? "Contrat à signer" : "Désactivé"}
             </span>
             <span className="font-mono text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded">
               {commercial.affiliateCode}
             </span>
           </div>
           <div className="text-sm text-gray-500 mt-1">{commercial.email}</div>
-          <div className="text-xs text-gray-500 mt-1">Pays : {commercial.country || "Non renseigné"} · Compte utilisateur : {commercial.firebaseUid ? "lié" : "à relier au premier accès"}</div>
+          <div className="text-xs text-gray-500 mt-1">Pays : {commercial.country || "Non renseigné"} · WhatsApp : {commercial.whatsappPhone || "Non renseigné"} · Compte utilisateur : {commercial.firebaseUid ? "lié" : "à relier au premier accès"}</div>
 
           {/* Stats */}
           {stats && (
@@ -1041,10 +1100,11 @@ function CommercialRow({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => setEditingInfo((value) => !value)} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50">{editingInfo ? "Fermer les informations" : "Modifier les informations"}</button>
           <button onClick={() => openContact("commercial", commercial.id, commercial.name, commercial.email)} className="text-xs px-3 py-1.5 border border-orange-200 rounded-lg text-orange-700 hover:bg-orange-50">Écrire au commercial</button>
           <button onClick={toggleDetails} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{expanded ? "Masquer comptes" : "Compte utilisateur & clients"}</button>
           <button onClick={toggleCommercialStatus} disabled={statusSaving} className={`text-xs px-3 py-1.5 border rounded-lg disabled:opacity-50 ${commercial.status === "active" ? "border-red-200 text-red-700 hover:bg-red-50" : "border-green-200 text-green-700 hover:bg-green-50"}`}>
-            {statusSaving ? "Mise à jour…" : commercial.status === "active" ? "Désactiver" : "Activer après contrat signé"}
+            {statusSaving ? "Mise à jour…" : commercial.status === "active" ? "Révoquer les droits" : commercial.status === "pending_contract" ? "Activer après contrat signé" : "Réactiver après vérification du contrat"}
           </button>
           {editingRate ? (
             <>
@@ -1096,6 +1156,29 @@ function CommercialRow({
           )}
         </div>
       </div>
+      {editingInfo && (
+        <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/40 p-4 space-y-3">
+          <div className="font-semibold text-sm text-gray-900">Informations modifiables</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="text-xs text-gray-600">Nom complet
+              <input value={infoName} onChange={(e) => setInfoName(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900" />
+            </label>
+            <label className="text-xs text-gray-600">Pays
+              <input value={infoCountry} onChange={(e) => setInfoCountry(e.target.value)} placeholder="Pays du commercial" className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900" />
+            </label>
+            <label className="text-xs text-gray-600">WhatsApp
+              <input value={infoWhatsApp} onChange={(e) => setInfoWhatsApp(e.target.value)} placeholder="+237..." className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900" />
+            </label>
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs text-gray-500">Adresse e-mail non modifiable : {commercial.email}</p>
+            <div className="flex gap-2">
+              <button onClick={() => { setInfoName(commercial.name); setInfoCountry(commercial.country ?? ""); setInfoWhatsApp(commercial.whatsappPhone ?? ""); setEditingInfo(false); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">Annuler</button>
+              <button onClick={saveCommercialInfo} disabled={infoSaving} className="rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{infoSaving ? "Enregistrement…" : "Enregistrer les informations"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {expanded && (
         <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
           {detailsLoading && <p className="text-sm text-gray-400">Chargement du compte et des clients attribués…</p>}
